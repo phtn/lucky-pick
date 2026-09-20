@@ -40,6 +40,9 @@ setup
   const [isDrawing, setIsDrawing] = useState(false);
   const [isMixing, setIsMixing] = useState(false);
   const [drawnBalls, setDrawnBalls] = useState<number[]>([]);
+  // The game the balls on screen belong to, so a ticket for another game is
+  // never credited with a hit.
+  const [drawGameId, setDrawGameId] = useState<GameId | null>(null);
   const [currentBallAnim, setCurrentBallAnim] = useState<number | null>(null);
   const [winnerJackpot, setWinnerJackpot] = useState<WinEntry | null>(null);
   const [winList, setWinList] = useState<WinEntry[]>([]);
@@ -299,7 +302,7 @@ setup
     const nextPool = GAMES[next].pool;
     setGameId(next);
     setSelected(prev => prev.filter(n => n <= nextPool));
-    setDrawnBalls([]); setCurrentBallAnim(null); setWinnerJackpot(null); setWinList([]); setShowMoneyRain(false);
+    setDrawnBalls([]); setDrawGameId(null); setCurrentBallAnim(null); setWinnerJackpot(null); setWinList([]); setShowMoneyRain(false);
     setOfficialInput('');
     playTone(760,0.18,'triangle',0.13);
     showToast(`${GAMES[next].name} • ${GAMES[next].drawDayLabel} 9PM`);
@@ -450,7 +453,7 @@ setup
   const startDraw = (overrideNumbers?: number[]) => {
     if(isDrawing) return;
     const drawGame = getGameId();
-    setIsDrawing(true); setIsMixing(true); setDrawnBalls([]); setCurrentBallAnim(null); setWinnerJackpot(null); setWinList([]); setShowMoneyRain(false);
+    setIsDrawing(true); setIsMixing(true); setDrawnBalls([]); setDrawGameId(drawGame); setCurrentBallAnim(null); setWinnerJackpot(null); setWinList([]); setShowMoneyRain(false);
     playMixRumble();
 
     // Draw order stays unsorted so the balls reveal the way the drum spat them out.
@@ -637,6 +640,8 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
           TicketList(
             ~ tickets={tickets}
             ~ draws={draws}
+            ~ drawnBalls={drawnBalls}
+            ~ drawGame={drawGameId}
             ~ onClear={() => setTickets([])}
             ~ )
         else
@@ -650,6 +655,8 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
             PlayerTickets(
               ~ player={currentPlayer}
               ~ draws={draws}
+              ~ drawnBalls={drawnBalls}
+              ~ drawGame={drawGameId}
               ~ onClearTickets={clearPlayerTickets}
               ~ )
             PartyChat(

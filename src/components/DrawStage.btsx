@@ -146,7 +146,7 @@ div(className="overflow-hidden relative")
         if isDrawing
           fragment
             span(className="w-5 h-5 border-[3px] border-white/20 border-t-white rounded-full animate-spin")
-            | #{isMixing ? `MIXING ${pool} BALLS...` : `DRAWING ${drawnBalls.length}/6`}
+            | #{isMixing ? `${pool} BALLS...` : `DRAWING ${drawnBalls.length}/6`}
         else
           fragment
             | #{" START DRAW "}

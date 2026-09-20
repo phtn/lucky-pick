@@ -212,3 +212,28 @@ export function genRoomCode() {
   for (let i = 0; i < 2; i++) code += nums[Math.floor(Math.random() * nums.length)]
   return code
 }
+
+/** A ticket paired with how many of the balls revealed so far it holds. */
+export interface RankedTicket {
+  ticket: Ticket
+  hits: number
+}
+
+/**
+ * Tickets ordered by how many of the drawn numbers they hold, most hits first.
+ * The sort is stable on the incoming order (newest first), so a ticket that
+ * jumps to the top is only pushed down by one that hits *more* numbers, never
+ * by a tie. Balls only count for tickets of the game being drawn.
+ */
+export function rankTickets(tickets: Ticket[], drawnBalls: number[], drawGame: GameId | null): RankedTicket[] {
+  if (!drawGame || drawnBalls.length === 0) return tickets.map((ticket) => ({ ticket, hits: 0 }))
+  const drawn = new Set(drawnBalls)
+  return tickets
+    .map((ticket, index) => ({
+      ticket,
+      index,
+      hits: ticket.game === drawGame ? ticket.numbers.reduce((n, num) => n + (drawn.has(num) ? 1 : 0), 0) : 0
+    }))
+    .sort((a, b) => b.hits - a.hits || a.index - b.index)
+    .map(({ ticket, hits }) => ({ ticket, hits }))
+}

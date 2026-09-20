@@ -1,18 +1,29 @@
+import { useMemo } from 'octane';
 import { Dices, Trash2, Trophy } from '@octanejs/lucide';
 import { formatPeso } from '../lib/format';
-import { BET_LABELS, VISIBLE_TICKETS, type Draw, type Ticket } from '../lib/lotto';
+import { BET_LABELS, VISIBLE_TICKETS, rankTickets, type Draw, type Ticket } from '../lib/lotto';
+import type { GameId } from '../lib/games';
 
 module
   // Solo mode's ticket stack. Every open ticket still settles on a draw; only
-  // the newest VISIBLE_TICKETS are rendered.
+  // the top VISIBLE_TICKETS of the live ranking are rendered.
   interface TicketListProps {
     tickets: Ticket[];
     /** Used to mark which numbers a settled ticket actually hit. */
     draws: Draw[];
+    /** Balls revealed so far in the running draw; drives the live ordering. */
+    drawnBalls: number[];
+    /** Which game those balls belong to, or null when no draw has started. */
+    drawGame: GameId | null;
     onClear: () => void;
   }
 
-props { tickets, draws, onClear }: TicketListProps
+props { tickets, draws, drawnBalls, drawGame, onClear }: TicketListProps
+setup
+  // Re-ranks on every revealed ball: the ticket holding the most drawn numbers
+  // rises to the top and is only displaced by one holding more.
+  const ranked = useMemo(() => rankTickets(tickets, drawnBalls, drawGame), [tickets, drawnBalls, drawGame]);
+  const liveDrawn = useMemo(() => new Set(drawnBalls), [drawnBalls]);
 
 div(className="px-5 py-3")
   div(className="flex items-center justify-between mb-1")
@@ -32,33 +43,35 @@ div(className="px-5 py-3")
       p(className="text-[13px] text-muted-foreground font-medium")
         | No bets yet
   else
-    div(className="space-y-2.5 max-h-[520px] overflow-y-auto custom-scroll pr-1")
+    div(className="space-y-2.5 max-h-[520px] overflow-y-auto custom-scroll p-1")
       if tickets.length > VISIBLE_TICKETS
-        p(className="text-[10px] text-muted-foreground/70 font-bold text-center py-1")
-          | #{"Showing the latest "}
+        p(className="text-[10px] text-muted-foreground text-center py-1")
+          | #{"Showing top "}
           | #{VISIBLE_TICKETS}
-          | #{" of "}
+          | #{"/"}
           | #{tickets.length}
-          | #{" tickets — every one still settles on a draw."}
-      each t in tickets.slice(0, VISIBLE_TICKETS) key t.id
-        div(className={`flex items-center justify-between rounded-[16px] p-1.5 transition ${t.status === 'won' ? 'bg-gradient-to-br from-primary/20 to-primary/5' : t.status === 'lost' ? 'bg-raised opacity-70' : 'bg-raised'}`})
+          | #{" tickets. All settles after draw."}
+      each r, idx in ranked.slice(0, VISIBLE_TICKETS) key r.ticket.id
+        div(className={`flex items-center justify-between rounded-[16px] p-1.5 transition ${r.ticket.status === 'won' ? 'bg-gradient-to-br from-primary/5 to-primary/1' : r.ticket.status === 'lost' ? 'bg-raised opacity-70' : idx === 0 && r.hits > 0 ? 'bg-raised ring-1 ring-primary/50' : 'bg-raised'}`})
           div(className="flex flex-wrap gap-0.5")
-            each n in t.numbers key n
-              span(className={`w-7 h-7 rounded-full text-[11px] font-black flex items-center justify-center transition ${(t.status !== 'pending') && (draws.find(d => d.game === t.game)?.sorted.includes(n)) ? 'bg-primary text-primary-foreground' : (t.status !== 'pending') ? 'bg-elevated/60 text-muted-foreground' : 'bg-ball text-ball-ink'}`})
+            each n in r.ticket.numbers key n
+              span(className={`w-7 h-7 rounded-full text-[11px] font-black flex items-center justify-center transition ${(r.ticket.game === drawGame && liveDrawn.has(n)) || ((r.ticket.status !== 'pending') && (draws.find(d => d.game === r.ticket.game)?.sorted.includes(n))) ? 'bg-primary text-primary-foreground' : (r.ticket.status !== 'pending') ? 'bg-elevated/60 text-muted-foreground' : 'bg-ball text-ball-ink'}`})
                 | #{n}
           div(className="flex items-center justify-between text-[10px] text-muted-foreground font-mono")
             span(className=" flex items-center gap-1.5")
-              if t.status === 'won'
-                span WIN
-              elseif t.status === 'lost'
-                span LOST
+              if r.ticket.status === 'pending' && r.hits > 0
+                span(className='whitespace-nowrap font-bold text-xs text-blue-500 tracking-tight') #{r.hits}x
+              elseif r.ticket.status === 'won'
+                span(className='text-emerald-500 font-bold text-xs') WIN
+              elseif r.ticket.status === 'lost'
+                span(className='text-rose-300 font-bold text-xs') LOST
               span(className="px-1.5 py-0.5 rounded-full bg-elevated text-foreground/70 font-bold")
-                | #{BET_LABELS[t.betType] + '' + t.game}
-              | #{t.time}
+                | #{BET_LABELS[r.ticket.betType] + '' + r.ticket.game}
+              | #{r.ticket.time}
 
-          if t.status !== 'pending'
+          if r.ticket.status !== 'pending'
             div(className="hidden mt-2 _flex items-center gap-2 text-[11px]")
-              span(className={`w-5 h-5 rounded-full flex items-center justify-center ${t.status === 'won' ? 'bg-primary text-primary-foreground' : 'bg-elevated text-muted-foreground'}`})
-                | #{t.status === 'won' ? '✓' : '✕'}
-              span(className={t.status === 'won' ? 'text-primary font-bold' : 'text-muted-foreground'})
-                | #{t.status === 'won' ? `Won ${formatPeso(t.prizeWon || 0)} — ${t.hits} hits` : `Only ${t.hits}/${t.required} matched`}
+              span(className={`w-5 h-5 rounded-full flex items-center justify-center ${r.ticket.status === 'won' ? 'bg-primary text-primary-foreground' : 'bg-elevated text-muted-foreground'}`})
+                | #{r.ticket.status === 'won' ? '✓' : '✕'}
+              span(className={r.ticket.status === 'won' ? 'text-primary font-bold' : 'text-muted-foreground'})
+                | #{r.ticket.status === 'won' ? `Won ${formatPeso(r.ticket.prizeWon || 0)} — ${r.ticket.hits} hits` : `Only ${r.ticket.hits}/${r.ticket.required} matched`}

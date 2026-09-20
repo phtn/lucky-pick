@@ -10,7 +10,7 @@ div(className=" p-4 flex items-center justify-between")
       BarChart3(className="w-4 h-4 text-foreground/70")
     div
       p(className="text-[11px] font-bold tracking-wide text-foreground/70")
-        | SIMULATOR SESSIONS
+        | SIMULATION SESSION
       p(className="text-[12px] font-bold")
         | #{stats.total}
         | #{" plays • "}
