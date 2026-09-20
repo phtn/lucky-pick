@@ -74,18 +74,18 @@ export interface DrumPalette {
 
 export function readDrumPalette(): DrumPalette {
   return {
-    ball: token('--lp-ball', '#fafafa'),
-    ballEdge: token('--lp-ball-edge', '#828984'),
-    ballInk: token('--lp-ball-ink', '#171b19'),
-    glow: tokenAlpha('--primary', 0.5),
-    glowSoft: tokenAlpha('--primary', 0.14),
+    ball: token('--lp-ball', '#fafbfc'),
+    ballEdge: token('--lp-ball-edge', '#b9c2bf90'),
+    ballInk: token('--lp-ball-ink', '#0A0A0A'),
+    glow: tokenAlpha('--primary', 0.25),
+    glowSoft: tokenAlpha('--primary', 0.1),
     // Neutral so a red or violet theme does not tint the whole chamber.
     chamber: tokenAlpha('--muted-foreground', 0.1),
     grid: tokenAlpha('--muted-foreground', 0.18),
     rim: tokenAlpha('--foreground', 0.32),
     shadow: tokenAlpha('--background', 0.55),
     // Type is not themed; the drum matches the rest of the app.
-    font: '"Manrope", "Geist", sans-serif',
+    font: '"Manrope", "Geist", sans-serif'
   }
 }
 
@@ -98,7 +98,7 @@ export function readConfettiColors(): string[] {
     token('--chart-3', '#a78bfa'),
     token('--chart-4', '#34d399'),
     token('--chart-5', '#ff8a00'),
-    token('--foreground', '#ffffff'),
+    token('--foreground', '#ffffff')
   ]
 }
 

@@ -788,7 +788,7 @@
 
 .draw-machine__glare {
   position: absolute;
-  inset: 6% 14% 45% 12%;
+  inset: 5.5% 17% 46% 15%;
   border-top: 1px solid var(--lp-glare);
   border-radius: 50%;
   background: linear-gradient(to bottom, var(--lp-glare), transparent 72%);

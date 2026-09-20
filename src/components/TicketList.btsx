@@ -64,7 +64,7 @@ div(className="px-5 py-3")
               elseif r.ticket.status === 'won'
                 span(className='text-emerald-500 font-bold text-xs') WIN
               elseif r.ticket.status === 'lost'
-                span(className='text-rose-300 font-bold text-xs') LOST
+                span(className='text-rose-400 font-bold text-xs') LOST
               span(className="px-1.5 py-0.5 rounded-full bg-elevated text-foreground/70 font-bold")
                 | #{BET_LABELS[r.ticket.betType] + '' + r.ticket.game}
               | #{r.ticket.time}

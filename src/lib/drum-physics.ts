@@ -12,7 +12,7 @@ export interface DrumBall {
 export const DRUM_SIZE = 360;
 export const MIN_DRUM_GRAVITY = 0.2;
 export const MAX_DRUM_GRAVITY = 1.8;
-export const DEFAULT_DRUM_GRAVITY = 1;
+export const DEFAULT_DRUM_GRAVITY = 0.5;
 const CENTER = DRUM_SIZE / 2;
 const WALL_RADIUS = 165;
 const BOTTOM_WIND_STRENGTH = 1050;

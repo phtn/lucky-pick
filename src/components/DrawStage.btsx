@@ -36,7 +36,11 @@ setup
   const pool = game.pool;
   const gravityId = useId();
   const [gravity, setGravity] = useState(DEFAULT_DRUM_GRAVITY);
-  const gravityLabel = gravity < 0.75 ? 'Light' : gravity > 1.25 ? 'Heavy' : 'Balanced';
+  // Read relative to the default rather than against fixed numbers, so the
+  // slider still says "Balanced" where it starts if the default is retuned.
+  const balancedLow = DEFAULT_DRUM_GRAVITY * 0.75;
+  const balancedHigh = DEFAULT_DRUM_GRAVITY * 1.25;
+  const gravityLabel = gravity < balancedLow ? 'Light' : gravity > balancedHigh ? 'Heavy' : 'Balanced';
   const gravityProgress = ((gravity - MIN_DRUM_GRAVITY) / (MAX_DRUM_GRAVITY - MIN_DRUM_GRAVITY)) * 100;
   const gravityTrack = `linear-gradient(to right, var(--primary) 0%, var(--primary) ${gravityProgress}%, var(--lp-elevated) ${gravityProgress}%, var(--lp-elevated) 100%)`;
 
