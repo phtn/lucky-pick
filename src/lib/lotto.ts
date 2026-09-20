@@ -1,4 +1,5 @@
 import { formatJackpot, formatPeso } from './format'
+import type { DrawSeed } from './rng'
 import { formatOdds, matchAllOdds, tierOdds, type BetType, type GameConfig, type GameId } from './games'
 
 export type { BetType } from './games'
@@ -38,6 +39,9 @@ export interface Draw {
   time: string
   dateLabel: string
   isOfficial?: boolean
+  /** The seed pair the balls were drawn from. Absent on a pasted official draw,
+   *  which takes its numbers from PCSO rather than from the generator. */
+  seed?: DrawSeed
 }
 
 export interface Player {

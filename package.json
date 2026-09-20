@@ -14,6 +14,7 @@
     "cf:preview": "bun run build && wrangler dev"
   },
   "dependencies": {
+    "@beastjs/use-rng": "^0.1.25",
     "@octanejs/lucide": "0.1.48",
     "@octanejs/shadcn": "0.0.38",
     "beast-tsrx": "latest",

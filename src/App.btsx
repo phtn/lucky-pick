@@ -16,7 +16,8 @@ import SessionStats from './components/SessionStats.btsx';
 import TicketList from './components/TicketList.btsx';
 import { THEMES, applyTheme, readStoredTheme, storeTheme, type ThemeId, type ThemeMode } from './lib/theme';
 import { readConfettiColors } from './lib/theme-colors';
-import { GAMES, GAME_IDS, betPrize, randomPick, type BetType, type GameId } from './lib/games';
+import { GAMES, GAME_IDS, betPrize, type BetType, type GameId } from './lib/games';
+import { drawBalls, evenOddPick, randomPick, randomPicks, randomRollover, type DrawSeed } from './lib/rng';
 import { formatCompactPeso, formatPeso } from './lib/format';
 import { MAX_TICKETS, OFFICIAL_RESULTS, PLAYER_COLORS, genRoomCode, getNextDrawDate, type BetCost, type ChatMsg, type Draw, type GameMode, type Player, type PrizeMode, type SessionTotals, type Ticket, type WinEntry } from './lib/lotto';
 
@@ -284,17 +285,13 @@ setup
     });
     playTone(650+Math.random()*200,0.15,'sine',0.12);
   };
-  const quickPick=()=>{
-    setSelected(randomPick(required, pool));
+  const quickPick=async()=>{
     playTone(800,0.2,'triangle',0.14);
+    setSelected(await randomPick(required, pool));
   };
-  const evenOddMix=()=>{
-    const evens=Array.from({length:pool},(_,i)=>i+1).filter(n=>n%2===0);
-    const odds=Array.from({length:pool},(_,i)=>i+1).filter(n=>n%2===1);
-    const pick:number[]=[]; const needEven=Math.floor(required/2);
-    for(let i=0;i<needEven && evens.length;i++){ const idx=Math.floor(Math.random()*evens.length); pick.push(evens.splice(idx,1)[0]); }
-    for(let i=pick.length;i<required && odds.length;i++){ const idx=Math.floor(Math.random()*odds.length); pick.push(odds.splice(idx,1)[0]); }
-    setSelected(pick.sort((a,b)=>a-b)); playTone(700,0.18,'sine',0.13);
+  const evenOddMix=async()=>{
+    playTone(700,0.18,'sine',0.13);
+    setSelected(await evenOddPick(required, pool));
   };
 
   const switchGame = (next: GameId) => {
@@ -322,15 +319,18 @@ setup
   };
 
   // Random-bet multipliers: buy 1, 10, 20 ... 200 machine picks in one tap.
-  const addRandomTickets = (count: number) => {
+  const addRandomTickets = async (count: number) => {
     if (isDrawing) return;
     const room = MAX_TICKETS - ticketCount;
     if (room <= 0) { showToast(`Ticket limit reached (${MAX_TICKETS} tickets) — clear some first`); return; }
     const size = Math.min(count, room);
     const nowTime=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-    const batch: Ticket[] = Array.from({ length: size }, () => ({
+    // Every pick in the batch comes off the same seeded stream, one nonce per
+    // number, so a bulk buy is as reproducible as a single hand-picked bet.
+    const picks = await randomPicks(size, required, pool);
+    const batch: Ticket[] = picks.map((numbers) => ({
       id: idCounterRef.current++,
-      numbers: randomPick(required, pool),
+      numbers,
       game: gameId,
       betType,
       required,
@@ -370,11 +370,11 @@ setup
     return parts;
   };
 
-  const evaluateTickets = (finalDraw:number[], drawGame:GameId, isOfficialDraw=false) => {
+  const evaluateTickets = (finalDraw:number[], drawGame:GameId, isOfficialDraw=false, seed?:DrawSeed) => {
     const config = GAMES[drawGame];
     const drawJackpot = getJackpots()[drawGame];
     const sorted=[...finalDraw].sort((a,b)=>a-b);
-    const draw:Draw={ id:Date.now(), game:drawGame, numbers:[...finalDraw], sorted, time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}), dateLabel:new Date().toLocaleDateString('en-PH',{month:'short',day:'numeric'}), isOfficial:isOfficialDraw };
+    const draw:Draw={ id:Date.now(), game:drawGame, numbers:[...finalDraw], sorted, time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}), dateLabel:new Date().toLocaleDateString('en-PH',{month:'short',day:'numeric'}), isOfficial:isOfficialDraw, seed };
     setDraws(prev=>[draw,...prev].slice(0,6));
 
     const wins: WinEntry[]=[];
@@ -441,34 +441,34 @@ setup
     } else {
       // no winner -> jackpot rollover
       if(!isOfficialDraw){
-        const bump = config.rollover + Math.floor(Math.random()*(config.rollover*0.2));
-        setJackpots(prev=>({ ...prev, [drawGame]: prev[drawGame] + bump }));
-        setJackpotAnim(true); schedule(()=>setJackpotAnim(false),1200);
-        showToast(`No ${drawGame} jackpot winner! Rolled over +${formatCompactPeso(bump)}`);
+        void randomRollover(config.rollover).then(bump=>{
+          setJackpots(prev=>({ ...prev, [drawGame]: prev[drawGame] + bump }));
+          setJackpotAnim(true); schedule(()=>setJackpotAnim(false),1200);
+          showToast(`No ${drawGame} jackpot winner! Rolled over +${formatCompactPeso(bump)}`);
+        });
       }
     }
     setIsDrawing(false); setCurrentBallAnim(null);
   };
 
-  const startDraw = (overrideNumbers?: number[]) => {
+  const startDraw = async (overrideNumbers?: number[]) => {
     if(isDrawing) return;
     const drawGame = getGameId();
     setIsDrawing(true); setIsMixing(true); setDrawnBalls([]); setDrawGameId(drawGame); setCurrentBallAnim(null); setWinnerJackpot(null); setWinList([]); setShowMoneyRain(false);
     playMixRumble();
 
-    // Draw order stays unsorted so the balls reveal the way the drum spat them out.
-    const finalDraw = overrideNumbers ?? (() => {
-      const bag=Array.from({length:GAMES[drawGame].pool},(_,i)=>i+1);
-      for(let i=bag.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [bag[i],bag[j]]=[bag[j],bag[i]]; }
-      return bag.slice(0,6);
-    })();
+    // The six balls come off the seeded generator, committed before the drum
+    // even starts mixing. Draw order stays unsorted so the balls reveal the way
+    // the drum spat them out. A pasted official result skips the generator.
+    const rolled = overrideNumbers ? null : await drawBalls(GAMES[drawGame].pool);
+    const finalDraw = overrideNumbers ?? rolled!.numbers;
 
     schedule(()=>{
       setIsMixing(false);
       let idx=0;
       const reveal=()=>{
         if(idx>=6){
-          evaluateTickets(finalDraw, drawGame, !!overrideNumbers);
+          evaluateTickets(finalDraw, drawGame, !!overrideNumbers, rolled?.seed);
           return;
         }
         const num=finalDraw[idx];

@@ -97,13 +97,3 @@ export function betPrize(game: GameConfig, bet: BetType, jackpot: number, stake:
   if (bet === 6) return jackpot
   return Math.round(game.payout[bet as 1 | 2 | 3 | 4 | 5] * stake)
 }
-
-/** Fisher-Yates over 1..pool, so a pick never repeats a number. */
-export function randomPick(count: number, pool: number): number[] {
-  const bag = Array.from({ length: pool }, (_, i) => i + 1)
-  for (let i = bag.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[bag[i], bag[j]] = [bag[j], bag[i]]
-  }
-  return bag.slice(0, count).sort((a, b) => a - b)
-}
