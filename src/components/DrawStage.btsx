@@ -153,5 +153,3 @@ div(className="overflow-hidden relative")
       div(className={`mx-auto mt-3 h-[2px] w-[60%] bg-gradient-to-r from-transparent via-destructive to-transparent blur-[0.5px] ${isDrawing ? 'opacity-100 animate-pulse' : 'opacity-40'}`})
     if winnerJackpot
       JackpotBanner(winner={winnerJackpot} onDismiss={onDismissJackpot})
-    if winList.length > 0 && !winnerJackpot
-      WinnersList(wins={winList} onDismiss={onDismissWins})
