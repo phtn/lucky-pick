@@ -67,25 +67,24 @@ setup
 
       for (const ball of balls) {
         if (motionRef.current.hidden.has(ball.n)) continue;
-        const accented = ball.n % 7 === 0;
         const fill = ctx.createRadialGradient(ball.x - ball.radius * 0.35, ball.y - ball.radius * 0.42, 1, ball.x, ball.y, ball.radius);
         fill.addColorStop(0, '#ffffff');
-        fill.addColorStop(0.06, accented ? palette.accentTint : palette.ball);
-        fill.addColorStop(0.94, accented ? palette.accent : palette.ballEdge);
-        fill.addColorStop(1, accented ? palette.accentDeep : palette.ballEdge);
+        fill.addColorStop(0.06, palette.ball);
+        fill.addColorStop(0.94, palette.ballEdge);
+        fill.addColorStop(1, palette.ballEdge);
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
         ctx.fillStyle = fill;
-        ctx.shadowColor = running ? (accented ? palette.glow : palette.rim) : palette.shadow;
+        ctx.shadowColor = running ? palette.rim : palette.shadow;
         ctx.shadowBlur = running ? 7 : 4;
         ctx.shadowOffsetY = running ? 1.5 : 3;
         ctx.fill();
         ctx.shadowBlur = 0;
         ctx.shadowOffsetY = 0;
-        ctx.strokeStyle = accented ? palette.accentDeep : palette.ballEdge;
+        ctx.strokeStyle = palette.ballEdge;
         ctx.lineWidth = 0.4;
         ctx.stroke();
-        ctx.fillStyle = accented ? palette.accentInk : palette.ballInk;
+        ctx.fillStyle = palette.ballInk;
         ctx.font = `700 ${(ball.radius * 0.78).toFixed(1)}px ${palette.font}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';

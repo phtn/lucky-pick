@@ -59,10 +59,19 @@ div(className="overflow-hidden relative")
           | #{isDrawing ? '● DRAWING' : '● READY'}
     div(className={`draw-machine ${isDrawing ? 'draw-machine--active' : ''}`})
       div(className="draw-machine__rail")
-        each _, i in [...Array(12)] key i
+        each _, i in [...Array(6)] key i
           span(
             ~ className={`draw-machine__light ${isDrawing ? 'draw-machine__light--active' : ''}`}
             ~ style={{ animationDelay: `${i * 80}ms` }}
+            ~ )
+        div(className="draw-machine__status" aria-live="polite")
+          span(className={`status-pulse ${isDrawing ? 'status-pulse--active' : ''}`})
+          span
+            | #{isDrawing ? (isMixing ? 'Bottom blower active' : `Selecting ball ${Math.min(drawnBalls.length + 1, 6)} of 6`) : drawnBalls.length === 6 ? 'Draw complete' : 'Awaiting draw'}
+        each _, i in [...Array(6)] key i
+          span(
+            ~ className={`draw-machine__light ${isDrawing ? 'draw-machine__light--active' : ''}`}
+            ~ style={{ animationDelay: `${(i + 6) * 80}ms` }}
             ~ )
       div(className="draw-machine__chamber")
         div(className="draw-machine__halo" aria-hidden="true")
@@ -70,10 +79,6 @@ div(className="overflow-hidden relative")
         div(className="draw-machine__globe")
           DrawDrum(active={isDrawing} drawnNumbers={drawnBalls} poolSize={pool} themeKey={themeKey} gravity={gravity})
           div(className="draw-machine__glare" aria-hidden="true")
-          div(className="draw-machine__status" aria-live="polite")
-            span(className={`status-pulse ${isDrawing ? 'status-pulse--active' : ''}`})
-            span
-              | #{isDrawing ? (isMixing ? 'Bottom blower active' : `Selecting ball ${Math.min(drawnBalls.length + 1, 6)} of 6`) : drawnBalls.length === 6 ? 'Draw complete' : 'Awaiting draw'}
         div(className="draw-machine__base" aria-hidden="true")
           span
       div(className="draw-machine__controls p-3 md:p-4")
@@ -97,7 +102,7 @@ div(className="overflow-hidden relative")
           div(className="drum-gravity__scale" aria-hidden="true")
             span Lighter
             span Heavier
-        div(className="flex items-center justify-between mb-2.5")
+        div(className="flex items-center justify-between mb-2.5 md:px-6")
           p(className="text-[10px] font-black tracking-[0.18em] text-muted-foreground")
             | DRAWN BALLS
           p(className="text-[10px] font-bold text-muted-foreground")
@@ -106,7 +111,7 @@ div(className="overflow-hidden relative")
             | #{isDrawing ? 'DRAWING...' : drawnBalls.length === 6 ? 'COMPLETE' : 'READY'}
             | #{" "}
             | #{draws[0]?.isOfficial ? '• OFFICIAL' : ''}
-        div(className="grid grid-cols-6 gap-2 md:gap-3")
+        div(className="grid grid-cols-6 gap-2 md:gap-3 md:px-6")
           each _, i in Array.from({ length: 6 }) key i
             div(className="aspect-square rounded-full flex items-center justify-center relative overflow-hidden")
               if (drawnBalls[i])
@@ -121,7 +126,7 @@ div(className="overflow-hidden relative")
               if (currentBallAnim === drawnBalls[i])
                 div(className="absolute inset-0 bg-primary/20 animate-[ping_0.6s_ease]")
         if drawnBalls.length === 6
-          div(className="mt-3 flex items-center justify-center gap-2 flex-wrap")
+          div(className="mt-3 flex md:hidden items-center justify-center gap-2 flex-wrap")
             span(className="text-[11px] font-bold text-muted-foreground")
               | SORTED RESULT:
             div(className="flex gap-1.5")
@@ -130,7 +135,7 @@ div(className="overflow-hidden relative")
                   | #{n}
             span(className="text-[11px] font-mono text-muted-foreground")
               | #{[...drawnBalls].sort((a, b) => a - b).map(n => String(n).padStart(2, '0')).join('-')}
-    div(className="mt-4")
+    div(className="mt-4 md:px-6")
       button(
         ~ onClick={onStartDraw}
         ~ disabled={isDrawing}

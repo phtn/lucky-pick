@@ -59,23 +59,10 @@ export function tokenAlpha(name: string, alpha: number, fallback = '#888888'): s
   return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`
 }
 
-/** Blend two resolved colours; builds a ball's lit and shaded gradient stops. */
-function mix(a: string, b: string, amount: number): string {
-  const ca = toRgb(a)
-  const cb = toRgb(b)
-  if (!ca || !cb) return a
-  const at = (x: number, y: number) => Math.round(x + (y - x) * amount)
-  return `rgb(${at(ca[0], cb[0])}, ${at(ca[1], cb[1])}, ${at(ca[2], cb[2])})`
-}
-
 export interface DrumPalette {
   ball: string
   ballEdge: string
   ballInk: string
-  accent: string
-  accentTint: string
-  accentDeep: string
-  accentInk: string
   glow: string
   glowSoft: string
   chamber: string
@@ -86,15 +73,10 @@ export interface DrumPalette {
 }
 
 export function readDrumPalette(): DrumPalette {
-  const accent = token('--primary', '#f5c518')
   return {
     ball: token('--lp-ball', '#fafafa'),
     ballEdge: token('--lp-ball-edge', '#828984'),
     ballInk: token('--lp-ball-ink', '#171b19'),
-    accent,
-    accentTint: mix(accent, 'rgb(255, 255, 255)', 0.68),
-    accentDeep: mix(accent, 'rgb(0, 0, 0)', 0.42),
-    accentInk: token('--primary-foreground', '#2d2008'),
     glow: tokenAlpha('--primary', 0.5),
     glowSoft: tokenAlpha('--primary', 0.14),
     // Neutral so a red or violet theme does not tint the whole chamber.

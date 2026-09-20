@@ -1,4 +1,4 @@
-import { Dices } from '@octanejs/lucide';
+import { ChevronDown, Dices } from '@octanejs/lucide';
 import { PAYOUT_RTP, formatOdds, tierOdds, type GameConfig } from '../lib/games';
 import { formatCompactPeso, formatJackpot, formatPeso } from '../lib/format';
 
@@ -12,11 +12,12 @@ module
 props { game, jackpot }: HowItWorksProps
 setup const pool = game.pool;
 
-div(className="rounded-[18px] bg-sunken p-4")
-  h3(className="text-[11px] font-black tracking-widest mb-2 flex items-center gap-1.5")
+details(className="collapsible rounded-[18px] bg-sunken")
+  summary(className="flex cursor-pointer list-none items-center gap-1.5 p-4 text-[11px] font-black tracking-widest")
     Dices(className="w-3.5 h-3.5 text-foreground/70")
-    | #{" HOW IT WORKS"}
-  ul(className="space-y-1.5 text-[11px] leading-[1.4] text-foreground/70")
+    span(className="flex-1") HOW IT WORKS
+    ChevronDown(className="collapsible__chevron w-3.5 h-3.5 text-muted-foreground")
+  ul(className="space-y-1.5 px-4 pb-4 text-[11px] leading-[1.4] text-foreground/70")
     li(className="flex gap-2")
       span(className="text-primary")
         | •

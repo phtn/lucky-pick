@@ -581,9 +581,9 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
       ~ onToggleIframe={() => setShowIframe(v => !v)}
       ~ )
     if toast
-      div(className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[120] px-4 py-2.5 rounded-full text-ball-ink text-[13px] font-bold shadow-[0_8px_24px_rgba(0,0,0,0.4)] animate-[winnerPop_0.4s_ease]")
+      div(className="fixed top-5 right-5 z-[9999] max-w-[min(20rem,calc(100vw-2.5rem))] px-4 py-2.5 rounded-full bg-ball text-ball-ink text-[13px] font-bold shadow-[0_8px_24px_rgba(0,0,0,0.4)] animate-[winnerPop_0.4s_ease]")
         | #{toast}
-    div(className="app-main-grid grid grid-cols-1 xl:grid-cols-[360px_1fr_380px] gap-4 md:gap-5 items-start")
+    div(className="app-main-grid grid grid-cols-1 xl:grid-cols-[360px_1fr_380px] gap-4 md:gap-8 items-start")
       div(className="app-column app-column--bet order-2 xl:order-1 space-y-4")
         if mode === 'party'
           RoomPanel(
@@ -662,5 +662,6 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
           PrizeNote(game={game})
         DrawHistory(draws={draws})
         HowItWorks(game={game} jackpot={jackpot})
-    footer(className="app-footer mt-8 text-center text-[11px] text-muted-foreground/60 tracking-wide")
-      | Simulator only • Not affiliated with PCSO • No money involved • 100% local RNG • Real prizes for fun • TV game show edition
+    footer(className="app-footer mt-8 text-center text-[11px] text-muted-foreground tracking-wide space-x-1")
+      span built with
+      a(href="https://beast-docs-adv.beastjs.workers.dev/") beastjs

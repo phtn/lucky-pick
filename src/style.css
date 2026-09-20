@@ -97,6 +97,9 @@
 }
 
 @layer base {
+  ::-webkit-scrollbar {
+    display: none;
+  }
   * {
     box-sizing: border-box;
     border-color: var(--lp-divider);
@@ -104,9 +107,7 @@
 
   html {
     background: var(--background);
-    ::-webkit-scrollbar: {
-      display: none;
-    }
+
     /* Firefox */
     scrollbar-width: none;
 
@@ -448,25 +449,33 @@
   }
 
   .random-bets__options > button {
-    height: 36px;
+    height: 48px;
   }
 
   .random-bets__note {
     display: none;
   }
+}
 
-  .bet-submit {
-    height: 46px;
-    margin-top: 10px;
-  }
+/* Shared disclosure styling for the collapsible cards. */
+.collapsible > summary {
+  list-style: none;
+}
 
-  .payout-reference > summary::-webkit-details-marker {
-    display: none;
-  }
+.collapsible > summary::-webkit-details-marker {
+  display: none;
+}
 
-  .payout-reference[open] .payout-reference__chevron {
-    transform: rotate(180deg);
-  }
+.collapsible > summary::marker {
+  content: '';
+}
+
+.collapsible__chevron {
+  transition: transform 0.2s ease;
+}
+
+.collapsible[open] .collapsible__chevron {
+  transform: rotate(180deg);
 }
 
 .live-chip {
@@ -684,6 +693,8 @@
 }
 
 .draw-machine {
+  /* The lamp rail doubles as the status band, so both read from one height. */
+  --lp-rail-h: 34px;
   position: relative;
   overflow: hidden;
   border-radius: 10px;
@@ -692,7 +703,7 @@
 
 .draw-machine__rail {
   display: flex;
-  height: 34px;
+  height: var(--lp-rail-h);
   align-items: center;
   justify-content: center;
   gap: 9px;
@@ -785,14 +796,14 @@
   pointer-events: none;
 }
 
+/* Sits in the lamp rail directly above the globe, never over it. */
 .draw-machine__status {
-  position: absolute;
-  top: 18px;
-  left: 50%;
   display: flex;
+  height: var(--lp-rail-h);
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
+  margin: 0 6px;
+  padding: 0 14px;
   border-radius: var(--lp-r-pill);
   color: var(--foreground);
   background: var(--lp-panel-strong);
@@ -801,7 +812,6 @@
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
-  transform: translateX(-50%);
   backdrop-filter: blur(12px);
   white-space: nowrap;
 }
@@ -1151,8 +1161,8 @@
 /* Desktop keeps the draw controls inside the fixed dashboard row. These
    overrides live after the base machine styles so their cascade is explicit. */
 @media (min-width: 1280px) {
-  .draw-machine__rail {
-    height: 18px;
+  .draw-machine {
+    --lp-rail-h: 32px;
   }
 
   .draw-machine__chamber {
@@ -1242,14 +1252,15 @@
   }
 
   .draw-machine__status {
-    top: 8px;
     max-width: 78%;
+    padding: 0 10px;
+    font-size: 9px;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .draw-machine__rail {
-    height: 26px;
+  .draw-machine {
+    --lp-rail-h: 26px;
   }
 
   .result-slot {

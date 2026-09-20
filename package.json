@@ -8,7 +8,10 @@
     "build": "rsbuild build",
     "preview": "rsbuild preview",
     "typecheck": "tsrx-tsc --noEmit",
-    "check": "bun run typecheck && bun run build"
+    "check": "bun run typecheck && bun run build",
+    "deploy": "bun run build && wrangler deploy",
+    "deploy:dry": "bun run build && wrangler deploy --dry-run",
+    "cf:preview": "bun run build && wrangler dev"
   },
   "dependencies": {
     "@octanejs/lucide": "0.1.48",
@@ -28,6 +31,7 @@
     "tailwindcss": "^4.3.3",
     "@rsbuild/core": "^2.2.2",
     "@octanejs/rsbuild-plugin": "0.1.50",
-    "@rsbuild/plugin-tailwindcss": "^2.0.3"
+    "@rsbuild/plugin-tailwindcss": "^2.0.3",
+    "wrangler": "^4.135.0"
   }
 }

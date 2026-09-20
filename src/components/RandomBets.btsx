@@ -15,13 +15,19 @@ module
     /** Who the batch is bought for, e.g. 'you' or a party player's name. */
     buyerLabel: string;
     isDrawing: boolean;
+    /** True once the board holds exactly `required` numbers. */
+    betReady: boolean;
+    /** '• Name' in party mode, empty in solo. */
+    buyerTag: string;
     onBuy: (count: number) => void;
+    /** Confirms the hand-picked bet; sits in the last slot of the grid. */
+    onAddTicket: () => void;
   }
 
-props { gameId, required, betCost, ticketCount, buyerLabel, isDrawing, onBuy }: RandomBetsProps
+props { gameId, required, betCost, ticketCount, buyerLabel, isDrawing, betReady, buyerTag, onBuy, onAddTicket }: RandomBetsProps
 
 div(className="random-bets mt-3 rounded-[16px] bg-sunken p-3")
-  div(className="flex items-center justify-between gap-2 mb-2")
+  div(className="flex items-center justify-between gap-2 mb-6")
     p(className="text-[10px] tracking-widest text-muted-foreground font-bold flex items-center gap-1.5")
       | #{" RANDOM BETS"}
     p(className="text-[10px] font-bold text-muted-foreground")
@@ -31,18 +37,27 @@ div(className="random-bets mt-3 rounded-[16px] bg-sunken p-3")
       | /
       | #{MAX_TICKETS}
       | #{" bought"}
-  div(className="random-bets__options grid grid-cols-3 gap-1.5")
+  div(className="random-bets__options grid grid-cols-5 gap-1.5")
     each m in BET_MULTIPLIERS key m
       button(
         ~ onClick={() => onBuy(m)}
         ~ disabled={isDrawing || ticketCount >= MAX_TICKETS}
-        ~ className="h-9 rounded-[12px] bg-raised flex flex-col items-center justify-center leading-none hover:bg-primary/15 hover:border-primary/30 active:scale-[0.97] transition disabled:opacity-30 disabled:cursor-not-allowed"
+        ~ className="h-16 rounded-md bg-raised flex flex-col items-center justify-center leading-none hover:bg-primary/15 hover:border-primary/30 active:scale-[0.97] transition disabled:opacity-30 disabled:cursor-not-allowed"
         ~ )
-        span(className="text-[13px] font-black tracking-tight")
-          | #{'×'}
+        span(className="text-sm font-black tracking-tight")
+          span(className="text-muted-foreground/80") #{'×'}
           | #{m}
-        span(className="text-[9px] font-bold text-muted-foreground mt-1")
+        span(className="text-[9px] font-light text-foreground mt-0.5")
           | #{formatPeso(m * betCost)}
+    button(
+      ~ onClick={onAddTicket}
+      ~ disabled={!betReady || isDrawing || ticketCount >= MAX_TICKETS}
+      ~ className="bet-submit h-16 rounded-md bg-primary text-primary-foreground shadow-[0_0_12px_var(--lp-glow)] flex flex-col items-center justify-center leading-none hover:brightness-110 active:scale-[0.97] transition disabled:opacity-30 disabled:cursor-not-allowed"
+      ~ )
+      span(className="text-sm font-black tracking-tight")
+        | BET
+      span(className="text-[9px] font-bold mt-1 opacity-80")
+        | #{buyerTag || formatPeso(betCost)}
   p(className="random-bets__note mt-2 text-[10px] text-muted-foreground/70 leading-[1.4]")
     | #{"Instantly buys that many machine-picked "}
     | #{required}

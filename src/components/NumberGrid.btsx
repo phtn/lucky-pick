@@ -20,19 +20,19 @@ fragment
           ~ className={`aspect-square rounded-full shadow-sm text-lg font-bold transition-all relative flex items-center justify-center ${(selected.includes(n)) ? 'bg-[color-mix(in_oklab,var(--destructive)_20%,transparent)] text-destructive scale-[1.06] z-10' : 'hover:scale-[1.05]'}`}
           ~ )
           | #{n}
-  div(className="mt-2 grid grid-cols-3 gap-2")
+  div(className="mt-2 grid grid-cols-3 gap-2 mt-4")
     button(
       ~ onClick={onQuickPick}
-      ~ className="pill--solid text-xs rounded-full h-10 font-medium px-2"
+      ~ className="pill--solid text-xs rounded-md h-8 font-bold px-1"
       ~ )
       | #{"LUCKY PICK"}
     button(
       ~ onClick={onEvenOddMix}
-      ~ className="text-xs rounded-full h-10 font-medium px-2"
+      ~ className=" text-xs rounded-md h-8 font-bold px-1"
       ~ )
       | EVEN/ODD
     button(
       ~ onClick={onClear}
-      ~ className="pill--muted text-xs rounded-full h-10 font-medium px-2"
+      ~ className="pill--muted text-xs rounded-md h-8 font-bold px-1"
       ~ )
       | CLEAR

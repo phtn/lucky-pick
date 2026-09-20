@@ -13,13 +13,13 @@ module
 
 props { game, jackpot, betType, betCost }: PayoutReferenceProps
 
-details(className="payout-reference rounded-[20px] bg-card")
+details(className="payout-reference collapsible rounded-[20px] bg-card")
   summary(className="flex cursor-pointer list-none items-center gap-2 p-4 text-[11px] font-black tracking-widest text-foreground/70")
     TableProperties(className="w-3.5 h-3.5 text-primary")
-    span(className="flex-1") FULL PAYOUT TABLE
+    span(className="flex-1") PAYOUT TABLE
     span(className="text-[9px] tracking-normal text-muted-foreground")
       | #{betType === 6 ? 'JACKPOT TIERS' : 'PICK BETS'}
-    ChevronDown(className="payout-reference__chevron w-3.5 h-3.5 text-muted-foreground")
+    ChevronDown(className="collapsible__chevron w-3.5 h-3.5 text-muted-foreground")
   div(className="px-3 pb-3")
     Paytable(
       ~ game={game}

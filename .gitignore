@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .beast/
+.wrangler/
 *.tsbuildinfo
 .env
 .env.*

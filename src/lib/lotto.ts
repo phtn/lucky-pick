@@ -129,12 +129,12 @@ export const BET_COSTS: { value: BetCost; label: string; sub: string }[] = [
 ]
 
 export const BET_LABELS: Record<BetType, string> = {
-  1: '1/6 Match 1',
-  2: '2/6 Match 2',
-  3: '3/6 Match 3',
-  4: '4/6 Match 4',
-  5: '5/6 Match 5',
-  6: '6/6 JACKPOT'
+  1: '1/',
+  2: '2/',
+  3: '3/',
+  4: '4/',
+  5: '5/',
+  6: '6/'
 }
 
 // Players are identified by a token, not a fixed hex, so the room re-hues

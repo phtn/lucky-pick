@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lucky-pick",
+  "compatibility_date": "2026-09-20",
+  // Static-assets-only Worker: the rsbuild output is served directly, and any
+  // unknown path falls back to index.html so client routing keeps working.
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
