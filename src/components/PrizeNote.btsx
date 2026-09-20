@@ -7,7 +7,7 @@ module
 
 props { game }: { game: GameConfig }
 
-div(className="rounded-[20px] bg-card border border-border p-4")
+div(className="rounded-[20px] bg-card p-4")
   h3(className="text-[11px] font-black tracking-widest text-foreground/70 mb-3 flex items-center gap-1.5")
     Sparkles(className="w-3.5 h-3.5 text-primary")
     | #{" PRIZE NOTE"}

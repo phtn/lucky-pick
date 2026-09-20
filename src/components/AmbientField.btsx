@@ -2,7 +2,3 @@ module
   // Fixed decorative field behind the whole app; no state, no interaction.
 
 div(className="ambient-field pointer-events-none fixed inset-0" aria-hidden="true")
-  div(className="ambient-orb ambient-orb--rose")
-  div(className="ambient-orb ambient-orb--gold")
-  div(className="ambient-orb ambient-orb--blue")
-  div(className="ambient-grain")

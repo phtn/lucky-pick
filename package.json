@@ -12,11 +12,14 @@
   },
   "dependencies": {
     "@octanejs/lucide": "0.1.48",
+    "@octanejs/shadcn": "0.0.38",
     "beast-tsrx": "latest",
     "clsx": "^2.1.1",
+    "convex": "^1.46.0",
+    "firebase": "^12.19.0",
+    "firebase-admin": "^14.4.0",
     "octane": "0.2.13",
-    "tailwind-merge": "^3.6.0",
-    "@octanejs/shadcn": "0.0.38"
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

@@ -27,9 +27,9 @@ div(className="lux-panel p-5")
         | #{player?.name}
     else
       each t in (player?.tickets ?? []).slice(0, VISIBLE_TICKETS) key t.id
-        div(className={`rounded-[14px] border p-2.5 flex items-center justify-between ${t.status === 'won' ? 'bg-primary/15 border-primary/30' : t.status === 'lost' ? 'bg-raised border-border opacity-70' : 'bg-raised border-border'}`})
+        div(className={`rounded-[14px] p-2.5 flex items-center justify-between ${t.status === 'won' ? 'bg-primary/15' : t.status === 'lost' ? 'bg-raised opacity-70' : 'bg-raised'}`})
           div(className="flex gap-1 flex-wrap")
-            span(className="px-1.5 h-6 rounded-full bg-elevated border border-border text-[9px] font-black text-muted-foreground flex items-center")
+            span(className="px-1.5 h-6 rounded-full bg-elevated text-[9px] font-black text-muted-foreground flex items-center")
               | #{t.game}
             each n in t.numbers key n
               span(className={`w-6 h-6 rounded-full text-[10px] font-black flex items-center justify-center ${t.status !== 'pending' && draws.find(d => d.game === t.game)?.sorted.includes(n) ? 'bg-primary text-primary-foreground' : 'bg-ball text-ball-ink'}`})
@@ -38,7 +38,7 @@ div(className="lux-panel p-5")
             | #{t.status === 'won' ? formatPeso(t.prizeWon || 0) : t.status === 'lost' ? `${t.hits}/${t.required}` : BET_LABELS[t.betType]}
   button(
     ~ onClick={onClearTickets}
-    ~ className="mt-3 w-full h-9 rounded-full bg-raised border border-border text-[11px] font-bold hover:bg-elevated flex items-center justify-center gap-1"
+    ~ className="pill pill--muted mt-3 w-full text-[11px]"
     ~ )
     Trash2(className="w-3.5 h-3.5")
     | #{" Clear "}

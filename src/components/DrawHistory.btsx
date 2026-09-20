@@ -6,12 +6,12 @@ module
 
 props { draws }: { draws: Draw[] }
 
-div(className="rounded-[18px] bg-sunken border border-border p-4")
+div(className="rounded-[18px] bg-sunken p-4")
   div(className="flex items-center justify-between mb-3")
     h3(className="text-[11px] font-black tracking-widest flex items-center gap-1.5")
       Clock(className="w-3.5 h-3.5 text-primary")
       | #{" DRAW HISTORY"}
-    span(className="text-[10px] px-2 py-0.5 rounded-full bg-elevated border border-border")
+    span(className="text-[10px] px-2 py-0.5 rounded-full bg-elevated")
       | #{draws.length}
   if draws.length === 0
     p(className="text-[12px] text-muted-foreground/70 py-4 text-center")

@@ -12,7 +12,7 @@ module
 props { game, jackpot }: HowItWorksProps
 setup const pool = game.pool;
 
-div(className="rounded-[18px] bg-sunken border border-border p-4")
+div(className="rounded-[18px] bg-sunken p-4")
   h3(className="text-[11px] font-black tracking-widest mb-2 flex items-center gap-1.5")
     Dices(className="w-3.5 h-3.5 text-foreground/70")
     | #{" HOW IT WORKS"}

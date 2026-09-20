@@ -20,7 +20,7 @@ module
 
 props { gameId, required, betCost, ticketCount, buyerLabel, isDrawing, onBuy }: RandomBetsProps
 
-div(className="mt-3 rounded-[16px] bg-sunken border border-border p-3")
+div(className="mt-3 rounded-[16px] bg-sunken p-3")
   div(className="flex items-center justify-between gap-2 mb-2")
     p(className="text-[10px] tracking-widest text-muted-foreground font-bold flex items-center gap-1.5")
       Dice5(className="w-3.5 h-3.5 text-primary")
@@ -37,7 +37,7 @@ div(className="mt-3 rounded-[16px] bg-sunken border border-border p-3")
       button(
         ~ onClick={() => onBuy(m)}
         ~ disabled={isDrawing || ticketCount >= MAX_TICKETS}
-        ~ className="h-11 rounded-[12px] bg-raised border border-border flex flex-col items-center justify-center leading-none hover:bg-primary/15 hover:border-primary/30 active:scale-[0.97] transition disabled:opacity-30 disabled:cursor-not-allowed"
+        ~ className="h-11 rounded-[12px] bg-raised flex flex-col items-center justify-center leading-none hover:bg-primary/15 hover:border-primary/30 active:scale-[0.97] transition disabled:opacity-30 disabled:cursor-not-allowed"
         ~ )
         span(className="text-[13px] font-black tracking-tight")
           | #{'×'}

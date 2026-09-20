@@ -22,7 +22,7 @@ setup
     }
   }, [messages]);
 
-div(className="rounded-[22px] bg-card border border-border p-4")
+div(className="rounded-[22px] bg-card p-4")
   h3(className="text-[11px] font-black tracking-widest text-foreground/70 mb-3 flex items-center gap-1.5")
     MessageCircle(className="w-3.5 h-3.5")
     | #{" PARTY CHAT • "}
@@ -56,7 +56,7 @@ div(className="rounded-[22px] bg-card border border-border p-4")
       ~ onInput={e => onInput(e.currentTarget.value)}
       ~ onKeyDown={e => e.key === 'Enter' && onSend()}
       ~ placeholder="Say good luck!"
-      ~ className="flex-1 h-9 rounded-full bg-sunken border border-border px-3.5 text-[12px] placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/30"
+      ~ className="flex-1 h-9 rounded-full bg-sunken px-3.5 text-[12px] placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/30"
       ~ )
     button(
       ~ onClick={onSend}

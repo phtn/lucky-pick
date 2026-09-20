@@ -15,26 +15,22 @@ module
 
 props { game, gameId, jackpots, isDrawing, onSwitchGame }: GameSwitcherProps
 
-div(className="mb-4 border border-border rounded-lg divide-x overflow-hidden")
-  div(className="flex items-center justify-between flex-wrap")
-    p(className="hidden text-[10px] font-bold text-muted-foreground")
-      | #{game.drawDayLabel}
-      | #{" • 9PM Manila • Pool 1-"}
-      | #{game.pool}
-  div(className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5")
+div(className="mb-4")
+  div(className="game-rail py-4")
     each g in GAME_IDS key g
       button(
         ~ onClick={() => onSwitchGame(g)}
         ~ disabled={isDrawing}
-        ~ className={`px-3 py-2 text-left border-r last:border-r-0 transition disabled:opacity-40 disabled:cursor-not-allowed ${gameId === g ? 'bg-foreground/80' : 'bg-background/60 hover:bg-raised'}`}
+        ~ className={cn('game-chip', { 'game-chip--active': gameId === g })}
         ~ )
-        span(
-          ~ className="flex items-center text-[14px] gap-2 font-bold leading-none"
-          ~ style={{ color: gameId === g ? 'var(--background)' : 'var(--foreground)' }}
-          ~ )
-          span #{g}
-          span &middot;
-          span(className={cn("block text-sm font-semibold text-primary", { 'text-background': gameId === g })})
+        span(className="flex items-baseline gap-4 font-bold leading-none tracking-[-0.02em]")
+          span(className="text-base")
+            | #{g}
+          span(className={cn('text-base font-semibold text-primary', { 'text-[color:var(--primary-foreground)]': gameId === g })})
             | #{formatCompactPeso(jackpots[g])}
-        span(className={cn("block text-[9px] font-bold tracking-[0.12em] text-foreground mt-1 truncate", { 'text-background': gameId === g })})
+        span(className={cn('block text-[9px] font-bold tracking-[0.14em] mt-1.5 truncate text-muted-foreground', { 'text-[color:var(--primary-foreground)] opacity-80': gameId === g })})
           | #{GAMES[g].name.toUpperCase()}
+  p(className="mt-2 px-0.5 text-[10px] font-semibold tracking-[0.1em] text-muted-foreground/70 uppercase")
+    | #{game.drawDayLabel}
+    | #{" • 9PM Manila • Pool 1-"}
+    | #{game.pool}

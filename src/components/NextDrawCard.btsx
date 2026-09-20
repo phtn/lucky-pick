@@ -15,7 +15,7 @@ module
 
 props { game, jackpot, countdown, jackpotAnim }: NextDrawCardProps
 
-div(className="rounded-[16px] bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/20 p-4 flex flex-col justify-between")
+div(className="rounded-[16px] bg-gradient-to-br from-primary/15 to-primary/5 p-4 flex flex-col justify-between")
   div
     div(className="flex items-center justify-between mb-3")
       span(className="text-[10px] font-black tracking-widest text-primary/80 flex items-center gap-1")
@@ -23,16 +23,16 @@ div(className="rounded-[16px] bg-gradient-to-br from-primary/15 to-primary/5 bor
         | #{" NEXT "}
         | #{game.id}
         | #{" DRAW"}
-      span(className="text-[10px] px-2 py-0.5 rounded-full bg-sunken border border-border text-foreground/70")
+      span(className="text-[10px] px-2 py-0.5 rounded-full bg-sunken text-foreground/70")
         | #{countdown.label}
     div(className="grid grid-cols-4 gap-2 mb-3")
       each k in [ { v: countdown.d, l: 'DAYS' }, { v: countdown.h, l: 'HRS' }, { v: countdown.m, l: 'MIN' }, { v: countdown.s, l: 'SEC' }, ] key k.l
-        div(className="rounded-xl bg-sunken border border-border p-2 text-center")
+        div(className="rounded-xl bg-sunken p-2 text-center")
           div(className="text-[18px] font-black leading-none")
             | #{String(k.v).padStart(2, '0')}
           div(className="text-[9px] font-bold text-muted-foreground tracking-widest mt-1")
             | #{k.l}
-    div(className="rounded-xl bg-sunken border border-primary/20 p-3")
+    div(className="rounded-xl bg-sunken p-3")
       p(className="text-[10px] tracking-widest font-black text-muted-foreground")
         | CURRENT JACKPOT • ROLLOVER
       p(className={`text-[22px] font-black tracking-tight text-primary leading-none mt-1 ${jackpotAnim ? 'animate-[jackpotUp_0.9s_ease]' : ''}`})

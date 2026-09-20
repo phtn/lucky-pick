@@ -4,6 +4,12 @@ All notable changes to `lucky-pick` will be recorded here.
 
 ## [Unreleased]
 
+- Replaced the default palette with a neutral greyscale set (`src/styles/new-default.css`); the old warm-cream/green `default.css` is gone. `--primary` is now near-black in light and near-white in dark, so every accent that reads from it — the selected game chip, the drawn balls, `--lp-glow` — is monochrome by default.
+- Took the strokes out of the interface. Surfaces now separate by fill, a single top-lit inner edge (`--lp-edge`) and shadow instead of 1px borders — every `border border-border` is gone from the components, and the accent cards carry their tint in the fill rather than an outline.
+- Added the surface vocabulary the sections share: `.well` for sunken blocks, `.pill` / `.pill--solid` / `.pill--muted` for action rows, `.icon-button--accent` for a filled control among soft ones, and `.meta-chip` for quiet labels. Radii are tokens (`--lp-r-panel`, `--lp-r-well`, `--lp-r-pill`) so shape stays consistent across breakpoints.
+- Rebuilt the game switcher as a scroll-snapping rail of soft chips with the selected game filled in the theme accent, replacing the bordered grid that left a ragged empty cell on narrow screens.
+- Reworked mobile: panels keep their radius instead of flattening to a 2px slab, the game rail bleeds to the page edge with its gutter and snap offset in step, the page gutter is an even 16px, controls hold a 44px touch target, and the three selection shortcuts stay on one line at 375px.
+
 - Split `src/App.btsx` into one file per interface section under `src/components/`: header, game switcher, live board (official result, next draw, play-vs-real), room panel, bet panel (paytable, number grid, random bets), session stats, draw stage (jackpot banner, winners list, draw history, how it works), ticket list, leaderboard, player tickets, party chat and prize note, plus the shared `Ball` and `Youtube` marks. `App.btsx` keeps the application state and now reads as the page outline.
 - Moved the domain types, tables and constants the sections share out of the `App.btsx` module block into `src/lib/lotto.ts`, and the peso formatters into `src/lib/format.ts`. `BetType` is no longer declared twice; every file uses the one from `src/lib/games.ts`.
 - Gave `PartyChat` its own scroll ref and effect, and `Leaderboard` its own sort, so neither needs the application to own it.
@@ -13,7 +19,7 @@ All notable changes to `lucky-pick` will be recorded here.
 - Pick bets no longer reuse the jackpot ticket's tier prizes. Pick 3 previously paid ₱20 at 1 in 574, which made it strictly worse than pick 2 on both odds and payout; no pick bet is dominated now.
 - Split the prize panel in two: a jackpot ladder (6/6 down to 3/6, PCSO tier odds) when the jackpot bet is selected, and the pick paytable (5/5 down to 1/1, match-all odds) otherwise. The single mixed table stated two different odds models in one column.
 
-- Added a colour theme system: `src/styles/default.css` is the default token set, with Doom and Soft Pop selectable from the header, plus a light/dark toggle. The choice persists and is applied before first paint, so it never flashes.
+- Added a colour theme system: `src/styles/new-default.css` is the default token set, with Doom and Soft Pop selectable from the header, plus a light/dark toggle. The choice persists and is applied before first paint, so it never flashes.
 - Re-skinned the interface onto theme tokens — every hard-coded colour in `App.btsx` and `style.css` now resolves from the active theme, including the canvas drum, the confetti and the lottery balls.
 - Themes change colour only. Corner radius, spacing, shadows and typography stay the app's own, so every theme keeps the original component shapes and Manrope/IBM Plex Mono type.
 - Player and game accents read from the theme's chart ramp, with per-fill text colour chosen by luminance so chips stay legible in any palette.

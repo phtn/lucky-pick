@@ -3,7 +3,7 @@
 
 /* Theme token sets. Each scopes itself to [data-theme='<id>'] (plus .dark),
    so every theme ships in one bundle and switching is a single attribute. */
-@import './styles/default.css';
+@import './styles/new-default.css';
 @import './styles/doom.css';
 @import './styles/soft-pop.css';
 
@@ -39,6 +39,16 @@
   --lp-glare: color-mix(in oklab, white 55%, transparent);
   --lp-hairline: color-mix(in oklab, var(--foreground) 12%, transparent);
   --lp-shade: color-mix(in oklab, var(--background) 82%, black);
+
+  /* Surfaces separate by fill and light, not by strokes. --lp-edge is the one
+     hairline the whole UI still uses: a top-lit inner highlight that reads as a
+     lifted edge rather than an outline. */
+  --lp-edge: color-mix(in oklab, var(--foreground) 9%, transparent);
+  --lp-veil: color-mix(in oklab, var(--foreground) 4%, transparent);
+  --lp-divider: color-mix(in oklab, var(--foreground) 7%, transparent);
+  --lp-r-panel: 30px;
+  --lp-r-well: 22px;
+  --lp-r-pill: 999px;
 }
 
 .dark {
@@ -47,6 +57,9 @@
   --lp-ball-ink: oklch(0.16 0 0);
   --lp-glare: color-mix(in oklab, white 16%, transparent);
   --lp-hairline: color-mix(in oklab, white 8%, transparent);
+  --lp-edge: color-mix(in oklab, white 8%, transparent);
+  --lp-veil: color-mix(in oklab, white 4%, transparent);
+  --lp-divider: color-mix(in oklab, white 6%, transparent);
 }
 
 @theme inline {
@@ -86,7 +99,7 @@
 @layer base {
   * {
     box-sizing: border-box;
-    border-color: var(--border);
+    border-color: var(--lp-divider);
   }
 
   html {
@@ -195,8 +208,7 @@
   height: 46px;
   place-items: center;
   overflow: hidden;
-  border: 1px solid color-mix(in oklab, var(--primary-foreground) 24%, transparent);
-  border-radius: 15px;
+  border-radius: 50%;
   color: var(--primary-foreground);
   background:
     radial-gradient(
@@ -218,40 +230,119 @@
 .brand-mark__number {
   position: relative;
   z-index: 1;
-  font-size: 15px;
+  font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.06em;
 }
 
 .brand-mark__orbit {
   position: absolute;
-  width: 34px;
+  width: 40px;
   height: 18px;
   border: 1px solid color-mix(in oklab, var(--primary-foreground) 42%, transparent);
   border-radius: 50%;
   transform: rotate(-28deg);
 }
 
+/* Game chips scroll as one soft row on narrow screens instead of a grid of cells. */
+.game-rail {
+  /* The rail bleeds to the page edge on narrow screens; --rail-gutter keeps the
+     bleed, the inner padding and the snap offset in step so the first chip still
+     lines up with the page. */
+  --rail-gutter: 0px;
+
+  display: grid;
+  gap: 8px;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(148px, 1fr);
+  margin-inline: calc(var(--rail-gutter) * -1);
+  padding-inline: var(--rail-gutter);
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: var(--rail-gutter);
+}
+
+.game-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.game-chip {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 18px;
+  text-align: left;
+  background: var(--lp-raised);
+  scroll-snap-align: start;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    transform 160ms ease;
+}
+
+.game-chip:hover:not(:disabled) {
+  background: var(--lp-elevated);
+}
+
+.game-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.game-chip--active {
+  color: var(--primary-foreground);
+  background: linear-gradient(
+    150deg,
+    color-mix(in oklab, var(--primary) 76%, white),
+    var(--primary) 62%,
+    color-mix(in oklab, var(--primary) 86%, black)
+  );
+  box-shadow:
+    0 2px 4px var(--lp-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.game-chip--active:hover:not(:disabled) {
+  background: linear-gradient(
+    150deg,
+    color-mix(in oklab, var(--primary) 70%, white),
+    var(--primary) 58%,
+    color-mix(in oklab, var(--primary) 82%, black)
+  );
+}
+
 .live-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.16rem 0.48rem;
-  border: 1px solid color-mix(in oklab, var(--destructive) 26%, transparent);
-  border-radius: 999px;
+  gap: 0.38rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--lp-r-pill);
   color: var(--destructive);
-  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+  background: color-mix(in oklab, var(--destructive) 14%, transparent);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* The quiet dot-and-label chip the reference leads with. */
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: var(--lp-r-pill);
+  color: var(--muted-foreground);
+  background: var(--lp-veil);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .mode-switch {
   display: flex;
   padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--lp-r-pill);
   background: var(--lp-sunken);
-  box-shadow: inset 0 1px 3px var(--lp-shade);
   backdrop-filter: blur(18px);
 }
 
@@ -288,86 +379,171 @@
 
 .icon-button {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   place-items: center;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--lp-r-pill);
   color: var(--foreground);
   background: var(--lp-raised);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 var(--lp-edge);
   transition:
     background-color 180ms ease,
-    border-color 180ms ease,
+    color 180ms ease,
     transform 180ms ease;
 }
 
 .icon-button:hover {
-  border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
-  background: var(--lp-glow-soft);
+  background: var(--lp-elevated);
   transform: translateY(-1px);
 }
 
-.lux-panel {
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012) 48%), var(--lp-panel);
+/* The accent orb, the one filled control in a row of soft ones. */
+.icon-button--accent {
+  color: var(--primary-foreground);
+  background: linear-gradient(
+    150deg,
+    color-mix(in oklab, var(--primary) 78%, white),
+    var(--primary) 62%,
+    color-mix(in oklab, var(--primary) 84%, black)
+  );
   box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.075);
+    0 10px 26px var(--lp-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.icon-button--accent:hover {
+  background: linear-gradient(
+    150deg,
+    color-mix(in oklab, var(--primary) 70%, white),
+    var(--primary) 58%,
+    color-mix(in oklab, var(--primary) 80%, black)
+  );
+}
+
+/* Action pills. `--solid` is the single high-contrast button on a surface. */
+.pill {
+  display: inline-flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: var(--lp-r-pill);
+  color: var(--foreground);
+  background: var(--lp-raised);
+  box-shadow: inset 0 1px 0 var(--lp-edge);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    transform 160ms ease;
+}
+
+.pill:hover {
+  background: var(--lp-elevated);
+}
+
+.pill:active {
+  transform: scale(0.985);
+}
+
+.pill--solid {
+  color: var(--background);
+  background: var(--foreground);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.32);
+}
+
+.pill--solid:hover {
+  background: color-mix(in oklab, var(--foreground) 88%, var(--background));
+}
+
+.pill--muted {
+  color: var(--muted-foreground);
+  background: var(--lp-veil);
+  box-shadow: none;
+}
+
+.pill--muted:hover {
+  color: var(--foreground);
+  background: var(--lp-raised);
+}
+
+.lux-panel {
+  border-radius: var(--lp-r-panel);
+  background: linear-gradient(180deg, var(--lp-veil), transparent 42%), var(--lp-panel);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 var(--lp-edge);
   backdrop-filter: blur(26px) saturate(125%);
 }
 
 .lux-panel--summary {
-  border-radius: 28px;
-  background: linear-gradient(110deg, rgba(255, 255, 255, 0.055), transparent 48%), var(--lp-panel);
+  background: linear-gradient(180deg, var(--lp-veil), transparent 38%), var(--lp-panel);
 }
 
 .lux-panel--summary > div:last-child > div {
-  border-color: var(--border);
   background: var(--lp-sunken);
 }
 
 .lux-panel--compact {
-  border-radius: 20px;
+  border-radius: var(--lp-r-well);
   background: var(--lp-panel);
   box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    0 14px 40px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 var(--lp-edge);
 }
 
+/* The draw panel carries the warm top light the rest of the page reads against. */
 .lux-panel--stage {
-  border-radius: 30px;
   background:
-    radial-gradient(70% 46% at 50% 0%, var(--lp-glow-soft), transparent),
-    linear-gradient(150deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.012) 42%), var(--lp-panel-strong);
+    radial-gradient(76% 42% at 50% -6%, color-mix(in oklab, var(--primary) 20%, transparent), transparent 70%),
+    linear-gradient(180deg, var(--lp-veil), transparent 38%), var(--lp-panel-strong);
   box-shadow:
-    0 36px 100px rgba(0, 0, 0, 0.46),
-    inset 0 1px 0 rgba(255, 255, 255, 0.09);
+    0 40px 110px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 color-mix(in oklab, var(--primary) 22%, var(--lp-edge));
+}
+
+/* Soft wells: the borderless replacement for `bg-sunken border border-border`. */
+.well {
+  border-radius: var(--lp-r-well);
+  background: var(--lp-sunken);
+  box-shadow: inset 0 1px 0 var(--lp-edge);
+}
+
+.well--raised {
+  background: var(--lp-raised);
+}
+
+.well--flat {
+  box-shadow: none;
+}
+
+/* Where a list still needs separation, it is light, not a line. */
+.soft-divide > * + * {
+  border-top: 1px solid var(--lp-divider);
 }
 
 .draw-machine {
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--border);
   border-radius: 26px;
   background: var(--lp-sunken);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 var(--lp-edge),
     inset 0 -28px 70px rgba(0, 0, 0, 0.4),
     0 24px 54px rgba(0, 0, 0, 0.38);
-  transition:
-    border-color 450ms ease,
-    box-shadow 450ms ease;
+  transition: box-shadow 450ms ease;
 }
 
 .draw-machine--active {
-  border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 1px 0 color-mix(in oklab, var(--primary) 30%, var(--lp-edge)),
     inset 0 -28px 70px rgba(0, 0, 0, 0.4),
     0 24px 70px rgba(0, 0, 0, 0.42),
-    0 0 46px var(--lp-glow-soft);
+    0 0 56px var(--lp-glow-soft);
 }
 
 .draw-machine__rail {
@@ -376,8 +552,7 @@
   align-items: center;
   justify-content: center;
   gap: 9px;
-  border-bottom: 1px solid var(--border);
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.015));
+  background: linear-gradient(to bottom, var(--lp-veil), transparent);
 }
 
 .draw-machine__light {
@@ -442,13 +617,12 @@
   z-index: 2;
   width: min(84%, 470px);
   aspect-ratio: 1;
-  border: 1px solid color-mix(in oklab, var(--border) 140%, transparent);
   border-radius: 50%;
   background:
     radial-gradient(circle at 34% 22%, var(--lp-glare), transparent 28%),
     color-mix(in oklab, var(--lp-shade) 40%, transparent);
   box-shadow:
-    inset 0 0 0 6px rgba(255, 255, 255, 0.015),
+    inset 0 0 0 1px var(--lp-edge),
     inset 0 -34px 70px rgba(0, 0, 0, 0.32),
     0 24px 48px rgba(0, 0, 0, 0.36);
   backdrop-filter: blur(2px);
@@ -478,9 +652,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 12px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  padding: 8px 14px;
+  border-radius: var(--lp-r-pill);
   color: var(--foreground);
   background: var(--lp-panel-strong);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
@@ -515,8 +688,6 @@
   left: 50%;
   width: min(42%, 230px);
   height: 40px;
-  border: 1px solid var(--border);
-  border-bottom: 0;
   border-radius: 18px 18px 0 0;
   background: linear-gradient(180deg, var(--lp-raised), var(--lp-shade));
   box-shadow:
@@ -531,19 +702,17 @@
   left: 18%;
   right: 18%;
   height: 5px;
-  border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--lp-shade);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.75);
 }
 
 .draw-machine__tray {
-  border-top: 1px solid var(--border);
   background: var(--lp-panel-strong);
+  box-shadow: inset 0 1px 0 var(--lp-edge);
 }
 
 .result-slot {
-  border: 1px solid var(--border);
   border-radius: 18px;
   background: var(--lp-sunken);
   box-shadow: inset 0 1px 10px rgba(0, 0, 0, 0.26);
@@ -552,9 +721,8 @@
 .result-slot__empty {
   width: 55%;
   aspect-ratio: 1;
-  border: 1px dashed var(--border);
   border-radius: 50%;
-  background: var(--lp-raised);
+  background: var(--lp-veil);
 }
 
 .draw-cta {
@@ -566,8 +734,7 @@
   justify-content: center;
   gap: 12px;
   overflow: hidden;
-  border: 1px solid color-mix(in oklab, var(--primary) 60%, transparent);
-  border-radius: 20px;
+  border-radius: var(--lp-r-pill);
   color: var(--primary-foreground);
   background: linear-gradient(
     135deg,
@@ -601,10 +768,9 @@
 
 .draw-cta--busy {
   cursor: not-allowed;
-  border-color: var(--border);
   color: var(--muted-foreground);
   background: var(--lp-raised);
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 var(--lp-edge);
 }
 
 .draw-cta--busy:hover {
@@ -771,33 +937,47 @@
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 767px) {
+  :root {
+    --lp-r-panel: 26px;
+    --lp-r-well: 18px;
+  }
+
   .brand-mark {
-    width: 42px;
-    height: 42px;
+    width: 40px;
+    height: 40px;
     border-radius: 14px;
   }
 
   .mode-switch__item {
-    padding: 0 12px;
+    height: 34px;
+    padding: 0 14px;
   }
 
-  .lux-panel,
-  .lux-panel--summary,
-  .lux-panel--stage {
-    border-radius: 2px;
+  /* One soft column: panels keep their radius and the page gutter stays even. */
+  .lux-panel {
+    backdrop-filter: none;
+    box-shadow:
+      0 18px 48px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 var(--lp-edge);
+  }
+
+  .game-rail {
+    --rail-gutter: 16px;
+
+    grid-auto-columns: 46vw;
   }
 
   .draw-machine {
-    border-radius: 21px;
+    border-radius: 22px;
   }
 
   .draw-machine__chamber {
-    min-height: 350px;
+    min-height: 330px;
   }
 
   .draw-machine__globe {
-    width: min(96%, 340px);
+    width: min(94%, 330px);
   }
 
   .draw-machine__status {
@@ -807,8 +987,32 @@
     text-overflow: ellipsis;
   }
 
+  .draw-machine__rail {
+    height: 26px;
+  }
+
   .result-slot {
-    border-radius: 13px;
+    border-radius: 14px;
+  }
+
+  /* Three pills share one row at 375px, so they trade horizontal padding for
+     room rather than wrapping their label. */
+  .pill {
+    min-height: 48px;
+    padding: 0 12px;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  /* Touch targets stay at least 44px even where the desktop control is smaller. */
+  .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .draw-cta {
+    height: 60px;
+    font-size: 17px;
   }
 }
 

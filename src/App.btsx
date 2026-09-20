@@ -543,14 +543,13 @@ setup
   };
 
 div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground selection:bg-primary/30 overflow-x-hidden relative")
-  AmbientField
   canvas(
     ~ ref={canvasRef}
     ~ className="fixed inset-0 pointer-events-none z-[100] max-w-full"
     ~ )
   if showMoneyRain
-    div(className="fixed inset-0 pointer-events-none z-[90] bg-gradient-to-b from-primary/10 to-transparent animate-[fadeIn_0.6s_ease]")
-  div(className="relative z-10 w-full max-w-[1480px] mx-auto px-3 md:px-6 py-4 md:py-7 overflow-x-hidden")
+    div(className="fixed inset-0 pointer-events-none z-[90] bg-gradient-to-b from-primary/1 to-transparent animate-[fadeIn_0.6s_ease]")
+  div(className="relative z-10 w-full max-w-[1480px] mx-auto px-4 md:px-6 py-4 md:py-7 overflow-x-hidden")
     AppHeader(
       ~ pool={pool}
       ~ gameName={game.name}

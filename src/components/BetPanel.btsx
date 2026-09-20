@@ -42,7 +42,7 @@ div(className="lux-panel p-5")
     h2(className="text-[12px] font-black tracking-[0.12em] flex items-center gap-2")
       Dices(className="w-4 h-4 text-primary")
       | #{" PICK YOUR NUMBERS"}
-    span(className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-sunken border border-border text-foreground/80")
+    span(className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-sunken text-foreground/80")
       | #{selected.length}
       | /
       | #{required}
@@ -51,7 +51,7 @@ div(className="lux-panel p-5")
   div(className="mb-3")
     p(className="text-[10px] tracking-widest text-muted-foreground font-bold mb-2")
       | BET TYPE
-    div(className="grid grid-cols-3 gap-1 p-1 rounded-[16px] bg-sunken border border-border")
+    div(className="grid grid-cols-3 gap-1 p-1 rounded-[16px] bg-sunken")
       each bt in BET_TYPES key bt
         button(
           ~ onClick={() => onSelectBetType(bt)}
@@ -83,7 +83,7 @@ div(className="lux-panel p-5")
     ~ isDrawing={isDrawing}
     ~ onBuy={onBuyRandom}
     ~ )
-  div(className="mt-4 rounded-[16px] bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/20 p-3.5 flex items-center justify-between")
+  div(className="mt-4 rounded-[16px] bg-gradient-to-br from-primary/15 to-primary/5 p-3.5 flex items-center justify-between")
     div
       p(className="text-[10px] tracking-widest font-black text-primary/80")
         | YOU WILL WIN

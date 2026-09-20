@@ -47,9 +47,9 @@ div(className="lux-panel lux-panel--stage overflow-hidden relative")
           | #{pool}
           | #{" BALLS"}
       div(className="hidden _flex items-center gap-2")
-        span(className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-primary/15 border border-primary/20 text-primary")
+        span(className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-primary/15 text-primary")
           | #{formatJackpot(jackpot)}
-        span(className={`text-[10px] font-bold px-2 py-1 rounded-full border ${isDrawing ? 'bg-destructive/20 border-destructive/40 text-destructive animate-pulse' : 'bg-raised border-border text-muted-foreground'}`})
+        span(className={`text-[10px] font-bold px-2 py-1 rounded-full ${isDrawing ? 'bg-destructive/20 text-destructive animate-pulse' : 'bg-raised text-muted-foreground'}`})
           | #{isDrawing ? '● DRAWING' : '● READY'}
     div(className={`draw-machine ${isDrawing ? 'draw-machine--active' : ''}`})
       div(className="draw-machine__rail")
@@ -114,7 +114,7 @@ div(className="lux-panel lux-panel--stage overflow-hidden relative")
           div(className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -skew-x-12 translate-x-[-120%] group-hover:translate-x-[120%] transition-transform duration-700")
         if isDrawing
           fragment
-            span(className="w-5 h-5 border-[3px] border-border/30 border-t-white rounded-full animate-spin")
+            span(className="w-5 h-5 border-[3px] border-white/20 border-t-white rounded-full animate-spin")
             | #{isMixing ? `MIXING ${pool} BALLS...` : `DRAWING ${drawnBalls.length}/6`}
         else
           fragment

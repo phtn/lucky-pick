@@ -69,7 +69,7 @@ Manrope / IBM Plex Mono type. Theme files carry no `--font-*`, `--radius`,
 `--spacing` or `--shadow-*` declarations; those are stripped when a theme is
 added, and `style.css` owns them via a plain `@theme` block.
 
-`src/styles/default.css` holds the default token set; `doom.css` and `soft-pop.css`
+`src/styles/new-default.css` holds the default token set; `doom.css` and `soft-pop.css`
 are the alternatives. Each file carries only tokens, scoped to its own id:
 
 ```css
@@ -81,6 +81,26 @@ Tailwind, the `@theme inline` mapping and the base layer live once in
 `src/style.css`, which imports every theme file. All three ship in one bundle, so
 switching is a single attribute on `<html>` — no extra request, no flash. A small
 inline script in `index.html` applies the stored choice before first paint.
+
+## Surfaces
+
+The interface has no strokes. A surface separates from the one behind it by its
+fill, one top-lit inner edge (`--lp-edge`) and a shadow — not a 1px border. Use
+the shared vocabulary in `style.css` rather than re-deriving it per component:
+
+| Class | Use |
+| --- | --- |
+| `.lux-panel` (`--stage`, `--compact`) | A page-level panel. `--stage` carries the warm top light. |
+| `.well` (`--raised`, `--flat`) | A sunken block inside a panel — the replacement for `bg-sunken border border-border`. |
+| `.pill`, `.pill--solid`, `.pill--muted` | Action rows. One `--solid` per cluster is the high-contrast choice. |
+| `.icon-button`, `.icon-button--accent` | Circular controls; `--accent` is the single filled one in a row. |
+| `.meta-chip`, `.live-chip` | Quiet dot-and-label markers. |
+| `.game-chip`, `.game-rail` | The scroll-snapping game selector. |
+| `.soft-divide` | A light separation where a list genuinely needs one. |
+
+Shape is tokenised too — `--lp-r-panel`, `--lp-r-well` and `--lp-r-pill` — so a
+breakpoint adjusts radius in one place. Anything that still reads `border` falls
+back to `--lp-divider`, which is a light rather than a line.
 
 The UI is written against tokens rather than fixed colours: `bg-card`,
 `text-foreground`, `border-border`, `text-primary`, and the derived `--lp-*` set
