@@ -22,7 +22,6 @@ setup
   const stored = readStoredTheme();
   const [theme, setTheme] = useState<ThemeId>(stored.theme);
   const [themeMode, setThemeMode] = useState<ThemeMode>(stored.mode);
-  const [showThemes, setShowThemes] = useState(false);
   const [gameId, setGameId, getGameId] = useState<GameId>('6/42');
   const [mode, setMode] = useState<GameMode>('solo');
   const [betType, setBetType] = useState<BetType>(6);
@@ -126,7 +125,6 @@ setup
   const pickTheme = (next: ThemeId) => {
     applyTheme({ theme: next, mode: themeMode });
     setTheme(next);
-    setShowThemes(false);
     playTone(720,0.16,'triangle',0.12);
     showToast(`${THEMES.find(t=>t.id===next)?.name} theme`);
   };
@@ -560,9 +558,8 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground selec
       ~ theme={theme}
       ~ themeMode={themeMode}
       ~ onToggleThemeMode={toggleMode}
-      ~ showThemes={showThemes}
-      ~ onToggleThemePicker={() => setShowThemes(v => !v)}
       ~ onPickTheme={pickTheme}
+      ~ onNotify={showToast}
       ~ )
     GameSwitcher(
       ~ game={game}

@@ -104,7 +104,14 @@
 
   html {
     background: var(--background);
-    scrollbar-color: var(--lp-glow) transparent;
+    ::-webkit-scrollbar: {
+      display: none;
+    }
+    /* Firefox */
+    scrollbar-width: none;
+
+    /* IE and Legacy Edge */
+    -ms-overflow-style: none;
   }
 
   body {
@@ -529,21 +536,8 @@
 .draw-machine {
   position: relative;
   overflow: hidden;
-  border-radius: 26px;
-  background: var(--lp-sunken);
-  box-shadow:
-    inset 0 1px 0 var(--lp-edge),
-    inset 0 -28px 70px rgba(0, 0, 0, 0.4),
-    0 24px 54px rgba(0, 0, 0, 0.38);
-  transition: box-shadow 450ms ease;
-}
-
-.draw-machine--active {
-  box-shadow:
-    inset 0 1px 0 color-mix(in oklab, var(--primary) 30%, var(--lp-edge)),
-    inset 0 -28px 70px rgba(0, 0, 0, 0.4),
-    0 24px 70px rgba(0, 0, 0, 0.42),
-    0 0 56px var(--lp-glow-soft);
+  border-radius: 10px;
+  /*background: var(--lp-sunken);*/
 }
 
 .draw-machine__rail {
@@ -552,7 +546,6 @@
   align-items: center;
   justify-content: center;
   gap: 9px;
-  background: linear-gradient(to bottom, var(--lp-veil), transparent);
 }
 
 .draw-machine__light {
@@ -577,9 +570,6 @@
   min-height: clamp(350px, 41vw, 500px);
   place-items: center;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 50% 38%, color-mix(in oklab, var(--muted-foreground) 12%, transparent), transparent 48%),
-    var(--lp-shade);
 }
 
 .draw-machine__grid {

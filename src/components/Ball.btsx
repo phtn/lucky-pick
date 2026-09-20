@@ -1,13 +1,12 @@
 props { n, size = 'md', glowing = false }: { n: number; size?: 'sm' | 'md' | 'lg' | 'xl'; glowing?: boolean; }
 setup
   const dim =
-    size === 'sm' ? 'w-7 h-7 text-[11px]' :
-    size === 'lg' ? 'w-[56px] h-[56px] md:w-[64px] md:h-[64px] text-[17px] md:text-[19px]' :
-    size === 'xl' ? 'w-[72px] h-[72px] md:w-[80px] md:h-[80px] text-[22px] md:text-[26px]' :
+    size === 'sm' ? 'w-7 h-7 text-xs' :
+    size === 'lg' ? 'w-[56px] h-[56px] md:w-[64px] md:h-[64px] text-base md:text-2xl' :
+    size === 'xl' ? 'w-[72px] h-[72px] md:w-[80px] md:h-[80px] text-lg md:text-3xl' :
     'w-8 h-8 md:w-9 md:h-9 text-[12px]';
 
-div(className={`${dim} ${glowing ? 'lp-ball lp-ball--accent ring-2 ring-primary/60' : 'lp-ball'} rounded-full relative flex items-center justify-center font-black tracking-tight select-none shrink-0`})
+div(className={`${dim} ${glowing ? 'lp-ball lp-ball--accent ring-2 ring-primary/60' : 'lp-ball'} rounded-full relative flex items-center justify-center font-bold tracking-tight select-none shrink-0`})
   span(className="leading-none")
     | #{n}
   span(className="absolute top-[14%] left-[18%] w-[38%] h-[28%] bg-white/60 rounded-full blur-[0.5px] pointer-events-none")
-

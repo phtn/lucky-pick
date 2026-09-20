@@ -9,7 +9,7 @@ const url = import.meta.env.PUBLIC_CONVEX_URL
 export const convexClient = url ? new ConvexClient(url) : null
 
 const fetchAuthToken = async ({ forceRefreshToken }: { forceRefreshToken: boolean }) => {
-  const user = auth.currentUser
+  const user = auth?.currentUser
   return user ? user.getIdToken(forceRefreshToken) : null
 }
 
@@ -56,7 +56,7 @@ export const subscribeToConvexAuthState = (onStoreChange: () => void) => {
 let syncedUid: string | null = null
 
 const ensureConvexUser = async () => {
-  const uid = auth.currentUser?.uid
+  const uid = auth?.currentUser?.uid
   if (!convexClient || !uid || uid === syncedUid) return
 
   syncedUid = uid
@@ -72,14 +72,14 @@ const ensureConvexUser = async () => {
   }
 }
 
-if (convexClient) {
+if (convexClient && auth) {
   onAuthStateChanged(auth, (user) => {
     if (!user) syncedUid = null
     // Reconfigure only on sign-in and sign-out. Convex owns token rotation;
     // re-registering on every Firebase token change can create refresh races.
     publishConvexAuthState({ isAuthenticated: false, isLoading: Boolean(user), userId: null })
     convexClient.setAuth(fetchAuthToken, (isAuthenticated) => {
-      if (auth.currentUser?.uid !== user?.uid) return
+      if (auth?.currentUser?.uid !== user?.uid) return
       publishConvexAuthState({
         isAuthenticated,
         isLoading: false,

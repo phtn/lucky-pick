@@ -1,5 +1,4 @@
 import {
-  GoogleAuthProvider,
   getRedirectResult,
   onIdTokenChanged,
   signInWithPopup,
@@ -8,20 +7,20 @@ import {
   type User,
   type UserCredential
 } from 'firebase/auth'
-import { useCallback, useEffect, useState } from 'octane'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'octane'
 import {
   type FirebaseCustomClaims,
   getFirebaseCustomClaimsFromIdTokenResult,
   hasFirebaseGodAccess
 } from '@/lib/firebase-admin/custom-claims'
 
-import { auth, isFirebaseConfigured } from './'
-
-const googleProvider = new GoogleAuthProvider()
-
-googleProvider.setCustomParameters({
-  prompt: 'select_account'
-})
+import { auth, googleProvider, isFirebaseConfigured } from './'
+import {
+  getRememberedAccounts,
+  rememberAccount,
+  subscribeToRememberedAccounts,
+  type RememberedAccount
+} from './accounts'
 
 const TOKEN_FETCH_TIMEOUT_MS = 12_000
 const TOKEN_FETCH_MAX_RETRIES = 2
@@ -56,10 +55,22 @@ export const openInExternalBrowser = (): boolean => {
   return true
 }
 
-export async function signInWithGoogle(): Promise<UserCredential | undefined> {
+/**
+ * @param loginHint Email of a previously used account. Google lands on that
+ * entry in the chooser instead of the generic "select an account" screen, which
+ * is what makes the switcher's roster feel like switching rather than
+ * re-authenticating from scratch.
+ */
+export async function signInWithGoogle(loginHint?: string): Promise<UserCredential | undefined> {
   if (!isFirebaseConfigured || !auth) {
     throw new Error('Firebase auth is not configured.')
   }
+
+  // A shared provider instance carries whichever hint was set last, so it is
+  // rewritten (and cleared) on every call rather than accumulating.
+  googleProvider.setCustomParameters(
+    loginHint ? { prompt: 'select_account', login_hint: loginHint } : { prompt: 'select_account' }
+  )
 
   // Messenger / FB / Instagram in-app WebView blocks window.open popups - use redirect flow
   if (isMessengerInAppBrowser()) {
@@ -67,16 +78,25 @@ export async function signInWithGoogle(): Promise<UserCredential | undefined> {
     return
   }
 
-  return signInWithPopup(auth, googleProvider)
+  const credential = await signInWithPopup(auth, googleProvider)
+  rememberAccount(credential.user)
+  return credential
 }
 
 export async function consumeRedirectResult(): Promise<UserCredential | null> {
   if (!isFirebaseConfigured || !auth) return null
   try {
-    return await getRedirectResult(auth)
+    const credential = await getRedirectResult(auth)
+    if (credential) rememberAccount(credential.user)
+    return credential
   } catch {
     return null
   }
+}
+
+/** Roster of accounts this browser has signed in with, newest first. */
+export function useRememberedAccounts(): RememberedAccount[] {
+  return useSyncExternalStore(subscribeToRememberedAccounts, getRememberedAccounts, getRememberedAccounts)
 }
 
 export function useFirebaseUser() {
@@ -165,6 +185,9 @@ export function useFirebaseUser() {
         return
       }
 
+      // Covers sessions Firebase restored on load, not just fresh sign-ins, so
+      // the roster never misses the account the user is actually on.
+      rememberAccount(nextUser)
       setIsLoading(true)
       void loadClaimsWithRetry(nextUser, requestId, false)
     })

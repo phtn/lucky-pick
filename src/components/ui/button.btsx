@@ -1,0 +1,42 @@
+module "use client";
+import { Button as ButtonPrimitive } from '@octanejs/base-ui/button'
+import { cn } from '@/lib/utils'
+
+module
+  export type ButtonVariant = 'default' | 'outline' | 'secondary' | 'ghost' | 'destructive' | 'link'
+  export type ButtonSize = 'default' | 'xs' | 'sm' | 'lg' | 'icon' | 'icon-xs' | 'icon-sm'
+
+  export interface ButtonProps extends ButtonPrimitive.Props {
+    variant?: ButtonVariant
+    size?: ButtonSize
+  }
+
+  const base =
+    'group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0'
+
+  const variants: Record<ButtonVariant, string> = {
+    default: 'bg-primary text-primary-foreground hover:bg-primary/80',
+    outline: 'border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted',
+    secondary: 'bg-secondary text-secondary-foreground aria-expanded:bg-secondary',
+    ghost: 'hover:bg-muted hover:text-foreground aria-expanded:bg-muted dark:hover:bg-muted/50',
+    destructive: 'bg-destructive/10 text-destructive hover:bg-destructive/20',
+    link: 'text-primary underline-offset-4 hover:underline'
+  }
+
+  const sizes: Record<ButtonSize, string> = {
+    default: 'h-8 gap-1.5 px-2.5',
+    xs: 'h-6 gap-1 rounded-md px-2 text-xs',
+    sm: 'h-7 gap-1 rounded-md px-2.5 text-[0.8rem]',
+    lg: 'h-9 gap-1.5 px-2.5',
+    icon: 'size-8',
+    'icon-xs': 'size-6 rounded-md',
+    'icon-sm': 'size-7 rounded-md'
+  }
+
+props { className, variant = 'default', size = 'default', ...props }: ButtonProps
+
+ButtonPrimitive(
+  ~ data-slot="button"
+  ~ className={cn(base, variants[variant], sizes[size], className)}
+  ~ {...props}
+  ~ )

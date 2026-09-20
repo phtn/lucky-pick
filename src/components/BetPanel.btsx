@@ -37,7 +37,7 @@ setup
   // A bet type is also the count of numbers a ticket holds.
   const required = betType;
 
-div(className="lux-panel p-5")
+div(className="p-5")
   div(className="flex items-center justify-between mb-4")
     h2(className="text-[12px] font-black tracking-[0.12em] flex items-center gap-2")
       Dices(className="w-4 h-4 text-primary")

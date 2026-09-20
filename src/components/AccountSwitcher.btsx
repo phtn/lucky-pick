@@ -1,0 +1,122 @@
+module "use client";
+import { useCallback, useState } from 'octane'
+import Switcher from '@/components/ui/switcher.btsx'
+import { isFirebaseConfigured } from '@/lib/firebase'
+import { forgetAllAccounts, getAccountLabel } from '@/lib/firebase/accounts'
+import { signInWithGoogle, signOutUser, useFirebaseUser, useRememberedAccounts } from '@/lib/firebase/auth'
+import type { IconName } from '@/lib/icons'
+
+module
+  interface AccountSwitcherProps {
+    /** Surfaces sign-in failures through the app's existing toast. */
+    onNotify?: (message: string) => void
+    /** App settings rendered inside this menu, below the account rows. */
+    children?: unknown
+  }
+
+  interface AccountItem {
+    id: string
+    label: string
+    icon: IconName
+    description?: string
+    imageUrl?: string | null
+  }
+
+  interface AccountAction {
+    id: string
+    label: string
+    icon: IconName
+    onSelect: () => void
+    variant?: 'default' | 'destructive'
+  }
+
+  // Closing the Google window is a decision, not a failure, so it stays silent.
+  const silentAuthCodes = new Set([
+    'auth/popup-closed-by-user',
+    'auth/cancelled-popup-request',
+    'auth/user-cancelled'
+  ])
+
+  const describeAuthError = (error: unknown): string | null => {
+    const code = typeof error === 'object' && error !== null ? (error as { code?: string }).code : undefined
+    if (code && silentAuthCodes.has(code)) return null
+    if (code === 'auth/popup-blocked') return 'Your browser blocked the sign-in window. Allow popups and try again.'
+    if (code === 'auth/network-request-failed') return 'Network error during sign-in. Check your connection.'
+    return error instanceof Error ? error.message : 'Sign-in failed. Please try again.'
+  }
+
+props { onNotify, children }: AccountSwitcherProps
+
+setup
+  const { user, isLoading, authError } = useFirebaseUser()
+  const accounts = useRememberedAccounts()
+  const [isPending, setIsPending] = useState(false)
+
+  const notify = useCallback((message: string | null) => {
+    if (message) onNotify?.(message)
+  }, [onNotify])
+
+  // `loginHint` is the address of a roster entry, so Google opens on that
+  // account instead of its generic chooser.
+  const startSignIn = useCallback(async (loginHint?: string) => {
+    setIsPending(true)
+    try {
+      const credential = await signInWithGoogle(loginHint)
+      // A redirect flow resolves after navigation, so there is nothing to
+      // announce on this side of it.
+      if (credential) notify(`Signed in as ${credential.user.displayName ?? credential.user.email ?? 'your account'}`)
+    } catch (error) {
+      notify(describeAuthError(error))
+    } finally {
+      setIsPending(false)
+    }
+  }, [notify])
+
+  const handleSignOut = useCallback(async () => {
+    setIsPending(true)
+    try {
+      await signOutUser()
+      notify('Signed out')
+    } catch (error) {
+      notify(describeAuthError(error))
+    } finally {
+      setIsPending(false)
+    }
+  }, [notify])
+
+  const items: AccountItem[] = accounts.map(account => ({
+    id: account.uid,
+    label: getAccountLabel(account),
+    icon: 'account',
+    description: account.email ?? undefined,
+    imageUrl: account.photoURL
+  }))
+
+  const actions: AccountAction[] = user
+    ? [{ id: 'sign-out', label: 'Sign out', icon: 'signout', onSelect: () => void handleSignOut(), variant: 'destructive' }]
+    : accounts.length > 0
+      ? [{ id: 'forget', label: 'Forget saved accounts', icon: 'close', onSelect: forgetAllAccounts }]
+      : []
+
+  // An unconfigured deployment has no auth to offer, so the control says so
+  // rather than opening a menu that cannot do anything.
+  const title = isFirebaseConfigured ? (user ? 'Authenticated' : 'Recent accounts') : 'Auth unavailable'
+  const emptyLabel = isFirebaseConfigured ? 'Sign in' : 'Auth off'
+
+if !isFirebaseConfigured
+  Switcher(items={[]} title={title} activeId={null} emptyLabel={emptyLabel} icon='key' children={children})
+else
+  Switcher(
+    ~ items={items}
+    ~ title={title}
+    ~ activeId={user?.uid ?? null}
+    ~ emptyLabel={authError ? 'Sign in again' : emptyLabel}
+    ~ busy={isPending || isLoading}
+    ~ createLabel={user ? 'Switch account' : 'Sign in with Google'}
+    ~ createLabelIcon='goog'
+    ~ icon={user ? 'account' : 'person'}
+    ~ onSelect={(item) => void startSignIn(item.description)}
+    ~ onCreate={() => void startSignIn()}
+    ~ actions={actions}
+    ~ children={children}
+    ~ )

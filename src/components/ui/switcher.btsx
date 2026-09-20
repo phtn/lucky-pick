@@ -8,6 +8,20 @@ module
     id: string
     label: string
     icon: IconName
+    shortName?: string
+    /** Secondary line under the label, e.g. an email address. */
+    description?: string
+    /** Avatar or logo shown in place of `icon` when it loads. */
+    imageUrl?: string | null
+  }
+  /** Trailing commands that are not one of the selectable items. */
+  interface SwitcherAction {
+    id: string
+    label: string
+    icon: IconName
+    onSelect: () => void
+    variant?: 'default' | 'destructive'
+    disabled?: boolean
   }
   interface SwitcherProps {
     items: SwitcherItem[]
@@ -19,22 +33,34 @@ module
     createLabelIcon?: IconName
     onSelect?: (item: SwitcherItem) => void
     onCreate?: () => void
-    icon? IconName
+    actions?: SwitcherAction[]
+    icon?: IconName
+    /**
+     * Extra menu content — settings, toggles, submenus — rendered between the
+     * create row and the trailing actions. Compose it from the same
+     * `dropdown-menu.btsx` parts this component uses.
+     */
+    children?: unknown
   }
 
 component SwitcherRoot
-  props { items, title, activeId, emptyLabel, busy = false, createLabel, createLabelIcon, onSelect, onCreate, icon }: SwitcherProps
+  props { items, title, activeId, emptyLabel, busy = false, createLabel, createLabelIcon, onSelect, onCreate, actions, icon, children }: SwitcherProps
   setup
-    const activeItem = items.find(item => item.id === activeId) ?? items[0];
+    // Omitting `activeId` falls back to the first item; passing `null` states
+    // that nothing is selected, which is what drops the trigger to `emptyLabel`.
+    const activeItem = activeId === undefined ? items[0] : items.find(item => item.id === activeId);
     const trigger = <Button/>;
     const label = busy ? 'Loading…' : activeItem?.label ?? emptyLabel;
 
   DropdownMenu
     DropdownMenuTrigger(render={trigger} className='bg-background/80 dark:bg-muted/50 hover:dark:bg-muted text-fg hover:bg-background/90 data-pressed:bg-background px-1 gap-0 light:border ligbn rounded-lg light:bg-panel shadow-xs light:shadow-elevation' disabled={busy})
       div(className="flex aspect-square size-6 items-center justify-center")
-        Icon(name={activeItem?.icon ?? icon ?? 'circle-plus'} className='size-3.5 text-accent')
+        // if activeItem?.imageUrl
+        //   img(src={activeItem.photoUrl} alt="" className='size-5 rounded-full object-cover')
+        // else
+        Icon(name={activeItem?.icon ?? icon ?? 'circle-plus'} className='size-3.5 text-foreground/70')
       div(className=' min-w-0 h-6 flex items-center max-[760px]:hidden')
-        span(className='font-sans font-normal text-muted-foreground text-sm -tracking-[0.02em] truncate capitalize' title={label}) #{label}
+        span(className='font-sans font-normal text-muted-foreground text-sm -tracking-[0.02em] truncate capitalize' title={label}) #{label.split(' ').shift()}
       Icon(name='select-caret' className='size-3 ml-1 opacity-70')
     DropdownMenuContent(className="min-w-44 max-w-72 bg-background" align="start" side="bottom" sideOffset={4})
       DropdownMenuGroup
@@ -44,8 +70,14 @@ component SwitcherRoot
         each item in items key item.id
           DropdownMenuItem(onClick={() => onSelect?.(item)} disabled={item.id === activeItem?.id} className="gap-1 p-2 hover:bg-foreground/10!")
             div(className="flex size-6 items-center justify-center")
+              // if item.imageUrl
+              //   img(src={item.imageUrl} alt="" className='size-5 rounded-full object-cover')
+              // else
               Icon(name={item.icon} className='size-4')
-            span(className='truncate pe-2') #{item.label}
+            div(className='min-w-0 flex-1')
+              span(className='block truncate pe-2') #{item.label}
+            if item.id === activeItem?.id
+              Icon(name='check' className='size-3.5 ml-auto text-accent')
         empty
           DropdownMenuItem(disabled className='hidden p-2 text-xs text-muted-foreground') #{emptyLabel}
       if onCreate && createLabel
@@ -55,6 +87,19 @@ component SwitcherRoot
             div(className="flex size-6 items-center justify-center rounded-md")
               Icon(name={createLabelIcon ?? 'plus'} className='size-3.5')
             div(className="font-sans text-sm -tracking-[0.02em]") #{createLabel}
+      if children
+        DropdownMenuGroup(children={children})
+      if actions && actions.length
+        DropdownMenuGroup
+          DropdownMenuSeparator
+          each action in actions key action.id
+            DropdownMenuItem(onClick={action.onSelect} disabled={action.disabled} variant={action.variant ?? 'default'} className="gap-1 p-2 text-muted-foreground hover:bg-muted-foreground/10! hover:text-accent")
+              div(className="flex size-6 items-center justify-center rounded-md")
+                Icon(name={action.icon} className='size-3.5')
+              div(className="font-sans text-sm -tracking-[0.02em]") #{action.label}
+
+module
+  export type { SwitcherItem, SwitcherAction, SwitcherProps }
 
 props {...props}: SwitcherProps
 SwitcherRoot({...props})

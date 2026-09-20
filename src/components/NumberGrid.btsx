@@ -19,7 +19,7 @@ fragment
       each n in Array.from({ length: pool }, (_, i) => i + 1) key n
         button(
           ~ onClick={() => onToggleNumber(n)}
-          ~ className={`aspect-square rounded-full text-[13px] font-black transition-all relative flex items-center justify-center ${(selected.includes(n)) ? 'bg-gradient-to-br from-primary/70 to-primary text-black shadow-[0_0_14px_var(--lp-glow),inset_0_1px_2px_rgba(255,255,255,0.9)] scale-[1.06] z-10' : 'lp-ball shadow-[inset_0_1px_2px_rgba(255,255,255,1),0_2px_6px_rgba(0,0,0,0.35)] hover:scale-[1.05]'}`}
+          ~ className={`aspect-square rounded-full border border-border/10 shadow-sm text-lg font-bold transition-all relative flex items-center justify-center ${(selected.includes(n)) ? 'text-black scale-[1.06] z-10' : 'hover:scale-[1.05]'}`}
           ~ )
           | #{n}
           if (selected.includes(n))
@@ -30,7 +30,6 @@ fragment
       ~ onClick={onQuickPick}
       ~ className="pill pill--solid text-[11px]"
       ~ )
-      Dice5(className="w-3.5 h-3.5 hidden min-[380px]:block")
       | #{"LUCKY PICK"}
     button(
       ~ onClick={onEvenOddMix}

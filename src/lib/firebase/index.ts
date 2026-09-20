@@ -1,13 +1,5 @@
-import { type FirebaseOptions, getApp, getApps, initializeApp } from 'firebase/app'
-import {
-  GoogleAuthProvider,
-  getAuth,
-  onAuthStateChanged,
-  signInWithPopup,
-  signOut,
-  type User,
-  type UserCredential
-} from 'firebase/auth'
+import { type FirebaseApp, type FirebaseOptions, getApp, getApps, initializeApp } from 'firebase/app'
+import { type Auth, GoogleAuthProvider, getAuth, onAuthStateChanged, type User } from 'firebase/auth'
 
 export const firebaseConfig = {
   apiKey: import.meta.env.PUBLIC_FIREBASE_API_KEY,
@@ -19,6 +11,8 @@ export const firebaseConfig = {
   measurementId: import.meta.env.PUBLIC_FIREBASE_MEASUREMENT_ID
 } satisfies FirebaseOptions
 
+// Analytics and storage are optional; these four are what `getAuth` needs to
+// reach the right project.
 const requiredConfig = {
   PUBLIC_FIREBASE_API_KEY: firebaseConfig.apiKey,
   PUBLIC_FIREBASE_AUTH_DOMAIN: firebaseConfig.authDomain,
@@ -26,29 +20,36 @@ const requiredConfig = {
   PUBLIC_FIREBASE_APP_ID: firebaseConfig.appId
 }
 
-export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean)
-const missingConfig = Object.entries(requiredConfig)
+export const missingFirebaseConfig = Object.entries(requiredConfig)
   .filter(([, value]) => !value)
   .map(([name]) => name)
 
-if (missingConfig.length > 0) {
-  throw new Error(`Missing Firebase configuration: ${missingConfig.join(', ')}`)
+export const isFirebaseConfigured = missingFirebaseConfig.length === 0
+
+// A missing `.env` must not take the whole app down with it — the game runs fine
+// signed out, so the switcher degrades to a disabled control instead.
+if (!isFirebaseConfigured) {
+  console.warn(`Firebase auth is disabled. Missing configuration: ${missingFirebaseConfig.join(', ')}`)
 }
 
-export const firebaseApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
-export const auth = getAuth(firebaseApp)
+export const firebaseApp: FirebaseApp | null = isFirebaseConfigured
+  ? (getApps().length > 0 ? getApp() : initializeApp(firebaseConfig))
+  : null
+
+export const auth: Auth | null = firebaseApp ? getAuth(firebaseApp) : null
+
 export const googleProvider = new GoogleAuthProvider()
-let authStateReady = false
 
-export function signInWithGoogle(): Promise<UserCredential> {
-  return signInWithPopup(auth, googleProvider)
-}
+googleProvider.setCustomParameters({ prompt: 'select_account' })
 
-export function signOutCurrentUser(): Promise<void> {
-  return signOut(auth)
-}
+let authStateReady = !isFirebaseConfigured
 
 export function subscribeToAuthState(onStoreChange: () => void): () => void {
+  if (!auth) {
+    onStoreChange()
+    return () => {}
+  }
+
   return onAuthStateChanged(auth, () => {
     authStateReady = true
     onStoreChange()
@@ -56,23 +57,15 @@ export function subscribeToAuthState(onStoreChange: () => void): () => void {
 }
 
 export function getCurrentUser(): User | null {
-  return auth.currentUser
-}
-
-export function getServerAuthUser(): User | null {
-  return null
+  return auth?.currentUser ?? null
 }
 
 export function getAuthStateReady(): boolean {
   return authStateReady
 }
 
-export function getServerAuthStateReady(): boolean {
-  return false
-}
-
 export async function authenticatedFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
-  const user = auth.currentUser
+  const user = auth?.currentUser
   if (!user) throw new Error('Sign in with Google to access your files.')
 
   const headers = new Headers(init.headers)

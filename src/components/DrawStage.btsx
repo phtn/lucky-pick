@@ -34,7 +34,7 @@ module
 props { game, jackpot, themeKey, isDrawing, isMixing, drawnBalls, currentBallAnim, draws, winnerJackpot, onDismissJackpot, winList, onDismissWins, onStartDraw }: DrawStageProps
 setup const pool = game.pool;
 
-div(className="lux-panel lux-panel--stage overflow-hidden relative")
+div(className="overflow-hidden relative")
   div(className="absolute top-0 left-1/2 -translate-x-1/2 w-[75%] h-[1px] bg-gradient-to-r from-transparent via-primary/60 to-transparent")
   div(className="relative")
     div(className="hidden _flex items-center justify-between mb-3")
@@ -70,7 +70,7 @@ div(className="lux-panel lux-panel--stage overflow-hidden relative")
               | #{isDrawing ? (isMixing ? 'Calibrating chamber' : `Selecting ball ${Math.min(drawnBalls.length + 1, 6)} of 6`) : drawnBalls.length === 6 ? 'Draw complete' : 'Awaiting draw'}
         div(className="draw-machine__base" aria-hidden="true")
           span
-      div(className="draw-machine__tray p-3 md:p-4")
+      div(className="p-3 md:p-4")
         div(className="flex items-center justify-between mb-2.5")
           p(className="text-[10px] font-black tracking-[0.18em] text-muted-foreground")
             | DRAWN BALLS
@@ -82,9 +82,9 @@ div(className="lux-panel lux-panel--stage overflow-hidden relative")
             | #{draws[0]?.isOfficial ? '• OFFICIAL' : ''}
         div(className="grid grid-cols-6 gap-2 md:gap-3")
           each _, i in Array.from({ length: 6 }) key i
-            div(className="result-slot aspect-square flex items-center justify-center relative overflow-hidden")
+            div(className="aspect-square rounded-full flex items-center justify-center relative overflow-hidden")
               if (drawnBalls[i])
-                div(className={`${(currentBallAnim === drawnBalls[i]) ? 'animate-[ballPop_0.6s_cubic-bezier(0.34,1.56,0.64,1)]' : 'animate-[ballIn_0.4s_ease]'}`})
+                div(className={`${(currentBallAnim === drawnBalls[i]) ? 'animate-in zoom-in' : ''}`})
                   Ball(
                     ~ n={(drawnBalls[i])}
                     ~ size="lg"
@@ -93,14 +93,14 @@ div(className="lux-panel lux-panel--stage overflow-hidden relative")
               else
                 div(className="result-slot__empty")
               if (currentBallAnim === drawnBalls[i])
-                div(className="absolute inset-0 bg-primary/20 animate-[ping_0.6s_ease] rounded-[18px]")
+                div(className="absolute inset-0 bg-primary/20 animate-[ping_0.6s_ease]")
         if drawnBalls.length === 6
           div(className="mt-3 flex items-center justify-center gap-2 flex-wrap")
             span(className="text-[11px] font-bold text-muted-foreground")
               | SORTED RESULT:
             div(className="flex gap-1.5")
               each n in [...drawnBalls].sort((a, b) => a - b) key n
-                span(className="w-7 h-7 rounded-full bg-primary text-primary-foreground text-[11px] font-black flex items-center justify-center shadow-[0_0_10px_var(--lp-glow)]")
+                span(className="w-7 h-7 rounded-full bg-primary text-primary-foreground text-[11px] font-black flex items-center justify-center")
                   | #{n}
             span(className="text-[11px] font-mono text-muted-foreground")
               | #{[...drawnBalls].sort((a, b) => a - b).map(n => String(n).padStart(2, '0')).join('-')}
