@@ -1,5 +1,3 @@
-import { Check, Dice5 } from '@octanejs/lucide';
-
 module
   // The 1..pool board plus the three shortcuts that fill it.
   interface NumberGridProps {
@@ -14,30 +12,27 @@ module
 props { pool, selected, onToggleNumber, onQuickPick, onEvenOddMix, onClear }: NumberGridProps
 
 fragment
-  div(className="rounded-[18px] bg-sunken p-3")
-    div(className={`grid gap-1.5 ${pool > 49 ? 'grid-cols-8' : 'grid-cols-7'}`})
+  div(className="number-grid rounded-[18px] bg-sunken p-3")
+    div(className={`number-grid__matrix grid gap-1.5 ${pool > 49 ? 'grid-cols-8' : 'grid-cols-7'}`})
       each n in Array.from({ length: pool }, (_, i) => i + 1) key n
         button(
           ~ onClick={() => onToggleNumber(n)}
-          ~ className={`aspect-square rounded-full border border-border/10 shadow-sm text-lg font-bold transition-all relative flex items-center justify-center ${(selected.includes(n)) ? 'text-black scale-[1.06] z-10' : 'hover:scale-[1.05]'}`}
+          ~ className={`aspect-square rounded-full shadow-sm text-lg font-bold transition-all relative flex items-center justify-center ${(selected.includes(n)) ? 'bg-[color-mix(in_oklab,var(--destructive)_20%,transparent)] text-destructive scale-[1.06] z-10' : 'hover:scale-[1.05]'}`}
           ~ )
           | #{n}
-          if (selected.includes(n))
-            span(className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-destructive rounded-full flex items-center justify-center")
-              Check(className="w-2 h-2 text-foreground")
-  div(className="mt-3 grid grid-cols-3 gap-2")
+  div(className="mt-2 grid grid-cols-3 gap-2")
     button(
       ~ onClick={onQuickPick}
-      ~ className="pill pill--solid text-[11px]"
+      ~ className="pill--solid text-xs rounded-full h-10 font-medium px-2"
       ~ )
       | #{"LUCKY PICK"}
     button(
       ~ onClick={onEvenOddMix}
-      ~ className="pill text-[11px]"
+      ~ className="text-xs rounded-full h-10 font-medium px-2"
       ~ )
       | EVEN/ODD
     button(
       ~ onClick={onClear}
-      ~ className="pill pill--muted text-[11px]"
+      ~ className="pill--muted text-xs rounded-full h-10 font-medium px-2"
       ~ )
       | CLEAR

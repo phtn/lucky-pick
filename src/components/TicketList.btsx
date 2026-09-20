@@ -20,7 +20,7 @@ div(className="p-5")
       Trophy(className="w-4 h-4 text-primary")
       | #{" MY TICKETS"}
     div(className="flex items-center gap-2")
-      span(className="px-2.5 py-1 rounded-full bg-elevated text-[11px] font-bold")
+      span(className="px-2.5 py-1 rounded-full bg-elevated text-xs font-bold")
         | #{tickets.length}
       if tickets.length > 0
         button(
@@ -46,9 +46,9 @@ div(className="p-5")
           | #{tickets.length}
           | #{" tickets — every one still settles on a draw."}
       each t in tickets.slice(0, VISIBLE_TICKETS) key t.id
-        div(className={`rounded-[16px] p-3 transition ${t.status === 'won' ? 'bg-gradient-to-br from-primary/20 to-primary/5 shadow-[0_0_18px_var(--lp-glow-soft)]' : t.status === 'lost' ? 'bg-raised opacity-70' : 'bg-raised'}`})
+        div(className={`rounded-[16px] p-3 transition ${t.status === 'won' ? 'bg-gradient-to-br from-primary/20 to-primary/5' : t.status === 'lost' ? 'bg-raised opacity-70' : 'bg-raised'}`})
           div(className="flex items-center justify-between mb-2")
-            span(className={`text-[10px] font-black tracking-widest px-2 py-0.5 rounded-full ${t.status === 'won' ? 'bg-primary text-primary-foreground' : t.status === 'lost' ? 'bg-elevated text-muted-foreground' : 'bg-primary/15 text-primary'}`})
+            span(className={`text-[10px] font-bold tracking-widest px-2 py-0.5 rounded-full ${t.status === 'won' ? 'bg-primary text-primary-foreground' : t.status === 'lost' ? 'bg-elevated text-muted-foreground' : 'bg-primary/15 text-primary'}`})
               | #{t.status === 'pending' ? `${BET_LABELS[t.betType]} • PENDING` : t.status === 'won' ? `WIN ${formatPeso(t.prizeWon || 0)} • ${BET_LABELS[t.betType]}` : `LOST • ${t.hits}/${t.required} hits`}
             span(className="text-[10px] text-muted-foreground font-mono flex items-center gap-1.5")
               span(className="px-1.5 py-0.5 rounded-full bg-elevated text-foreground/70 font-bold")
@@ -56,7 +56,7 @@ div(className="p-5")
               | #{t.time}
           div(className="flex flex-wrap gap-1.5")
             each n in t.numbers key n
-              span(className={`w-7 h-7 rounded-full text-[11px] font-black flex items-center justify-center transition ${(t.status !== 'pending') && (draws.find(d => d.game === t.game)?.sorted.includes(n)) ? 'bg-primary text-primary-foreground shadow-[0_0_8px_var(--lp-glow)]' : (t.status !== 'pending') ? 'bg-elevated text-muted-foreground/70 line-through' : 'bg-ball text-ball-ink'}`})
+              span(className={`w-7 h-7 rounded-full text-[11px] font-black flex items-center justify-center transition ${(t.status !== 'pending') && (draws.find(d => d.game === t.game)?.sorted.includes(n)) ? 'bg-primary text-primary-foreground' : (t.status !== 'pending') ? 'bg-elevated text-muted-foreground/70 line-through' : 'bg-ball text-ball-ink'}`})
                 | #{n}
           if t.status !== 'pending'
             div(className="mt-2 flex items-center gap-2 text-[11px]")

@@ -1,7 +1,9 @@
 import { Moon, Sun, User, Users, Volume2, VolumeX } from '@octanejs/lucide';
 import AccountSwitcher from './AccountSwitcher.btsx';
+import GameSwitcher from './GameSwitcher.btsx';
 import { DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator } from './ui/dropdown-menu.btsx';
 import { THEMES, type ThemeId, type ThemeMode } from '../lib/theme';
+import type { GameConfig, GameId } from '../lib/games';
 import type { GameMode } from '../lib/lotto';
 
 module
@@ -9,6 +11,11 @@ module
     /** Ball pool of the selected game, shown inside the wordmark. */
     pool: number;
     gameName: string;
+    game: GameConfig;
+    gameId: GameId;
+    jackpots: Record<GameId, number>;
+    isDrawing: boolean;
+    onSwitchGame: (next: GameId) => void;
     mode: GameMode;
     onSelectMode: (next: GameMode) => void;
     soundOn: boolean;
@@ -25,12 +32,12 @@ module
   // worth of settings can be worked through in one visit.
   const rowClass = 'gap-1 p-2 hover:bg-foreground/10!';
 
-props { pool, gameName, mode, onSelectMode, soundOn, onToggleSound, theme, themeMode, onToggleThemeMode, onPickTheme, onNotify }: AppHeaderProps
+props { pool, gameName, game, gameId, jackpots, isDrawing, onSwitchGame, mode, onSelectMode, soundOn, onToggleSound, theme, themeMode, onToggleThemeMode, onPickTheme, onNotify }: AppHeaderProps
 
-header(className="mb-4")
-  div(className="flex flex-wrap items-center justify-between gap-3")
-    div(className="flex items-center gap-3")
-      div(className="brand-mark")
+header(className="app-header")
+  div(className="app-header__layout")
+    div(className="app-header__brand flex min-w-0 items-center gap-3")
+      div(className="brand-mark rounded-full!")
         span(className="brand-mark__number")
           | #{pool}
         span(className="brand-mark__orbit animate-spin blur-xs" aria-hidden="true")
@@ -47,7 +54,16 @@ header(className="mb-4")
             | #{gameName}
             | #{" • Philippines"}
 
-    div(className="flex items-center gap-2")
+    div(className="app-header__games")
+      GameSwitcher(
+        ~ game={game}
+        ~ gameId={gameId}
+        ~ jackpots={jackpots}
+        ~ isDrawing={isDrawing}
+        ~ onSwitchGame={onSwitchGame}
+        ~ )
+
+    div(className="app-header__account flex items-start gap-2")
       AccountSwitcher(onNotify={onNotify})
         DropdownMenuSeparator
         DropdownMenuLabel(className="font-normal text-xs text-muted-foreground opacity-80") Mode

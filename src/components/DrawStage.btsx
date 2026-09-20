@@ -1,12 +1,12 @@
 import { Zap } from '@octanejs/lucide';
+import { useId, useState } from 'octane';
 import Ball from './Ball.btsx';
 import DrawDrum from '../DrawDrum.btsx';
-import DrawHistory from './DrawHistory.btsx';
-import HowItWorks from './HowItWorks.btsx';
 import JackpotBanner from './JackpotBanner.btsx';
 import WinnersList from './WinnersList.btsx';
 import { formatJackpot } from '../lib/format';
 import type { GameConfig } from '../lib/games';
+import { DEFAULT_DRUM_GRAVITY, MAX_DRUM_GRAVITY, MIN_DRUM_GRAVITY } from '../lib/drum-physics';
 import type { Draw, WinEntry } from '../lib/lotto';
 
 module
@@ -32,10 +32,16 @@ module
   }
 
 props { game, jackpot, themeKey, isDrawing, isMixing, drawnBalls, currentBallAnim, draws, winnerJackpot, onDismissJackpot, winList, onDismissWins, onStartDraw }: DrawStageProps
-setup const pool = game.pool;
+setup
+  const pool = game.pool;
+  const gravityId = useId();
+  const [gravity, setGravity] = useState(DEFAULT_DRUM_GRAVITY);
+  const gravityLabel = gravity < 0.75 ? 'Light' : gravity > 1.25 ? 'Heavy' : 'Balanced';
+  const gravityProgress = ((gravity - MIN_DRUM_GRAVITY) / (MAX_DRUM_GRAVITY - MIN_DRUM_GRAVITY)) * 100;
+  const gravityTrack = `linear-gradient(to right, var(--primary) 0%, var(--primary) ${gravityProgress}%, var(--lp-elevated) ${gravityProgress}%, var(--lp-elevated) 100%)`;
 
 div(className="overflow-hidden relative")
-  div(className="absolute top-0 left-1/2 -translate-x-1/2 w-[75%] h-[1px] bg-gradient-to-r from-transparent via-primary/60 to-transparent")
+  div(className="absolute top-0 left-1/2 -translate-x-1/2 w-[75%] h-[1px] bg-gradient-to-r from-transparent via-primary/10 to-transparent")
   div(className="relative")
     div(className="hidden _flex items-center justify-between mb-3")
       div(className="hidden _flex items-center gap-2")
@@ -62,15 +68,35 @@ div(className="overflow-hidden relative")
         div(className="draw-machine__halo" aria-hidden="true")
         div(className="draw-machine__grid" aria-hidden="true")
         div(className="draw-machine__globe")
-          DrawDrum(active={isDrawing} drawnNumbers={drawnBalls} poolSize={pool} themeKey={themeKey})
+          DrawDrum(active={isDrawing} drawnNumbers={drawnBalls} poolSize={pool} themeKey={themeKey} gravity={gravity})
           div(className="draw-machine__glare" aria-hidden="true")
           div(className="draw-machine__status" aria-live="polite")
             span(className={`status-pulse ${isDrawing ? 'status-pulse--active' : ''}`})
             span
-              | #{isDrawing ? (isMixing ? 'Calibrating chamber' : `Selecting ball ${Math.min(drawnBalls.length + 1, 6)} of 6`) : drawnBalls.length === 6 ? 'Draw complete' : 'Awaiting draw'}
+              | #{isDrawing ? (isMixing ? 'Bottom blower active' : `Selecting ball ${Math.min(drawnBalls.length + 1, 6)} of 6`) : drawnBalls.length === 6 ? 'Draw complete' : 'Awaiting draw'}
         div(className="draw-machine__base" aria-hidden="true")
           span
-      div(className="p-3 md:p-4")
+      div(className="draw-machine__controls p-3 md:p-4")
+        div(className="drum-gravity hidden!")
+          div(className="drum-gravity__header")
+            label(className="drum-gravity__label" htmlFor={gravityId}) Ball gravity
+            span(className="drum-gravity__value")
+              | #{gravity.toFixed(2)}× · #{gravityLabel}
+          input(
+            ~ id={gravityId}
+            ~ className="drum-gravity__range"
+            ~ type="range"
+            ~ min={MIN_DRUM_GRAVITY}
+            ~ max={MAX_DRUM_GRAVITY}
+            ~ step={0.05}
+            ~ value={gravity}
+            ~ aria-valuetext={`${gravity.toFixed(2)} times gravity, ${gravityLabel.toLowerCase()} balls`}
+            ~ style={{ background: gravityTrack }}
+            ~ onInput={(event) => setGravity(Number(event.currentTarget.value))}
+            ~ )
+          div(className="drum-gravity__scale" aria-hidden="true")
+            span Lighter
+            span Heavier
         div(className="flex items-center justify-between mb-2.5")
           p(className="text-[10px] font-black tracking-[0.18em] text-muted-foreground")
             | DRAWN BALLS
@@ -118,15 +144,9 @@ div(className="overflow-hidden relative")
             | #{isMixing ? `MIXING ${pool} BALLS...` : `DRAWING ${drawnBalls.length}/6`}
         else
           fragment
-            Zap(className="w-6 h-6")
             | #{" START DRAW "}
-            span(className="w-8 h-8 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-[14px]")
-              | ●
       div(className={`mx-auto mt-3 h-[2px] w-[60%] bg-gradient-to-r from-transparent via-destructive to-transparent blur-[0.5px] ${isDrawing ? 'opacity-100 animate-pulse' : 'opacity-40'}`})
     if winnerJackpot
       JackpotBanner(winner={winnerJackpot} onDismiss={onDismissJackpot})
     if winList.length > 0 && !winnerJackpot
       WinnersList(wins={winList} onDismiss={onDismissWins})
-    div(className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3")
-      DrawHistory(draws={draws})
-      HowItWorks(game={game} jackpot={jackpot})

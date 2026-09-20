@@ -2,14 +2,14 @@ import { useEffect, useRef } from 'octane'
 import { createDrumBalls, stepDrum, DRUM_SIZE } from './lib/drum-physics'
 import { readDrumPalette } from './lib/theme-colors'
 
-props { active, drawnNumbers, poolSize, themeKey }: { active: boolean; drawnNumbers: number[]; poolSize: number; themeKey: string }
+props { active, drawnNumbers, poolSize, themeKey, gravity }: { active: boolean; drawnNumbers: number[]; poolSize: number; themeKey: string; gravity: number }
 setup
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const motionRef = useRef({ active, hidden: new Set(drawnNumbers) });
+  const motionRef = useRef({ active, hidden: new Set(drawnNumbers), gravity });
 
   useEffect(() => {
-    motionRef.current = { active, hidden: new Set(drawnNumbers) };
-  }, [active, drawnNumbers]);
+    motionRef.current = { active, hidden: new Set(drawnNumbers), gravity };
+  }, [active, drawnNumbers, gravity]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -50,7 +50,7 @@ setup
       ctx.fillRect(0, 0, DRUM_SIZE, DRUM_SIZE);
 
       ctx.strokeStyle = running ? palette.glowSoft : palette.grid;
-      ctx.lineWidth = 0.65;
+      ctx.lineWidth = 0.5;
       for (let radius = 48; radius <= 144; radius += 32) {
         ctx.beginPath();
         ctx.arc(DRUM_SIZE / 2, DRUM_SIZE / 2, radius, 0, Math.PI * 2);
@@ -70,8 +70,8 @@ setup
         const accented = ball.n % 7 === 0;
         const fill = ctx.createRadialGradient(ball.x - ball.radius * 0.35, ball.y - ball.radius * 0.42, 1, ball.x, ball.y, ball.radius);
         fill.addColorStop(0, '#ffffff');
-        fill.addColorStop(0.28, accented ? palette.accentTint : palette.ball);
-        fill.addColorStop(0.72, accented ? palette.accent : palette.ballEdge);
+        fill.addColorStop(0.06, accented ? palette.accentTint : palette.ball);
+        fill.addColorStop(0.94, accented ? palette.accent : palette.ballEdge);
         fill.addColorStop(1, accented ? palette.accentDeep : palette.ballEdge);
         ctx.beginPath();
         ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
@@ -83,22 +83,26 @@ setup
         ctx.shadowBlur = 0;
         ctx.shadowOffsetY = 0;
         ctx.strokeStyle = accented ? palette.accentDeep : palette.ballEdge;
-        ctx.lineWidth = 0.7;
+        ctx.lineWidth = 0.4;
         ctx.stroke();
         ctx.fillStyle = accented ? palette.accentInk : palette.ballInk;
-        ctx.font = `700 ${(ball.radius * 0.73).toFixed(1)}px ${palette.font}`;
+        ctx.font = `700 ${(ball.radius * 0.78).toFixed(1)}px ${palette.font}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(String(ball.n).padStart(2, '0'), ball.x, ball.y + 0.4);
+        ctx.save();
+        ctx.translate(ball.x, ball.y);
+        ctx.rotate(ball.rotation);
+        ctx.fillText(String(ball.n).padStart(2, '0'), 0, 0.4);
+        ctx.restore();
 
         ctx.beginPath();
         ctx.ellipse(ball.x - ball.radius * 0.35, ball.y - ball.radius * 0.42, ball.radius * 0.29, ball.radius * 0.17, -0.55, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
         ctx.fill();
       }
       ctx.restore();
 
-      const rim = ctx.createLinearGradient(42, 40, 314, 320);
+      const rim = ctx.createLinearGradient(32, 30, 314, 320);
       rim.addColorStop(0, palette.rim);
       rim.addColorStop(0.35, palette.grid);
       rim.addColorStop(0.72, running ? palette.glow : palette.grid);
@@ -106,7 +110,7 @@ setup
       ctx.beginPath();
       ctx.arc(DRUM_SIZE / 2, DRUM_SIZE / 2, 166, 0, Math.PI * 2);
       ctx.strokeStyle = rim;
-      ctx.lineWidth = 1.25;
+      ctx.lineWidth = 1;
       ctx.stroke();
     };
     const tick = (now: number) => {
@@ -116,7 +120,7 @@ setup
         accumulator += elapsed;
         while (accumulator >= 1 / 120) {
           simulationTime += 1 / 120;
-          stepDrum(balls, 1 / 120, motionRef.current.active, motionRef.current.hidden, simulationTime);
+          stepDrum(balls, 1 / 120, motionRef.current.active, motionRef.current.hidden, simulationTime, motionRef.current.gravity);
           accumulator -= 1 / 120;
         }
       }

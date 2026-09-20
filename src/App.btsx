@@ -2,12 +2,14 @@ import { useState, useRef, useEffect, useMemo } from 'octane';
 import AmbientField from './components/AmbientField.btsx';
 import AppHeader from './components/AppHeader.btsx';
 import BetPanel from './components/BetPanel.btsx';
+import DrawHistory from './components/DrawHistory.btsx';
 import DrawStage from './components/DrawStage.btsx';
-import GameSwitcher from './components/GameSwitcher.btsx';
+import HowItWorks from './components/HowItWorks.btsx';
 import Leaderboard from './components/Leaderboard.btsx';
 import LiveBoard from './components/LiveBoard.btsx';
 import PartyChat from './components/PartyChat.btsx';
 import PlayerTickets from './components/PlayerTickets.btsx';
+import PayoutReference from './components/PayoutReference.btsx';
 import PrizeNote from './components/PrizeNote.btsx';
 import RoomPanel from './components/RoomPanel.btsx';
 import SessionStats from './components/SessionStats.btsx';
@@ -55,7 +57,6 @@ setup
   const [newPlayerName, setNewPlayerName] = useState('');
   const [chat, setChat] = useState<ChatMsg[]>([
     { id:'1', name:'Kim', color:'--primary', text:'Good luck everyone! 🎉', time:'9:00 PM' },
-    { id:'2', name:'Alex', color:'--chart-2', text:'I feel 27 is coming!', time:'9:01 PM' },
   ]);
   const [chatInput, setChatInput] = useState('');
   const [showMoneyRain, setShowMoneyRain] = useState(false);
@@ -540,17 +541,22 @@ setup
     showToast(`Cleared ${currentPlayer?.name}'s tickets`);
   };
 
-div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground selection:bg-primary/30 overflow-x-hidden relative")
+div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overflow-x-hidden relative")
   canvas(
     ~ ref={canvasRef}
     ~ className="fixed inset-0 pointer-events-none z-[100] max-w-full"
     ~ )
   if showMoneyRain
-    div(className="fixed inset-0 pointer-events-none z-[90] bg-gradient-to-b from-primary/1 to-transparent animate-[fadeIn_0.6s_ease]")
-  div(className="relative z-10 w-full max-w-[1480px] mx-auto px-4 md:px-6 py-4 md:py-7 overflow-x-hidden")
+    div(className="fixed inset-0 pointer-events-none z-[90]")
+  div(className="app-frame relative z-10 w-full max-w-[1480px] mx-auto px-4 md:px-6 py-4 md:py-7 overflow-x-hidden")
     AppHeader(
       ~ pool={pool}
       ~ gameName={game.name}
+      ~ game={game}
+      ~ gameId={gameId}
+      ~ jackpots={jackpots}
+      ~ isDrawing={isDrawing}
+      ~ onSwitchGame={switchGame}
       ~ mode={mode}
       ~ onSelectMode={selectMode}
       ~ soundOn={soundOn}
@@ -560,13 +566,6 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground selec
       ~ onToggleThemeMode={toggleMode}
       ~ onPickTheme={pickTheme}
       ~ onNotify={showToast}
-      ~ )
-    GameSwitcher(
-      ~ game={game}
-      ~ gameId={gameId}
-      ~ jackpots={jackpots}
-      ~ isDrawing={isDrawing}
-      ~ onSwitchGame={switchGame}
       ~ )
     LiveBoard(
       ~ game={game}
@@ -582,10 +581,10 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground selec
       ~ onToggleIframe={() => setShowIframe(v => !v)}
       ~ )
     if toast
-      div(className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[120] px-4 py-2.5 rounded-full bg-ball text-ball-ink text-[13px] font-bold shadow-[0_8px_24px_rgba(0,0,0,0.4)] animate-[winnerPop_0.4s_ease]")
+      div(className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[120] px-4 py-2.5 rounded-full text-ball-ink text-[13px] font-bold shadow-[0_8px_24px_rgba(0,0,0,0.4)] animate-[winnerPop_0.4s_ease]")
         | #{toast}
-    div(className="grid grid-cols-1 xl:grid-cols-[360px_1fr_380px] gap-4 md:gap-5 items-start")
-      div(className="order-2 xl:order-1 space-y-4")
+    div(className="app-main-grid grid grid-cols-1 xl:grid-cols-[360px_1fr_380px] gap-4 md:gap-5 items-start")
+      div(className="app-column app-column--bet order-2 xl:order-1 space-y-4")
         if mode === 'party'
           RoomPanel(
             ~ roomCode={roomCode}
@@ -615,8 +614,7 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground selec
           ~ onBuyRandom={addRandomTickets}
           ~ onAddTicket={addTicket}
           ~ )
-        SessionStats(stats={stats})
-      div(className="order-1 xl:order-2")
+      div(className="app-column app-column--draw order-1 xl:order-2")
         DrawStage(
           ~ game={game}
           ~ jackpot={jackpot}
@@ -632,7 +630,9 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground selec
           ~ onDismissWins={() => setWinList([])}
           ~ onStartDraw={() => startDraw()}
           ~ )
-      div(className="order-3 space-y-4")
+      div(className="app-column app-column--info order-3 space-y-4")
+        SessionStats(stats={stats})
+        PayoutReference(game={game} jackpot={jackpot} betType={betType} betCost={betCost})
         if mode === 'solo'
           TicketList(
             ~ tickets={tickets}
@@ -660,5 +660,7 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground selec
               ~ )
         if mode === 'solo'
           PrizeNote(game={game})
-    footer(className="mt-8 text-center text-[11px] text-muted-foreground/60 tracking-wide")
+        DrawHistory(draws={draws})
+        HowItWorks(game={game} jackpot={jackpot})
+    footer(className="app-footer mt-8 text-center text-[11px] text-muted-foreground/60 tracking-wide")
       | Simulator only • Not affiliated with PCSO • No money involved • 100% local RNG • Real prizes for fun • TV game show edition

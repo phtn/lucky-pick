@@ -15,22 +15,22 @@ module
 
 props { game, gameId, jackpots, isDrawing, onSwitchGame }: GameSwitcherProps
 
-div(className="mb-4")
-  div(className="game-rail py-4")
+div(className="game-switcher")
+  div(className="game-rail scale-80" aria-label="Choose a lottery game")
     each g in GAME_IDS key g
       button(
         ~ onClick={() => onSwitchGame(g)}
         ~ disabled={isDrawing}
         ~ className={cn('game-chip', { 'game-chip--active': gameId === g })}
         ~ )
-        span(className="flex items-baseline gap-4 font-bold leading-none tracking-[-0.02em]")
+        span(className="flex justify-center items-baseline gap-4 font-bold leading-none tracking-[-0.02em]")
           span(className="text-base")
             | #{g}
-          span(className={cn('text-base font-semibold text-primary', { 'text-[color:var(--primary-foreground)]': gameId === g })})
+          span(className={cn('hidden md:flex text-base font-normal text-foreground/35', { 'text-[color:var(--primary-foreground)]': gameId === g })})
             | #{formatCompactPeso(jackpots[g])}
-        span(className={cn('block text-[9px] font-bold tracking-[0.14em] mt-1.5 truncate text-muted-foreground', { 'text-[color:var(--primary-foreground)] opacity-80': gameId === g })})
+        span(className={cn('hidden md:block text-[9px] font-semibold tracking-[0.14em] mt-0.75 truncate text-muted-foreground', { 'text-[color:var(--primary-foreground)] opacity-80': gameId === g })})
           | #{GAMES[g].name.toUpperCase()}
-  p(className="mt-2 px-0.5 text-[10px] font-semibold tracking-[0.1em] text-muted-foreground/70 uppercase")
+  p(className="hidden mt-2 px-0.5 text-[10px] font-semibold tracking-[0.1em] text-muted-foreground/70 uppercase")
     | #{game.drawDayLabel}
     | #{" • 9PM Manila • Pool 1-"}
     | #{game.pool}
