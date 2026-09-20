@@ -1,0 +1,30 @@
+{
+  "name": "lucky-pick",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "rsbuild build",
+    "preview": "rsbuild preview",
+    "typecheck": "tsrx-tsc --noEmit",
+    "check": "bun run typecheck && bun run build"
+  },
+  "dependencies": {
+    "@octanejs/lucide": "0.1.48",
+    "beast-tsrx": "latest",
+    "clsx": "^2.1.1",
+    "octane": "0.2.13",
+    "tailwind-merge": "^3.6.0",
+    "@octanejs/shadcn": "0.0.38"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@tsrx/typescript-plugin": "0.3.135",
+    "typescript": "^5.9.3",
+    "tailwindcss": "^4.3.3",
+    "@rsbuild/core": "^2.2.2",
+    "@octanejs/rsbuild-plugin": "0.1.50",
+    "@rsbuild/plugin-tailwindcss": "^2.0.3"
+  }
+}

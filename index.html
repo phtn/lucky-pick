@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico?v=2" />
+    <meta name="description" content="Pick your numbers across 6/42, 6/45, 6/49, 6/55 and 6/58, simulate a PCSO-style draw, and play locally with friends." />
+    <title>Lucky Pick — PCSO Lotto Simulator</title>
+    <script>
+      // Runs before first paint so the stored theme never flashes the default one.
+      (function () {
+        var theme = 'default', mode = 'dark';
+        try {
+          var saved = JSON.parse(localStorage.getItem('lucky-pick:theme') || '{}');
+          if (['default', 'doom', 'soft-pop'].indexOf(saved.theme) > -1) theme = saved.theme;
+          if (saved.mode === 'light') mode = 'light';
+        } catch (e) {}
+        var root = document.documentElement;
+        root.setAttribute('data-theme', theme);
+        if (mode === 'dark') root.classList.add('dark');
+        root.style.colorScheme = mode;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+
+  </body>
+</html>

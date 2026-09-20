@@ -1,0 +1,1626 @@
+import { useState, useRef, useEffect, useMemo } from 'octane';
+import { Volume2, VolumeX, Sun, Moon, Palette, Trophy, X, Zap, Dices, Clock, ExternalLink, Trash2, Check, Dice5, BarChart3, Users, Crown, MessageCircle, Link2, Play, Radio, Timer, DollarSign, Image as ImageIcon, Sparkles, Flame, Gift, Globe, UserPlus } from '@octanejs/lucide';
+import DrawDrum from './DrawDrum.btsx';
+import { THEMES, applyTheme, readStoredTheme, storeTheme, type ThemeId, type ThemeMode } from './lib/theme';
+import { paintFor, readConfettiColors } from './lib/theme-colors';
+import { GAMES, GAME_IDS, PAYOUT_RTP, betOdds, betPrize, formatOdds, matchAllOdds, randomPick, tierOdds, type GameConfig, type GameId } from './lib/games';
+import { cn } from './lib/utils';
+
+module
+  type BetType = 1 | 2 | 3 | 4 | 5 | 6;
+  const BET_TYPES: BetType[] = [1, 2, 3, 4, 5, 6];
+
+  // One tap buys this many random tickets at once.
+  const BET_MULTIPLIERS = [1, 10, 20, 50, 100, 200];
+  const MAX_TICKETS = 600;
+  const VISIBLE_TICKETS = 100;
+
+  type GameMode = 'solo' | 'party';
+
+  type BetCost = 20 | 24 | 25;
+
+  type PrizeMode = 'official' | 'barkada';
+
+  interface Ticket {
+    id: number;
+    numbers: number[];
+    game: GameId;
+    betType: BetType;
+    required: number;
+    status: 'pending' | 'won' | 'lost';
+    hits: number;
+    time: string;
+    prizeWon?: number;
+    playerId?: string;
+    cost: BetCost;
+  }
+
+  interface Draw {
+    id: number;
+    game: GameId;
+    numbers: number[];
+    sorted: number[];
+    time: string;
+    dateLabel: string;
+    isOfficial?: boolean;
+  }
+
+  interface Player {
+    id: string;
+    name: string;
+    /** A CSS custom property name, e.g. '--chart-2'. */
+    color: string;
+    avatar: string;
+    tickets: Ticket[];
+    winnings: number;
+    winCount: number;
+  }
+
+  interface ChatMsg {
+    id: string;
+    name: string;
+    color: string;
+    text: string;
+    time: string;
+  }
+
+  interface OfficialResult {
+    date: string;
+    dateShort: string;
+    numbers: number[];
+    raw: string;
+    jackpot: number;
+    winners: number;
+    jackpotFormatted: string;
+  }
+
+  // Only 6/42 ships with recorded draws; the other games start empty until a
+  // real result is pasted in, rather than showing invented "official" numbers.
+  const OFFICIAL_RESULTS: Record<GameId, OfficialResult[]> = {
+    '6/42': [
+    {
+      date: 'Sep 19, 2026',
+      dateShort: 'SEP 19 • SAT',
+      numbers: [8, 27, 6, 25, 13, 22],
+      raw: '08-27-06-25-13-22',
+      jackpot: 50097970.39,
+      winners: 0,
+      jackpotFormatted: '₱50,097,970.39'
+    },
+    {
+      date: 'Sep 17, 2026',
+      dateShort: 'SEP 17 • THU',
+      numbers: [8, 31, 32, 19, 24, 6],
+      raw: '08-31-32-19-24-06',
+      jackpot: 45831802.36,
+      winners: 0,
+      jackpotFormatted: '₱45,831,802.36'
+    }
+    ],
+    '6/45': [],
+    '6/49': [],
+    '6/55': [],
+    '6/58': [],
+  };
+
+  const BET_COSTS: { value: BetCost; label: string; sub: string }[] = [
+    { value: 20, label: '₱20', sub: 'Classic' },
+    { value: 24, label: '₱24', sub: '2023' },
+    { value: 25, label: '₱25', sub: '2026 Current' },
+  ];
+
+  // Two different bets, so two different tables. A jackpot ticket holds six
+  // numbers and collects on partial matches; a pick bet wins only if every
+  // number it holds is drawn. Mixing their odds in one column read as a
+  // contradiction, so each is shown on its own.
+  function jackpotLadder(game: GameConfig, jackpot: number) {
+    return [
+      { m: '6/6', prize: formatJackpot(jackpot), odds: formatOdds(tierOdds(game.pool, 6)), sub: 'Jackpot • rolls over' },
+      { m: '5/6', prize: formatPeso(game.secondary[5]), odds: formatOdds(tierOdds(game.pool, 5)), sub: 'Fixed second tier' },
+      { m: '4/6', prize: formatPeso(game.secondary[4]), odds: formatOdds(tierOdds(game.pool, 4)), sub: 'Fixed third tier' },
+      { m: '3/6', prize: formatPeso(game.secondary[3]), odds: formatOdds(tierOdds(game.pool, 3)), sub: 'Fixed consolation' },
+    ];
+  }
+
+  function pickPaytable(game: GameConfig, stake: BetCost) {
+    return ([5, 4, 3, 2, 1] as const).map(k => ({
+      m: `${k}/${k}`,
+      prize: formatPeso(Math.round(game.payout[k] * stake)),
+      odds: formatOdds(matchAllOdds(game.pool, k)),
+      bet: k as BetType,
+      sub: `×${game.payout[k].toLocaleString('en-PH')} your stake`,
+    }));
+  }
+
+  const BET_LABELS: Record<BetType, string> = {
+    1: '1/6 Match 1',
+    2: '2/6 Match 2',
+    3: '3/6 Match 3',
+    4: '4/6 Match 4',
+    5: '5/6 Match 5',
+    6: '6/6 JACKPOT',
+  };
+
+  // Players are identified by a token, not a fixed hex, so the room re-hues
+  // with the theme. Ink is chosen per fill at render (see paintFor).
+  const PLAYER_COLORS = [
+    '--primary', '--destructive', '--chart-2', '--chart-3',
+    '--chart-4', '--chart-5', '--chart-1', '--foreground',
+  ];
+
+  function formatPeso(n: number) {
+    return '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: n >= 1000 ? 0 : 0, maximumFractionDigits: n % 1 === 0 ? 0 : 2 });
+  }
+
+  function formatJackpot(n: number) {
+    return '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // Short form for the game chips and multiplier buttons.
+  function formatCompactPeso(n: number) {
+    if (n >= 1_000_000) return '₱' + (n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1) + 'M';
+    if (n >= 1_000) return '₱' + (n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1) + 'K';
+    return '₱' + n;
+  }
+
+  function getNextDrawDate(drawDays: number[]): Date {
+    const now = new Date();
+    const d = new Date(now);
+    d.setHours(21, 0, 0, 0); // 9PM Manila
+    if (drawDays.includes(d.getDay()) && now < d) return d;
+    for (let i = 1; i <= 7; i++) {
+      const nd = new Date(now);
+      nd.setDate(now.getDate() + i);
+      nd.setHours(21,0,0,0);
+      if (drawDays.includes(nd.getDay())) return nd;
+    }
+    return d;
+  }
+
+  function genRoomCode() {
+    const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const nums = '0123456789';
+    let code = '';
+    for (let i=0;i<3;i++) code += letters[Math.floor(Math.random()*letters.length)];
+    for (let i=0;i<2;i++) code += nums[Math.floor(Math.random()*nums.length)];
+    return code;
+  }
+
+// The current Lucide package no longer includes brand icons.
+component Youtube
+  props { className }: { className?: string }
+  svg(className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true")
+    rect(x="2" y="5" width="20" height="14" rx="4")
+    path(d="m10 9 5 3-5 3z")
+
+component Ball
+  props { n, size = 'md', glowing = false }: { n: number; size?: 'sm' | 'md' | 'lg' | 'xl'; glowing?: boolean; }
+  setup
+    const dim =
+      size === 'sm' ? 'w-7 h-7 text-[11px]' :
+      size === 'lg' ? 'w-[56px] h-[56px] md:w-[64px] md:h-[64px] text-[17px] md:text-[19px]' :
+      size === 'xl' ? 'w-[72px] h-[72px] md:w-[80px] md:h-[80px] text-[22px] md:text-[26px]' :
+      'w-8 h-8 md:w-9 md:h-9 text-[12px]';
+
+  div(className={`${dim} ${glowing ? 'lp-ball lp-ball--accent ring-2 ring-primary/60' : 'lp-ball'} rounded-full relative flex items-center justify-center font-black tracking-tight select-none shrink-0`})
+    span(className="leading-none")
+      | #{n}
+    span(className="absolute top-[14%] left-[18%] w-[38%] h-[28%] bg-white/60 rounded-full blur-[0.5px] pointer-events-none")
+
+setup
+  const stored = readStoredTheme();
+  const [theme, setTheme] = useState<ThemeId>(stored.theme);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(stored.mode);
+  const [showThemes, setShowThemes] = useState(false);
+  const [gameId, setGameId, getGameId] = useState<GameId>('6/42');
+  const [mode, setMode] = useState<GameMode>('solo');
+  const [betType, setBetType] = useState<BetType>(6);
+  const [betCost, setBetCost] = useState<BetCost>(25);
+  const [prizeMode, setPrizeMode] = useState<PrizeMode>('official');
+  const [selected, setSelected] = useState<number[]>([7, 14, 21, 28, 35, 42]);
+  const [tickets, setTickets, getTickets] = useState<Ticket[]>([]);
+  const [players, setPlayers, getPlayers] = useState<Player[]>(() => {
+    return [{ id: 'p1', name: 'You', color: PLAYER_COLORS[0], avatar: 'Y', tickets: [], winnings: 0, winCount: 0 }];
+  });
+  const [currentPlayerIdx, setCurrentPlayerIdx] = useState(0);
+  const [roomCode, setRoomCode] = useState(() => genRoomCode());
+  const [draws, setDraws] = useState<Draw[]>([]);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [isMixing, setIsMixing] = useState(false);
+  const [drawnBalls, setDrawnBalls] = useState<number[]>([]);
+  const [currentBallAnim, setCurrentBallAnim] = useState<number | null>(null);
+  const [winnerJackpot, setWinnerJackpot] = useState<{ ticket: Ticket; player?: Player; prize: number } | null>(null);
+  const [winList, setWinList] = useState<{ ticket: Ticket; player?: Player; prize: number }[]>([]);
+  const [soundOn, setSoundOn] = useState(true);
+  const [toast, setToast] = useState<string | null>(null);
+  const [jackpots, setJackpots, getJackpots] = useState<Record<GameId, number>>(() => {
+    const seed = {} as Record<GameId, number>;
+    for (const id of GAME_IDS) seed[id] = OFFICIAL_RESULTS[id][0]?.jackpot ?? GAMES[id].baseJackpot;
+    return seed;
+  });
+  const [jackpotAnim, setJackpotAnim] = useState(false);
+  const [officialInput, setOfficialInput] = useState('');
+  const [countdown, setCountdown] = useState({ d:0,h:0,m:0,s:0,label:'' });
+  const [showIframe, setShowIframe] = useState(false);
+  const [newPlayerName, setNewPlayerName] = useState('');
+  const [chat, setChat] = useState<ChatMsg[]>([
+    { id:'1', name:'Kim', color:'--primary', text:'Good luck everyone! 🎉', time:'9:00 PM' },
+    { id:'2', name:'Alex', color:'--chart-2', text:'I feel 27 is coming!', time:'9:01 PM' },
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [showMoneyRain, setShowMoneyRain] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const [rolloverPot, setRolloverPot] = useState(0);
+  const [payoutBoard, setPayoutBoard] = useState<null | {
+    totalPot: number;
+    rolloverIncluded: number;
+    jackpotPool: number;
+    fivePool: number;
+    fourPool: number;
+    betBackTotal: number;
+    winners6: any[];
+    winners5: any[];
+    winners4: any[];
+    winners3: any[];
+    rolloverNext: number;
+    distributions: { ticket: Ticket; player?: Player; prize: number; hits: number }[];
+    settlement: { playerId: string; name: string; spent: number; won: number; net: number }[];
+    isBarkada: boolean;
+  }>(null);
+  const [settlementPaid, setSettlementPaid] = useState<Record<string, boolean>>({});
+
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const confettiRef = useRef<number | null>(null);
+  const idCounterRef = useRef(1);
+  const voiceIdRef = useRef(0);
+  const voiceMapRef = useRef<Map<number, { osc: OscillatorNode; gain: GainNode }>>(new Map());
+  const timersRef = useRef(new Set<number>());
+
+  // Draw, sound, toast, and chat timers belong to this mounted application.
+  const schedule = (callback: () => void, delay: number) => {
+    const timer = window.setTimeout(() => {
+      timersRef.current.delete(timer);
+      callback();
+    }, delay);
+    timersRef.current.add(timer);
+    return timer;
+  };
+
+  // Canvas colours are resolved values, not live vars, so anything painted
+  // there re-reads its palette when this key changes.
+  const themeKey = `${theme}:${themeMode}`;
+  const required = betType;
+  const game = GAMES[gameId];
+  const pool = game.pool;
+  const jackpot = jackpots[gameId];
+  const officialResults = OFFICIAL_RESULTS[gameId];
+  const latestOfficial = officialResults[0];
+  const prevOfficial = officialResults[1];
+  const currentPlayer = players[currentPlayerIdx];
+  const ticketCount = mode === 'solo' ? tickets.length : (currentPlayer?.tickets.length ?? 0);
+
+  useEffect(()=>{
+    if(mode==='party') setPrizeMode('barkada');
+    else setPrizeMode('official');
+  },[mode]);
+
+  useEffect(()=>{
+    applyTheme({ theme, mode: themeMode });
+    storeTheme({ theme, mode: themeMode });
+  },[theme, themeMode]);
+
+  // Applied before the state update so the render that follows already reads
+  // the new tokens; paintFor and the drum palette resolve during render.
+  const pickTheme = (next: ThemeId) => {
+    applyTheme({ theme: next, mode: themeMode });
+    setTheme(next);
+    setShowThemes(false);
+    playTone(720,0.16,'triangle',0.12);
+    showToast(`${THEMES.find(t=>t.id===next)?.name} theme`);
+  };
+
+  const toggleMode = () => {
+    const next: ThemeMode = themeMode === 'dark' ? 'light' : 'dark';
+    applyTheme({ theme, mode: next });
+    setThemeMode(next);
+    playTone(next==='dark'?520:900,0.16,'sine',0.12);
+  };
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    schedule(()=>setToast(null), 2400);
+  };
+
+  const getAudio = () => {
+    if (!audioCtxRef.current) {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const master = ctx.createGain();
+      master.gain.value = 0.45;
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -18; comp.knee.value = 30; comp.ratio.value = 12; comp.attack.value = 0.003; comp.release.value = 0.25;
+      master.connect(comp).connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      masterGainRef.current = master;
+    }
+    const ctx = audioCtxRef.current!;
+    if (ctx.state !== 'running') ctx.resume();
+    try { if ((navigator as any).audioSession) (navigator as any).audioSession.type = 'playback'; } catch {}
+    return ctx;
+  };
+
+  useEffect(()=>{
+    const onVis = () => { if (document.visibilityState==='visible' && audioCtxRef.current?.state!=='running') audioCtxRef.current?.resume(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pageshow', onVis);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pageshow', onVis);
+      if (confettiRef.current) cancelAnimationFrame(confettiRef.current);
+      timersRef.current.forEach(timer => window.clearTimeout(timer));
+      timersRef.current.clear();
+      voiceMapRef.current.clear();
+      const audio = audioCtxRef.current;
+      if (audio && audio.state !== 'closed') void audio.close().catch(() => {});
+    };
+  },[]);
+
+  // read room code from URL hash like #KIM42
+  useEffect(()=>{
+    const h = window.location.hash.replace('#','').trim().toUpperCase();
+    if (h && /^[A-Z]{3}[0-9]{2}$/.test(h.slice(0,5))) {
+      setRoomCode(h.slice(0,5));
+    } else if (h && h.length >= 5 && h.length <= 10) {
+      // support longer but show first 5 as code
+      const m = h.match(/[A-Z]{3}[0-9]{2}/);
+      if (m) setRoomCode(m[0]);
+    }
+  },[]);
+
+  // countdown timer
+  useEffect(()=>{
+    const tick = () => {
+      const next = getNextDrawDate(GAMES[gameId].drawDays);
+      const diff = next.getTime() - Date.now();
+      const d = Math.floor(diff / (1000*60*60*24));
+      const h = Math.floor((diff % (1000*60*60*24)) / (1000*60*60));
+      const m = Math.floor((diff % (1000*60*60)) / (1000*60));
+      const s = Math.floor((diff % (1000*60)) / 1000);
+      const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      setCountdown({ d,h,m,s,label: `${days[next.getDay()]} ${next.toLocaleDateString('en-PH',{month:'short',day:'numeric'})} 9:00 PM` });
+    };
+    tick();
+    const iv = setInterval(tick,1000);
+    return ()=>clearInterval(iv);
+  },[gameId]);
+
+  useEffect(()=>{
+    if(chatScrollRef.current){
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  },[chat]);
+
+  const playTone = (freq: number, dur = 0.35, type: OscillatorType='sine', peak=0.18) => {
+    if(!soundOn) return;
+    try{
+      const ctx=getAudio();
+      const id=voiceIdRef.current++;
+      const osc=ctx.createOscillator(); const g=ctx.createGain();
+      osc.type=type; osc.frequency.value=freq;
+      const now=ctx.currentTime;
+      g.gain.setValueAtTime(0.0001,now); g.gain.exponentialRampToValueAtTime(peak,now+0.02); g.gain.exponentialRampToValueAtTime(0.0001,now+dur);
+      osc.connect(g); g.connect(masterGainRef.current!);
+      voiceMapRef.current.set(id,{osc,gain:g});
+      osc.start(now); osc.stop(now+dur+0.05);
+      schedule(()=>{ if(voiceMapRef.current.get(id)?.osc===osc) voiceMapRef.current.delete(id); },(dur+0.15)*1000);
+    }catch{}
+  };
+  const playMixRumble=()=>{
+    if(!soundOn) return;
+    try{
+      const ctx=getAudio(); const osc=ctx.createOscillator(); const g=ctx.createGain();
+      osc.type='sawtooth'; osc.frequency.setValueAtTime(90,ctx.currentTime); osc.frequency.linearRampToValueAtTime(60,ctx.currentTime+2.8);
+      g.gain.setValueAtTime(0.0001,ctx.currentTime); g.gain.linearRampToValueAtTime(0.08,ctx.currentTime+0.2); g.gain.linearRampToValueAtTime(0.04,ctx.currentTime+2.8); g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+3);
+      osc.connect(g).connect(masterGainRef.current!); osc.start(); osc.stop(ctx.currentTime+3.1);
+    }catch{}
+  };
+  const playWinSeq=()=>{
+    if(!soundOn) return;
+    [261,329,392,523,659,784,1046].forEach((f,i)=> schedule(()=>playTone(f,0.8,i%2?'triangle':'sine',0.22), i*100));
+  };
+
+  const triggerConfetti = (gold=false, money=false) => {
+    const canvas=canvasRef.current; if(!canvas) return; const ctx=canvas.getContext('2d'); if(!ctx) return;
+    canvas.width=window.innerWidth; canvas.height=window.innerHeight;
+    const particles:any[]=[];
+    const colors = readConfettiColors();
+    const count = gold? 300 : money? 180 : 200;
+    for(let i=0;i<count;i++){
+      particles.push({
+        x: window.innerWidth/2 + (Math.random()-0.5)*280,
+        y: window.innerHeight*0.42,
+        vx: (Math.random()-0.5)*18,
+        vy: -Math.random()*14 -2,
+        size: Math.random()*9+3,
+        color: colors[Math.floor(Math.random()*colors.length)],
+        rot: Math.random()*360, rotSpeed: (Math.random()-0.5)*12,
+        life:1, decay: Math.random()*0.012+0.006,
+        shape: money ? (Math.random()>0.5?'money':'rect') : Math.random()>0.4?'rect':'circle',
+        text: money ? '₱' : null
+      });
+    }
+    let last=performance.now();
+    const animate=(now:number)=>{
+      const dt=Math.min(32,now-last)/16; last=now;
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      let alive=false;
+      particles.forEach(p=>{
+        p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=0.28*dt; p.vx*=0.993; p.rot+=p.rotSpeed*dt; p.life-=p.decay*dt;
+        if(p.life>0){ alive=true; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate((p.rot*Math.PI)/180); ctx.globalAlpha=p.life; ctx.fillStyle=p.color;
+          if(p.shape==='money'){ ctx.font=`bold ${p.size*2.2}px Geist`; ctx.fillText('₱',-p.size,p.size); }
+          else if(p.shape==='rect') ctx.fillRect(-p.size/2,-p.size/2,p.size,p.size*0.65);
+          else { ctx.beginPath(); ctx.arc(0,0,p.size/2,0,Math.PI*2); ctx.fill(); }
+          ctx.restore();
+        }
+      });
+      if(alive) confettiRef.current=requestAnimationFrame(animate); else ctx.clearRect(0,0,canvas.width,canvas.height);
+    };
+    if(confettiRef.current) cancelAnimationFrame(confettiRef.current);
+    confettiRef.current=requestAnimationFrame(animate);
+  };
+
+  const toggleNumber = (n:number) => {
+    setSelected(prev=>{
+      if(prev.includes(n)) return prev.filter(x=>x!==n);
+      if(prev.length>=required){ const copy=[...prev]; copy[copy.length-1]=n; return copy; }
+      return [...prev,n].sort((a,b)=>a-b);
+    });
+    playTone(650+Math.random()*200,0.15,'sine',0.12);
+  };
+  const quickPick=()=>{
+    setSelected(randomPick(required, pool));
+    playTone(800,0.2,'triangle',0.14);
+  };
+  const evenOddMix=()=>{
+    const evens=Array.from({length:pool},(_,i)=>i+1).filter(n=>n%2===0);
+    const odds=Array.from({length:pool},(_,i)=>i+1).filter(n=>n%2===1);
+    const pick:number[]=[]; const needEven=Math.floor(required/2);
+    for(let i=0;i<needEven && evens.length;i++){ const idx=Math.floor(Math.random()*evens.length); pick.push(evens.splice(idx,1)[0]); }
+    for(let i=pick.length;i<required && odds.length;i++){ const idx=Math.floor(Math.random()*odds.length); pick.push(odds.splice(idx,1)[0]); }
+    setSelected(pick.sort((a,b)=>a-b)); playTone(700,0.18,'sine',0.13);
+  };
+
+  const switchGame = (next: GameId) => {
+    if (next === gameId || isDrawing) return;
+    const nextPool = GAMES[next].pool;
+    setGameId(next);
+    setSelected(prev => prev.filter(n => n <= nextPool));
+    setDrawnBalls([]); setCurrentBallAnim(null); setWinnerJackpot(null); setWinList([]); setShowMoneyRain(false);
+    setOfficialInput('');
+    playTone(760,0.18,'triangle',0.13);
+    showToast(`${GAMES[next].name} • ${GAMES[next].drawDayLabel} 9PM`);
+  };
+
+  const addTicket = () => {
+    if(selected.length!==required) return;
+    const nowTime=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    const base: Ticket = { id:idCounterRef.current++, numbers:[...selected].sort((a,b)=>a-b), game:gameId, betType, required, status:'pending', hits:0, time:nowTime, cost:betCost };
+    if(mode==='solo'){
+      setTickets(prev=>[base,...prev]);
+    } else {
+      setPlayers(prev=>prev.map((p,i)=> i===currentPlayerIdx ? {...p, tickets:[ {...base, playerId:p.id}, ...p.tickets ]} : p));
+    }
+    playTone(900,0.25,'triangle',0.16);
+    showToast(mode==='party' ? `Added for ${currentPlayer?.name}` : 'Ticket added!');
+  };
+
+  // Random-bet multipliers: buy 1, 10, 20 ... 200 machine picks in one tap.
+  const addRandomTickets = (count: number) => {
+    if (isDrawing) return;
+    const room = MAX_TICKETS - ticketCount;
+    if (room <= 0) { showToast(`Ticket limit reached (${MAX_TICKETS} tickets) — clear some first`); return; }
+    const size = Math.min(count, room);
+    const nowTime=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    const batch: Ticket[] = Array.from({ length: size }, () => ({
+      id: idCounterRef.current++,
+      numbers: randomPick(required, pool),
+      game: gameId,
+      betType,
+      required,
+      status: 'pending' as const,
+      hits: 0,
+      time: nowTime,
+      cost: betCost,
+    }));
+    if(mode==='solo'){
+      setTickets(prev=>[...batch,...prev]);
+    } else {
+      setPlayers(prev=>prev.map((p,i)=> i===currentPlayerIdx ? {...p, tickets:[...batch.map(t=>({...t, playerId:p.id})), ...p.tickets]} : p));
+    }
+    setSelected(batch[0].numbers);
+    playTone(880,0.22,'triangle',0.15);
+    schedule(()=>playTone(1180,0.18,'sine',0.12),90);
+    const clipped = size < count ? ` (capped from ×${count})` : '';
+    showToast(`×${size} random ${game.id} bets • ${formatPeso(size*betCost)}${clipped}`);
+  };
+
+  const addPlayer = () => {
+    if(!newPlayerName.trim()) return;
+    if(players.length>=8){ showToast('Max 8 players'); return; }
+    const col = PLAYER_COLORS[players.length % PLAYER_COLORS.length];
+    const p: Player = { id:'p'+Date.now(), name:newPlayerName.trim().slice(0,12), color:col, avatar:newPlayerName.trim()[0].toUpperCase(), tickets:[], winnings:0, winCount:0 };
+    setPlayers(prev=>[...prev,p]); setNewPlayerName(''); setCurrentPlayerIdx(players.length);
+    setChat(prev=>[...prev,{ id:Date.now().toString(), name:p.name, color:col, text:`Joined the party! 🎉`, time:new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) }]);
+    showToast(`${p.name} joined!`);
+  };
+
+  const parseOfficialInput = (str:string): number[] | null => {
+    const cleaned=str.trim().replace(/\s/g,'');
+    const parts=cleaned.split(/[-,]/).map(s=>parseInt(s,10)).filter(n=>!isNaN(n));
+    if(parts.length!==6) return null;
+    if(parts.some(n=>n<1||n>pool)) return null;
+    if(new Set(parts).size!==6) return null;
+    return parts;
+  };
+
+  const evaluateTickets = (finalDraw:number[], drawGame:GameId, isOfficialDraw=false) => {
+    const config = GAMES[drawGame];
+    const drawJackpot = getJackpots()[drawGame];
+    const sorted=[...finalDraw].sort((a,b)=>a-b);
+    const draw:Draw={ id:Date.now(), game:drawGame, numbers:[...finalDraw], sorted, time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}), dateLabel:new Date().toLocaleDateString('en-PH',{month:'short',day:'numeric'}), isOfficial:isOfficialDraw };
+    setDraws(prev=>[draw,...prev].slice(0,6));
+
+    const wins: {ticket:Ticket; player?:Player; prize:number}[]=[];
+
+    const calcPrize = (t:Ticket, hits:number): { won:boolean; prize:number } => {
+      if(t.betType===6){
+        if(hits===6) return { won:true, prize:drawJackpot };
+        if(hits>=3) return { won:true, prize:config.secondary[hits as 3|4|5] };
+        return { won:false, prize:0 };
+      } else {
+        if(hits===t.required) return { won:true, prize:betPrize(config, t.betType, drawJackpot, t.cost) };
+        return { won:false, prize:0 };
+      }
+    };
+
+    if(mode==='solo'){
+      const updatedTickets = getTickets().map(t=>{
+          if(t.status!=='pending' || t.game!==drawGame) return t;
+          const hits=t.numbers.filter(n=>finalDraw.includes(n)).length;
+          const {won,prize}=calcPrize(t,hits);
+          if(won){
+            const nt={...t,hits,status:'won' as const, prizeWon:prize};
+            wins.push({ticket:nt, prize});
+            return nt;
+          } else {
+            return {...t,hits,status:'lost' as const, prizeWon:0};
+          }
+      });
+      setTickets(updatedTickets);
+    } else {
+        const updatedPlayers = getPlayers().map(p=>{
+          let w= p.winnings; let wc=p.winCount;
+          const newTickets = p.tickets.map(t=>{
+            if(t.status!=='pending' || t.game!==drawGame) return t;
+            const hits=t.numbers.filter(n=>finalDraw.includes(n)).length;
+            const {won,prize}=calcPrize(t,hits);
+            if(won){
+              w+=prize; wc+=1;
+              const nt={...t,hits,status:'won' as const, prizeWon:prize};
+              wins.push({ticket:nt, player:p, prize});
+              return nt;
+            } else {
+              return {...t,hits,status:'lost' as const, prizeWon:0};
+            }
+          });
+          return {...p, tickets:newTickets, winnings:w, winCount:wc};
+        });
+        setPlayers(updatedPlayers);
+    }
+
+    if(wins.length>0){
+      const jackpotWin = wins.find(w=>w.ticket.betType===6 && w.ticket.hits===6);
+      if(jackpotWin){
+        setWinnerJackpot(jackpotWin);
+        setWinList(wins);
+        triggerConfetti(true,false);
+        playWinSeq();
+      } else {
+        setWinList(wins);
+        triggerConfetti(false,true);
+        playTone(650,0.6,'sine',0.2); schedule(()=>playTone(850,0.6,'triangle',0.18),180);
+        if(wins.some(w=>w.prize>=1000)) setShowMoneyRain(true);
+      }
+    } else {
+      // no winner -> jackpot rollover
+      if(!isOfficialDraw){
+        const bump = config.rollover + Math.floor(Math.random()*(config.rollover*0.2));
+        setJackpots(prev=>({ ...prev, [drawGame]: prev[drawGame] + bump }));
+        setJackpotAnim(true); schedule(()=>setJackpotAnim(false),1200);
+        showToast(`No ${drawGame} jackpot winner! Rolled over +${formatCompactPeso(bump)}`);
+      }
+    }
+    setIsDrawing(false); setCurrentBallAnim(null);
+  };
+
+  const startDraw = (overrideNumbers?: number[]) => {
+    if(isDrawing) return;
+    const drawGame = getGameId();
+    setIsDrawing(true); setIsMixing(true); setDrawnBalls([]); setCurrentBallAnim(null); setWinnerJackpot(null); setWinList([]); setShowMoneyRain(false);
+    playMixRumble();
+
+    // Draw order stays unsorted so the balls reveal the way the drum spat them out.
+    const finalDraw = overrideNumbers ?? (() => {
+      const bag=Array.from({length:GAMES[drawGame].pool},(_,i)=>i+1);
+      for(let i=bag.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [bag[i],bag[j]]=[bag[j],bag[i]]; }
+      return bag.slice(0,6);
+    })();
+
+    schedule(()=>{
+      setIsMixing(false);
+      let idx=0;
+      const reveal=()=>{
+        if(idx>=6){
+          evaluateTickets(finalDraw, drawGame, !!overrideNumbers);
+          return;
+        }
+        const num=finalDraw[idx];
+        setDrawnBalls(prev=>[...prev,num]);
+        setCurrentBallAnim(num);
+        playTone(320+idx*70+(num%12)*10,0.55,'sine',0.22);
+        schedule(()=>setCurrentBallAnim(null),600);
+        idx++;
+        schedule(reveal,1100);
+      };
+      reveal();
+    }, 2600);
+  };
+
+  const handleUseOfficialInput = () => {
+    const nums=parseOfficialInput(officialInput);
+    if(!nums){ showToast(`Invalid format. Six unique numbers 1-${pool}, e.g. 08-27-06-25-13-22`); return; }
+    showToast(`Using official draw: ${nums.join('-')}`);
+    startDraw(nums);
+  };
+
+  const handleCopyInvite = async () => {
+    const url=`${window.location.origin}${window.location.pathname}#${roomCode}`;
+    try{ await navigator.clipboard.writeText(url); showToast(`Invite copied • Room ${roomCode}`); }
+    catch{ showToast(url); }
+  };
+
+  const handleSendChat=()=>{
+    if(!chatInput.trim()) return;
+    const msg:ChatMsg={ id:Date.now().toString(), name:currentPlayer?.name||'You', color:currentPlayer?.color||'--primary', text:chatInput.trim().slice(0,120), time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) };
+    setChat(prev=>[...prev.slice(-20),msg]); setChatInput('');
+    if(Math.random()>0.45){
+      schedule(()=>{
+        const hype=['LETS GOOO! 🔥','Jackpot incoming!','I got 6/6 feeling!','P50M 😳','Watch 27!','Good luck! 🍀'];
+        const p = players[Math.floor(Math.random()*players.length)] || currentPlayer;
+        if(!p) return;
+        setChat(prev=>[...prev.slice(-20),{ id:(Date.now()+1).toString(), name:p.name, color:p.color, text:hype[Math.floor(Math.random()*hype.length)], time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) }]);
+      }, 900 + Math.random()*1200);
+    }
+  };
+
+  const stats = useMemo(()=>{
+    if(mode==='solo'){
+      const total=tickets.length; const wins=tickets.filter(t=>t.status==='won').length; const rate= total? Math.round((wins/total)*100):0;
+      const wonAmount=tickets.filter(t=>t.status==='won').reduce((s,t)=>s+(t.prizeWon||0),0);
+      return { total,wins,rate,wonAmount };
+    } else {
+      const total=players.reduce((s,p)=>s+p.tickets.length,0);
+      const wins=players.reduce((s,p)=>s+p.tickets.filter(t=>t.status==='won').length,0);
+      const rate= total? Math.round((wins/total)*100):0;
+      const wonAmount=players.reduce((s,p)=>s+p.winnings,0);
+      return { total,wins,rate,wonAmount };
+    }
+  },[tickets,players,mode]);
+
+  const sortedLeaderboard = useMemo(()=> [...players].sort((a,b)=> b.winnings - a.winnings),[players]);
+
+div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground selection:bg-primary/30 overflow-x-hidden relative")
+  div(className="ambient-field pointer-events-none fixed inset-0" aria-hidden="true")
+    div(className="ambient-orb ambient-orb--rose")
+    div(className="ambient-orb ambient-orb--gold")
+    div(className="ambient-orb ambient-orb--blue")
+    div(className="ambient-grain")
+  canvas(
+    ~ ref={canvasRef}
+    ~ className="fixed inset-0 pointer-events-none z-[100] max-w-full"
+    ~ )
+  if showMoneyRain
+    div(className="fixed inset-0 pointer-events-none z-[90] bg-gradient-to-b from-primary/10 to-transparent animate-[fadeIn_0.6s_ease]")
+  div(className="relative z-10 w-full max-w-[1480px] mx-auto px-3 md:px-6 py-4 md:py-7 overflow-x-hidden")
+    header(className="mb-4")
+      div(className="flex flex-wrap items-center justify-between gap-3")
+        div(className="flex items-center gap-3")
+          div(className="brand-mark")
+            span(className="brand-mark__number")
+              | #{pool}
+            span(className="brand-mark__orbit" aria-hidden="true")
+          div
+            h1(className="flex items-center gap-2 text-[22px] md:text-[28px] font-bold tracking-[-0.04em] leading-none")
+              span Lucky Pick
+              span(className="live-chip text-[10px] uppercase tracking-[0.18em]")
+                span(className=" w-1.5 h-1.5 rounded-full bg-destructive animate-pulse")
+                | #{" Live"}
+            p(className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-semibold mt-1.5 flex items-center gap-2")
+              span
+                | #{game.name}
+                | #{" • Philippines"}
+
+        div(className="flex items-center gap-2")
+          div(className="mode-switch")
+            button(
+              ~ onClick={() => { setMode('solo'); showToast('Solo mode • Your tickets'); }}
+              ~ className={`mode-switch__item ${mode === 'solo' ? 'mode-switch__item--active' : ''}`}
+              ~ )
+              | Solo
+            button(
+              ~ onClick={() => { setMode('party'); showToast(`Party mode • Room ${roomCode} • ${players.length} players`); }}
+              ~ className={`mode-switch__item flex items-center gap-1.5 ${mode === 'party' ? 'mode-switch__item--active mode-switch__item--party' : ''}`}
+              ~ )
+              Users(className="w-3.5 h-3.5")
+              | #{" Party"}
+          button(
+              ~ onClick={() => setSoundOn(v => !v)}
+            ~ className="icon-button"
+            ~ aria-label={soundOn ? 'Mute sound' : 'Turn sound on'}
+            ~ )
+            if soundOn
+              Volume2(className="w-4 h-4")
+            else
+              VolumeX(className="w-4 h-4 text-muted-foreground")
+          button(
+            ~ onClick={toggleMode}
+            ~ className="icon-button"
+            ~ aria-label={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            ~ )
+            if themeMode === 'dark'
+              Moon(className="w-4 h-4")
+            else
+              Sun(className="w-4 h-4")
+          div(className="relative")
+            button(
+              ~ onClick={() => setShowThemes(v => !v)}
+              ~ className="icon-button"
+              ~ aria-label="Change theme"
+              ~ aria-expanded={showThemes}
+              ~ )
+              Palette(className="w-4 h-4")
+            if showThemes
+              div(className="absolute right-0 top-[46px] z-50 w-[210px] p-1.5 rounded-2xl border border-border bg-popover shadow-xl")
+                each t in THEMES key t.id
+                  button(
+                    ~ onClick={() => pickTheme(t.id)}
+                    ~ className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition ${theme === t.id ? 'bg-elevated' : 'hover:bg-raised'}`}
+                    ~ )
+                    span(
+                      ~ className={`w-5 h-5 rounded-full border border-border shrink-0 ${themeMode === 'dark' ? 'dark' : ''}`}
+                      ~ data-theme={t.id}
+                      ~ style={{ background: 'linear-gradient(135deg, var(--primary) 0 50%, var(--destructive) 50% 100%)' }}
+                      ~ )
+                    span(className="min-w-0 flex-1")
+                      span(className="block text-[12px] font-bold leading-none")
+                        | #{t.name}
+                      span(className="block text-[10px] text-muted-foreground mt-1 truncate")
+                        | #{t.blurb}
+                    if theme === t.id
+                      Check(className="w-3.5 h-3.5 text-primary shrink-0")
+    div(className="mb-4 border border-border rounded-lg divide-x overflow-hidden")
+      div(className="flex items-center justify-between flex-wrap")
+        p(className="hidden text-[10px] font-bold text-muted-foreground")
+          | #{game.drawDayLabel}
+          | #{" • 9PM Manila • Pool 1-"}
+          | #{pool}
+      div(className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5")
+        each g in GAME_IDS key g
+          button(
+            ~ onClick={() => switchGame(g)}
+            ~ disabled={isDrawing}
+            ~ className={`px-3 py-2 text-left border-r last:border-r-0 transition disabled:opacity-40 disabled:cursor-not-allowed ${gameId === g ? 'bg-foreground/80' : 'bg-background/60 hover:bg-raised'}`}
+            ~ )
+            span(
+              ~ className="flex items-center text-[14px] gap-2 font-bold leading-none"
+              ~ style={{ color: gameId === g ? 'var(--background)' : 'var(--foreground)' }}
+              ~ )
+              span #{g}
+              span &middot;
+              span(className={cn("block text-sm font-semibold text-primary", { 'text-background': gameId === g })})
+                | #{formatCompactPeso(jackpots[g])}
+            span(className={cn("block text-[9px] font-bold tracking-[0.12em] text-foreground mt-1 truncate", { 'text-background': gameId === g })})
+              | #{GAMES[g].name.toUpperCase()}
+
+    div(className="hidden lux-panel lux-panel--summary mb-5 overflow-hidden relative")
+      div(className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary/50 to-transparent")
+      div(className="p-4 md:p-5 grid grid-cols-1 lg:grid-cols-[1.2fr_0.9fr_1fr] gap-4")
+        div(className="rounded-[16px] bg-sunken p-4 relative overflow-hidden")
+          div(className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-[20px]")
+          div(className="flex items-center justify-between mb-2.5")
+            div(className="flex items-center gap-2")
+              span(className="px-2.5 py-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-black tracking-widest flex items-center gap-1.5 shadow-[0_0_12px_var(--lp-glow)]")
+                Radio(className="w-3 h-3 animate-pulse")
+                | #{" OFFICIAL PCSO RESULT • "}
+                | #{game.id}
+              span(className="w-2 h-2 rounded-full bg-destructive animate-ping")
+            span(className="text-[10px] font-bold text-muted-foreground")
+              | #{latestOfficial ? `${latestOfficial.date} • 9PM DRAW` : 'NO RESULT LOADED'}
+          if latestOfficial
+            fragment
+              div(className="flex flex-wrap items-center gap-2 mb-2")
+                div(className="flex gap-1.5")
+                  each n in latestOfficial.numbers key n
+                    span(className="w-8 h-8 rounded-full bg-primary text-primary-foreground text-[12px] font-black flex items-center justify-center shadow-[0_0_10px_var(--lp-glow)]")
+                      | #{String(n).padStart(2, '0')}
+                span(className="text-[12px] font-mono text-foreground/70")
+                  | #{latestOfficial.raw}
+              div(className="flex flex-wrap gap-3 text-[12px]")
+                span(className="flex items-center gap-1.5")
+                  DollarSign(className="w-3.5 h-3.5 text-primary")
+                  | #{" Jackpot "}
+                  b(className="text-primary")
+                    | #{latestOfficial.jackpotFormatted}
+                span(className="text-muted-foreground")
+                  | #{latestOfficial.winners}
+                  | #{" winner(s) • Rollover"}
+          else
+            div(className="rounded-[12px] border border-dashed border-border bg-sunken px-3 py-4 text-[12px] text-muted-foreground leading-[1.45]")
+              | #{"No recorded draw stored for "}
+              | #{game.name}
+              | #{" yet. Paste a result on the right to play against a real "}
+              | #{game.id}
+              | #{" draw, or hit START DRAW for a simulated one."}
+          if prevOfficial
+            div(className="mt-3 pt-3 border-t border-border flex flex-wrap items-center gap-2 text-[11px] text-foreground/70")
+              span(className="font-bold text-muted-foreground")
+                | #{"PREV "}
+                | #{prevOfficial.dateShort}
+                | :
+              div(className="flex gap-1")
+                each n in prevOfficial.numbers key n + 'p'
+                  span(className="w-6 h-6 rounded-full bg-ball text-ball-ink text-[10px] font-black flex items-center justify-center")
+                    | #{String(n).padStart(2, '0')}
+              span(className="font-mono")
+                | #{prevOfficial.raw}
+              span(className="text-primary/80")
+                | #{prevOfficial.jackpotFormatted}
+          div(className="mt-3 flex gap-2")
+            a(
+              ~ href="https://www.pcso.gov.ph"
+              ~ target="_blank"
+              ~ rel="noopener"
+              ~ className="h-8 px-3 rounded-full bg-ball text-ball-ink text-[11px] font-black flex items-center gap-1.5 hover:brightness-110 transition"
+              ~ )
+              Globe(className="w-3.5 h-3.5")
+              | #{" PCSO.gov.ph "}
+              ExternalLink(className="w-3 h-3")
+            a(
+              ~ href="https://www.youtube.com/@pcsoofficial"
+              ~ target="_blank"
+              ~ rel="noopener"
+              ~ className="h-8 px-3 rounded-full bg-destructive text-destructive-foreground text-[11px] font-black flex items-center gap-1.5 hover:brightness-110 transition"
+              ~ )
+              Youtube(className="w-3.5 h-3.5")
+              | #{" Watch Live "}
+              Play(className="w-3 h-3")
+        div(className="rounded-[16px] bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/20 p-4 flex flex-col justify-between")
+          div
+            div(className="flex items-center justify-between mb-3")
+              span(className="text-[10px] font-black tracking-widest text-primary/80 flex items-center gap-1")
+                Timer(className="w-3.5 h-3.5")
+                | #{" NEXT "}
+                | #{game.id}
+                | #{" DRAW"}
+              span(className="text-[10px] px-2 py-0.5 rounded-full bg-sunken border border-border text-foreground/70")
+                | #{countdown.label}
+            div(className="grid grid-cols-4 gap-2 mb-3")
+              each k in [ { v: countdown.d, l: 'DAYS' }, { v: countdown.h, l: 'HRS' }, { v: countdown.m, l: 'MIN' }, { v: countdown.s, l: 'SEC' }, ] key k.l
+                div(className="rounded-xl bg-sunken border border-border p-2 text-center")
+                  div(className="text-[18px] font-black leading-none")
+                    | #{String(k.v).padStart(2, '0')}
+                  div(className="text-[9px] font-bold text-muted-foreground tracking-widest mt-1")
+                    | #{k.l}
+            div(className="rounded-xl bg-sunken border border-primary/20 p-3")
+              p(className="text-[10px] tracking-widest font-black text-muted-foreground")
+                | CURRENT JACKPOT • ROLLOVER
+              p(className={`text-[22px] font-black tracking-tight text-primary leading-none mt-1 ${jackpotAnim ? 'animate-[jackpotUp_0.9s_ease]' : ''}`})
+                | #{formatJackpot(jackpot)}
+              p(className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1")
+                Flame(className="w-3 h-3 text-chart-5")
+                | #{" +"}
+                | #{formatCompactPeso(game.rollover)}
+                | #{" if no winner • Base "}
+                | #{formatPeso(game.baseJackpot)}
+          p(className="mt-3 text-[10px] text-muted-foreground leading-[1.4]")
+            | #{game.name}
+            | #{" draws "}
+            | #{game.drawDayLabel}
+            | #{" 9PM Manila • Live broadcast IBC13 / PCSO FB"}
+        div(className="rounded-[16px] bg-raised border border-border p-4 flex flex-col")
+          h3(className="text-[11px] font-black tracking-widest text-foreground/80 mb-3 flex items-center gap-1.5")
+            Gift(className="w-3.5 h-3.5 text-primary")
+            | #{" PLAY VS REAL "}
+            | #{game.id}
+            | #{" RESULT"}
+          div(className="flex gap-2")
+            input(
+              ~ value={officialInput}
+              ~ onInput={e => setOfficialInput(e.currentTarget.value)}
+              ~ placeholder={`Paste official ${game.id} e.g. 08-27-06-25-13-22`}
+              ~ className="flex-1 h-10 rounded-full bg-sunken border border-border px-4 text-[12px] font-mono placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/20 transition"
+              ~ )
+            button(
+              ~ onClick={handleUseOfficialInput}
+              ~ className="h-10 px-4 rounded-full bg-primary text-primary-foreground text-[12px] font-black hover:brightness-110 active:scale-[0.98] transition whitespace-nowrap"
+              ~ )
+              | Use as Draw
+          div(className="mt-2 flex gap-1.5")
+            if latestOfficial
+              button(
+                ~ onClick={() => { setOfficialInput(latestOfficial.raw); }}
+                ~ className="px-2.5 py-1 rounded-full bg-elevated border border-border text-[10px] font-bold hover:bg-elevated"
+                ~ )
+                | #{"Fill "}
+                | #{latestOfficial.raw}
+            button(
+              ~ onClick={() => setShowIframe(v => !v)}
+              ~ className="px-2.5 py-1 rounded-full bg-raised border border-border text-[10px] font-bold hover:bg-elevated flex items-center gap-1"
+              ~ )
+              Globe(className="w-3 h-3")
+              | #{" "}
+              | #{showIframe ? 'Hide' : 'Official Source'}
+          if showIframe
+            div(className="mt-3 rounded-[12px] overflow-hidden border border-border bg-sunken")
+              div(className="h-7 bg-raised border-b border-border flex items-center justify-between px-3 text-[10px] font-bold text-foreground/70")
+                span
+                  | Official Source • lotto-result.ph (fallback)
+                a(
+                  ~ href="https://lotto-result.ph"
+                  ~ target="_blank"
+                  ~ rel="noopener"
+                  ~ className="text-primary hover:underline"
+                  ~ )
+                  | Open ↗
+              iframe(
+                ~ title="lotto official"
+                ~ src="https://lotto-result.ph"
+                ~ className="w-full h-[160px] bg-white"
+                ~ loading="lazy"
+                ~ sandbox="allow-same-origin allow-scripts allow-popups"
+                ~ )
+          else
+            p(className="mt-3 text-[11px] leading-[1.4] text-muted-foreground")
+              | Copy result from PCSO site and paste here to simulate against real draw. Works for party mode too — everyone bets on same official numbers.
+          div(className="mt-auto pt-3 flex items-center gap-2 text-[10px] text-muted-foreground")
+            span(className="w-1.5 h-1.5 rounded-full bg-chart-2 animate-pulse")
+            | #{" Live feed updated Sep 19, 2026"}
+    if toast
+      div(className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[120] px-4 py-2.5 rounded-full bg-ball text-ball-ink text-[13px] font-bold shadow-[0_8px_24px_rgba(0,0,0,0.4)] animate-[winnerPop_0.4s_ease]")
+        | #{toast}
+    div(className="grid grid-cols-1 xl:grid-cols-[360px_1fr_380px] gap-4 md:gap-5 items-start")
+      div(className="order-2 xl:order-1 space-y-4")
+        if mode === 'party'
+          div(className="rounded-[20px] bg-card border border-border p-4")
+            div(className="flex items-center justify-between mb-3")
+              h3(className="text-[11px] font-black tracking-widest flex items-center gap-1.5")
+                Crown(className="w-4 h-4 text-primary")
+                | #{" ROOM "}
+                | #{roomCode}
+              button(
+                ~ onClick={handleCopyInvite}
+                ~ className="h-7 px-3 rounded-full bg-elevated border border-border text-[10px] font-bold flex items-center gap-1 hover:bg-elevated transition"
+                ~ )
+                Link2(className="w-3 h-3")
+                | #{" Copy Invite"}
+            div(className="flex gap-2 mb-3")
+              input(
+                ~ value={newPlayerName}
+                ~ onInput={e => setNewPlayerName(e.currentTarget.value)}
+                ~ onKeyDown={e => e.key === 'Enter' && addPlayer()}
+                ~ placeholder="Add player name"
+                ~ className="flex-1 h-9 rounded-full bg-sunken border border-border px-3.5 text-[12px] placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/40"
+                ~ )
+              button(
+                ~ onClick={addPlayer}
+                ~ className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:brightness-110 active:scale-95"
+                ~ )
+                UserPlus(className="w-4 h-4")
+            div(className="flex flex-wrap gap-2")
+              each p, idx in players key p.id
+                button(
+                  ~ onClick={() => setCurrentPlayerIdx(idx)}
+                  ~ className={`h-8 px-3 rounded-full border text-[12px] font-bold flex items-center gap-1.5 transition ${idx === currentPlayerIdx ? 'bg-ball text-ball-ink border-border shadow' : 'bg-sunken border-border text-foreground/70 hover:text-foreground hover:bg-elevated'}`}
+                  ~ )
+                  span(
+                    ~ className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black"
+                    ~ style={paintFor(p.color)}
+                    ~ )
+                    | #{p.avatar}
+                  | #{p.name}
+                  | #{" "}
+                  span(className="text-[10px] opacity-60")
+                    | #{p.tickets.length}
+            if players.length < 8
+              p(className="mt-2 text-[10px] text-muted-foreground")
+                | Up to 8 players • All bet on same draw
+            else
+              p(className="mt-2 text-[10px] text-destructive")
+                | Room full (8/8)
+        div(className="lux-panel p-5")
+          div(className="flex items-center justify-between mb-4")
+            h2(className="text-[12px] font-black tracking-[0.12em] flex items-center gap-2")
+              Dices(className="w-4 h-4 text-primary")
+              | #{" PICK YOUR NUMBERS"}
+            span(className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-sunken border border-border text-foreground/80")
+              | #{selected.length}
+              | /
+              | #{required}
+              | #{" SELECTED "}
+              | #{mode === 'party' && currentPlayer ? `• ${currentPlayer.name}` : ''}
+          div(className="mb-3")
+            p(className="text-[10px] tracking-widest text-muted-foreground font-bold mb-2")
+              | BET TYPE
+            div(className="grid grid-cols-3 gap-1 p-1 rounded-[16px] bg-sunken border border-border")
+              each bt in BET_TYPES key bt
+                button(
+                  ~ onClick={() => { setBetType(bt); setSelected(prev => prev.slice(0, bt).sort((a, b) => a - b)); }}
+                  ~ className={`h-9 rounded-xl text-xs font-black tracking-wide transition ${betType === bt ? 'bg-primary text-primary-foreground shadow-[0_0_12px_var(--lp-glow)]' : 'bg-raised text-foreground/70 hover:bg-elevated hover:text-foreground'}`}
+                  ~ )
+                  | #{bt}
+                  | #{"/6 "}
+                  | #{bt === 6 ? 'JACKPOT' : ''}
+          div(className="mb-4 rounded-[14px] overflow-hidden border border-border bg-sunken")
+            div(className="px-3 py-2 bg-raised flex items-center justify-between")
+              span(className="text-[10px] font-black tracking-widest text-muted-foreground")
+                | #{betType === 6 ? '' : 'PAYTABLE • '}
+                | #{game.name.toUpperCase()}
+              span(className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/15 border border-primary/20 text-primary font-bold")
+                | #{betType === 6 ? formatCompactPeso(game.baseJackpot) + '+ BASE' : Math.round(PAYOUT_RTP * 1000) / 10 + '% RETURN'}
+            if betType === 6
+              div(className="divide-y divide-border")
+                each r in jackpotLadder(game, jackpot) key r.m
+                  div(className={`grid grid-cols-[54px_1fr_92px] px-3 py-2 items-center text-[11px] ${r.m === '6/6' ? 'bg-primary/10' : ''}`})
+                    span(className={`font-black ${r.m === '6/6' ? 'text-primary' : 'text-foreground'}`})
+                      | #{r.m}
+                    span(className="flex flex-col leading-tight")
+                      span(className={`font-bold ${r.m === '6/6' ? 'text-primary' : 'text-foreground'}`})
+                        | #{r.prize}
+                      span(className="text-[9px] text-muted-foreground")
+                        | #{r.sub}
+                    span(className="text-right text-[10px] text-muted-foreground font-mono")
+                      | #{r.odds}
+            else
+              div(className="divide-y divide-border")
+                each r in pickPaytable(game, betCost) key r.m
+                  div(className={`grid grid-cols-[54px_1fr_92px] px-3 py-2 items-center text-[11px] ${betType === r.bet ? 'bg-primary/10' : ''}`})
+                    span(className={`font-black ${betType === r.bet ? 'text-primary' : 'text-foreground'}`})
+                      | #{r.m}
+                    span(className="flex flex-col leading-tight")
+                      span(className={`font-bold ${betType === r.bet ? 'text-primary' : 'text-foreground'}`})
+                        | #{r.prize}
+                      span(className="text-[9px] text-muted-foreground")
+                        | #{r.sub}
+                    span(className="text-right text-[10px] text-muted-foreground font-mono")
+                      | #{r.odds}
+          div(className="rounded-[18px] bg-sunken border border-border p-3")
+            div(className={`grid gap-1.5 ${pool > 49 ? 'grid-cols-8' : 'grid-cols-7'}`})
+              each n in Array.from({ length: pool }, (_, i) => i + 1) key n
+                button(
+                  ~ onClick={() => toggleNumber(n)}
+                  ~ className={`aspect-square rounded-full text-[13px] font-black transition-all relative flex items-center justify-center ${(selected.includes(n)) ? 'bg-gradient-to-br from-primary/70 to-primary text-black shadow-[0_0_14px_var(--lp-glow),inset_0_1px_2px_rgba(255,255,255,0.9)] scale-[1.06] z-10' : 'lp-ball shadow-[inset_0_1px_2px_rgba(255,255,255,1),0_2px_6px_rgba(0,0,0,0.35)] hover:scale-[1.05]'}`}
+                  ~ )
+                  | #{n}
+                  if (selected.includes(n))
+                    span(className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-destructive rounded-full border border-border flex items-center justify-center")
+                      Check(className="w-2 h-2 text-foreground")
+          div(className="mt-3 grid grid-cols-3 gap-2")
+            button(
+              ~ onClick={quickPick}
+              ~ className="h-9 rounded-full bg-elevated border border-border text-[11px] font-bold hover:bg-elevated transition flex items-center justify-center gap-1"
+              ~ )
+              Dice5(className="w-3.5 h-3.5")
+              | #{" LUCKY PICK"}
+            button(
+              ~ onClick={evenOddMix}
+              ~ className="h-9 rounded-full bg-elevated border border-border text-[11px] font-bold hover:bg-elevated transition"
+              ~ )
+              | EVEN/ODD
+            button(
+              ~ onClick={() => setSelected([])}
+              ~ className="h-9 rounded-full bg-raised border border-border text-[11px] font-bold text-muted-foreground hover:text-foreground/90 transition"
+              ~ )
+              | CLEAR
+          div(className="mt-3 rounded-[16px] bg-sunken border border-border p-3")
+            div(className="flex items-center justify-between gap-2 mb-2")
+              p(className="text-[10px] tracking-widest text-muted-foreground font-bold flex items-center gap-1.5")
+                Dice5(className="w-3.5 h-3.5 text-primary")
+                | #{" RANDOM BETS"}
+              p(className="text-[10px] font-bold text-muted-foreground")
+                | #{formatPeso(betCost)}
+                | #{" / bet • "}
+                | #{ticketCount}
+                | /
+                | #{MAX_TICKETS}
+                | #{" bought"}
+            div(className="grid grid-cols-3 gap-1.5")
+              each m in BET_MULTIPLIERS key m
+                button(
+                  ~ onClick={() => addRandomTickets(m)}
+                  ~ disabled={isDrawing || ticketCount >= MAX_TICKETS}
+                  ~ className="h-11 rounded-[12px] bg-raised border border-border flex flex-col items-center justify-center leading-none hover:bg-primary/15 hover:border-primary/30 active:scale-[0.97] transition disabled:opacity-30 disabled:cursor-not-allowed"
+                  ~ )
+                  span(className="text-[13px] font-black tracking-tight")
+                    | #{'×'}
+                    | #{m}
+                  span(className="text-[9px] font-bold text-muted-foreground mt-1")
+                    | #{formatPeso(m * betCost)}
+            p(className="mt-2 text-[10px] text-muted-foreground/70 leading-[1.4]")
+              | #{"Instantly buys that many machine-picked "}
+              | #{required}
+              | #{"-number "}
+              | #{game.id}
+              | #{" bets for "}
+              | #{mode === 'party' ? (currentPlayer?.name ?? 'this player') : 'you'}
+              | .
+          div(className="mt-4 rounded-[16px] bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/20 p-3.5 flex items-center justify-between")
+            div
+              p(className="text-[10px] tracking-widest font-black text-primary/80")
+                | YOU WILL WIN
+              p(className="text-[16px] font-black text-primary tracking-tight")
+                | #{betType === 6 ? formatJackpot(jackpot) : formatPeso(betPrize(game, betType, jackpot, betCost))}
+                | #{" "}
+                span(className="text-[11px] text-foreground/70 font-bold")
+                  | #{"if "}
+                  | #{betType === 6 ? '6/6 hits' : `${betType}/${betType}`}
+              p(className="text-[10px] text-muted-foreground")
+                | #{formatOdds(betOdds(pool, betType))}
+                | #{" • "}
+                | #{BET_LABELS[betType]}
+                | #{" • "}
+                | #{game.id}
+            div(className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-black text-[14px] shadow-[0_0_18px_var(--lp-glow)]")
+              | #{betType}
+              | /6
+          button(
+            ~ onClick={addTicket}
+            ~ disabled={selected.length !== required}
+            ~ className="mt-4 w-full h-[52px] rounded-full bg-primary text-primary-foreground font-black text-[14px] tracking-wide disabled:opacity-30 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.98] transition shadow-[0_0_24px_var(--lp-glow)] flex items-center justify-center gap-2"
+            ~ )
+            span
+              | #{"BET "}
+              | #{BET_LABELS[betType]}
+              | #{" "}
+              | #{mode === 'party' ? `• ${currentPlayer?.name}` : ''}
+            span(className="w-6 h-6 rounded-full bg-sunken text-primary flex items-center justify-center text-[12px]")
+              | +
+        div(className="lux-panel lux-panel--compact p-4 flex items-center justify-between")
+          div(className="flex items-center gap-2.5")
+            div(className="w-8 h-8 rounded-full bg-elevated flex items-center justify-center")
+              BarChart3(className="w-4 h-4 text-foreground/70")
+            div
+              p(className="text-[11px] font-bold tracking-wide text-foreground/70")
+                | SESSION
+              p(className="text-[12px] font-bold")
+                | #{stats.total}
+                | #{" plays • "}
+                | #{stats.wins}
+                | #{" wins • "}
+                | #{stats.rate}
+                | #{"% • "}
+                | #{formatPeso(stats.wonAmount)}
+                | #{" won"}
+      div(className="order-1 xl:order-2")
+        div(className="lux-panel lux-panel--stage overflow-hidden relative")
+          div(className="absolute top-0 left-1/2 -translate-x-1/2 w-[75%] h-[1px] bg-gradient-to-r from-transparent via-primary/60 to-transparent")
+          div(className="relative")
+            div(className="hidden _flex items-center justify-between mb-3")
+              div(className="hidden _flex items-center gap-2")
+                div(className="w-2 h-2 rounded-full bg-destructive shadow-[0_0_8px_var(--destructive)] animate-pulse")
+                span(className="text-[11px] font-black tracking-[0.18em] text-foreground/80")
+                  | #{"LIVE DRUM • "}
+                  | #{game.name.toUpperCase()}
+                  | #{" • "}
+                  | #{pool}
+                  | #{" BALLS"}
+              div(className="hidden _flex items-center gap-2")
+                span(className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-primary/15 border border-primary/20 text-primary")
+                  | #{formatJackpot(jackpot)}
+                span(className={`text-[10px] font-bold px-2 py-1 rounded-full border ${isDrawing ? 'bg-destructive/20 border-destructive/40 text-destructive animate-pulse' : 'bg-raised border-border text-muted-foreground'}`})
+                  | #{isDrawing ? '● DRAWING' : '● READY'}
+            div(className={`draw-machine ${isDrawing ? 'draw-machine--active' : ''}`})
+              div(className="draw-machine__rail")
+                each _, i in [...Array(12)] key i
+                  span(
+                    ~ className={`draw-machine__light ${isDrawing ? 'draw-machine__light--active' : ''}`}
+                    ~ style={{ animationDelay: `${i * 80}ms` }}
+                    ~ )
+              div(className="draw-machine__chamber")
+                div(className="draw-machine__halo" aria-hidden="true")
+                div(className="draw-machine__grid" aria-hidden="true")
+                div(className="draw-machine__globe")
+                  DrawDrum(active={isDrawing} drawnNumbers={drawnBalls} poolSize={pool} themeKey={themeKey})
+                  div(className="draw-machine__glare" aria-hidden="true")
+                  div(className="draw-machine__status" aria-live="polite")
+                    span(className={`status-pulse ${isDrawing ? 'status-pulse--active' : ''}`})
+                    span
+                      | #{isDrawing ? (isMixing ? 'Calibrating chamber' : `Selecting ball ${Math.min(drawnBalls.length + 1, 6)} of 6`) : drawnBalls.length === 6 ? 'Draw complete' : 'Awaiting draw'}
+                div(className="draw-machine__base" aria-hidden="true")
+                  span
+              div(className="draw-machine__tray p-3 md:p-4")
+                div(className="flex items-center justify-between mb-2.5")
+                  p(className="text-[10px] font-black tracking-[0.18em] text-muted-foreground")
+                    | DRAWN BALLS
+                  p(className="text-[10px] font-bold text-muted-foreground")
+                    | #{drawnBalls.length}
+                    | #{"/6 • "}
+                    | #{isDrawing ? 'DRAWING...' : drawnBalls.length === 6 ? 'COMPLETE' : 'READY'}
+                    | #{" "}
+                    | #{draws[0]?.isOfficial ? '• OFFICIAL' : ''}
+                div(className="grid grid-cols-6 gap-2 md:gap-3")
+                  each _, i in Array.from({ length: 6 }) key i
+                    div(className="result-slot aspect-square flex items-center justify-center relative overflow-hidden")
+                      if (drawnBalls[i])
+                        div(className={`${(currentBallAnim === drawnBalls[i]) ? 'animate-[ballPop_0.6s_cubic-bezier(0.34,1.56,0.64,1)]' : 'animate-[ballIn_0.4s_ease]'}`})
+                          Ball(
+                            ~ n={(drawnBalls[i])}
+                            ~ size="lg"
+                            ~ glowing
+                            ~ )
+                      else
+                        div(className="result-slot__empty")
+                      if (currentBallAnim === drawnBalls[i])
+                        div(className="absolute inset-0 bg-primary/20 animate-[ping_0.6s_ease] rounded-[18px]")
+                if drawnBalls.length === 6
+                  div(className="mt-3 flex items-center justify-center gap-2 flex-wrap")
+                    span(className="text-[11px] font-bold text-muted-foreground")
+                      | SORTED RESULT:
+                    div(className="flex gap-1.5")
+                      each n in [...drawnBalls].sort((a, b) => a - b) key n
+                        span(className="w-7 h-7 rounded-full bg-primary text-primary-foreground text-[11px] font-black flex items-center justify-center shadow-[0_0_10px_var(--lp-glow)]")
+                          | #{n}
+                    span(className="text-[11px] font-mono text-muted-foreground")
+                      | #{[...drawnBalls].sort((a, b) => a - b).map(n => String(n).padStart(2, '0')).join('-')}
+            div(className="mt-4")
+              button(
+                ~ onClick={() => startDraw()}
+                ~ disabled={isDrawing}
+                ~ className={`draw-cta group ${isDrawing ? 'draw-cta--busy' : ''}`}
+                ~ )
+                if !isDrawing
+                  div(className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -skew-x-12 translate-x-[-120%] group-hover:translate-x-[120%] transition-transform duration-700")
+                if isDrawing
+                  fragment
+                    span(className="w-5 h-5 border-[3px] border-border/30 border-t-white rounded-full animate-spin")
+                    | #{isMixing ? `MIXING ${pool} BALLS...` : `DRAWING ${drawnBalls.length}/6`}
+                else
+                  fragment
+                    Zap(className="w-6 h-6")
+                    | #{" START DRAW "}
+                    span(className="w-8 h-8 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-[14px]")
+                      | ●
+              div(className={`mx-auto mt-3 h-[2px] w-[60%] bg-gradient-to-r from-transparent via-destructive to-transparent blur-[0.5px] ${isDrawing ? 'opacity-100 animate-pulse' : 'opacity-40'}`})
+            if winnerJackpot
+              div(className="mt-5 rounded-[20px] bg-gradient-to-br from-primary/25 to-chart-5/25 border border-primary/40 p-4 flex items-center gap-3 animate-[winnerPop_0.6s_cubic-bezier(0.34,1.56,0.64,1)] relative overflow-hidden")
+                div(className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 animate-[shine_1.5s_ease_infinite]")
+                div(className="w-14 h-14 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-[0_0_24px_var(--lp-glow)]")
+                  Trophy(className="w-7 h-7")
+                div(className="min-w-0 flex-1")
+                  p(className="text-[11px] font-black tracking-widest text-primary flex items-center gap-1")
+                    Sparkles(className="w-3 h-3")
+                    | #{" JACKPOT HIT!!! "}
+                    | #{formatJackpot(winnerJackpot.prize)}
+                  p(className="text-[15px] font-black leading-tight")
+                    | #{winnerJackpot.player ? `${winnerJackpot.player.name} • ` : ''}
+                    | Ticket #
+                    | #{winnerJackpot.ticket.id}
+                    | #{" • "}
+                    | #{winnerJackpot.ticket.numbers.join(' - ')}
+                    | #{" • 6/6"}
+                  p(className="text-[12px] text-foreground/80")
+                    | #{formatJackpot(winnerJackpot.prize)}
+                    | #{" won!"}
+                button(
+                  ~ onClick={() => setWinnerJackpot(null)}
+                  ~ className="w-8 h-8 rounded-full bg-elevated flex items-center justify-center hover:bg-elevated z-10"
+                  ~ )
+                  X(className="w-4 h-4")
+            if winList.length > 0 && !winnerJackpot
+              div(className="mt-5 rounded-[18px] bg-gradient-to-br from-chart-2/15 to-primary/10 border border-chart-2/25 p-3 animate-[fadeIn_0.4s_ease]")
+                div(className="flex items-center justify-between mb-2")
+                  p(className="text-[11px] font-black tracking-widest text-chart-2 flex items-center gap-1.5")
+                    Gift(className="w-3.5 h-3.5")
+                    | #{" WINNERS • "}
+                    | #{winList.length}
+                    | #{" ticket(s) • "}
+                    | #{formatPeso(winList.reduce((s, w) => s + w.prize, 0))}
+                  button(
+                    ~ onClick={() => setWinList([])}
+                    ~ className="w-6 h-6 rounded-full bg-elevated flex items-center justify-center"
+                    ~ )
+                    X(className="w-3 h-3")
+                div(className="space-y-1.5 max-h-[120px] overflow-y-auto custom-scroll pr-1")
+                  each w, i in winList.slice(0, 50) key i
+                    div(className="flex items-center justify-between text-[12px] bg-sunken rounded-full px-3 py-1.5 border border-border")
+                      span(className="flex items-center gap-2")
+                        span(className="w-5 h-5 rounded-full bg-ball text-ball-ink text-[10px] font-black flex items-center justify-center")
+                          | #{w.ticket.numbers.join(' ')}
+                        | #{" "}
+                        | #{w.player ? w.player.name : ''}
+                        | #{" • "}
+                        | #{w.ticket.hits}
+                        | /
+                        | #{w.ticket.required}
+                        | #{" "}
+                        | #{BET_LABELS[w.ticket.betType]}
+                      span(className="font-black text-primary")
+                        | #{formatPeso(w.prize)}
+            div(className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3")
+              div(className="rounded-[18px] bg-sunken border border-border p-4")
+                div(className="flex items-center justify-between mb-3")
+                  h3(className="text-[11px] font-black tracking-widest flex items-center gap-1.5")
+                    Clock(className="w-3.5 h-3.5 text-primary")
+                    | #{" DRAW HISTORY"}
+                  span(className="text-[10px] px-2 py-0.5 rounded-full bg-elevated border border-border")
+                    | #{draws.length}
+                if draws.length === 0
+                  p(className="text-[12px] text-muted-foreground/70 py-4 text-center")
+                    | No draws yet — hit START DRAW
+                else
+                  div(className="space-y-2.5 max-h-[132px] overflow-y-auto custom-scroll pr-1")
+                    each d in draws key d.id
+                      div(className="flex items-center justify-between gap-2")
+                        div(className="flex gap-1")
+                          each n in d.sorted key n
+                            span(className={`w-6 h-6 rounded-full text-[10px] font-black flex items-center justify-center ${d.isOfficial ? 'bg-primary text-primary-foreground' : 'bg-ball text-ball-ink'}`})
+                              | #{n}
+                        span(className="text-[10px] text-muted-foreground font-mono shrink-0")
+                          | #{d.game}
+                          | #{" • "}
+                          | #{d.time}
+                          | #{d.isOfficial ? ' • OFFICIAL' : ''}
+              div(className="rounded-[18px] bg-sunken border border-border p-4")
+                h3(className="text-[11px] font-black tracking-widest mb-2 flex items-center gap-1.5")
+                  Dices(className="w-3.5 h-3.5 text-foreground/70")
+                  | #{" HOW IT WORKS"}
+                ul(className="space-y-1.5 text-[11px] leading-[1.4] text-foreground/70")
+                  li(className="flex gap-2")
+                    span(className="text-primary")
+                      | •
+                    | #{" "}
+                    | #{game.name}
+                    | #{": 6 balls from 1-"}
+                    | #{pool}
+                    | #{". Jackpot starts "}
+                    | #{formatPeso(game.baseJackpot)}
+                    | #{", now "}
+                    | #{formatJackpot(jackpot)}
+                    | #{" rolling at "}
+                    | #{formatOdds(tierOdds(pool, 6))}
+                    | .
+                  li(className="flex gap-2")
+                    span(className="text-primary")
+                      | •
+                    | #{" A jackpot ticket also collects 5/6 "}
+                    | #{formatPeso(game.secondary[5])}
+                    | #{", 4/6 "}
+                    | #{formatPeso(game.secondary[4])}
+                    | #{", 3/6 "}
+                    | #{formatPeso(game.secondary[3])}
+                    | .
+                  li(className="flex gap-2")
+                    span(className="text-primary")
+                      | •
+                    | #{" A pick bet wins only if every number you hold is drawn, and pays a multiple of your stake — "}
+                    | #{game.id}
+                    | #{" pick 3 pays ×"}
+                    | #{game.payout[3].toLocaleString('en-PH')}
+                    | #{". Every pick bet returns the same "}
+                    | #{Math.round(PAYOUT_RTP * 1000) / 10}
+                    | #{"%, so none is a worse deal than another."}
+                  li(className="flex gap-2")
+                    span(className="text-primary")
+                      | •
+                    | #{" Switch games any time — each keeps its own rolling jackpot, and a draw only settles tickets bought for that game."}
+                  li(className="flex gap-2")
+                    span(className="text-primary")
+                      | •
+                    | #{" Random bets ×1 to ×200 buy machine picks in bulk. Paste an official result to play vs a real draw."}
+      div(className="order-3 space-y-4")
+        if mode === 'solo'
+          fragment
+            div(className="lux-panel p-5")
+              div(className="flex items-center justify-between mb-4")
+                h2(className="text-[13px] font-black tracking-[0.12em] flex items-center gap-2")
+                  Trophy(className="w-4 h-4 text-primary")
+                  | #{" MY TICKETS"}
+                div(className="flex items-center gap-2")
+                  span(className="px-2.5 py-1 rounded-full bg-elevated border border-border text-[11px] font-bold")
+                    | #{tickets.length}
+                  if tickets.length > 0
+                    button(
+                      ~ onClick={() => setTickets([])}
+                      ~ className="w-7 h-7 rounded-full bg-raised border border-border flex items-center justify-center hover:bg-destructive/20 transition"
+                      ~ )
+                      Trash2(className="w-3.5 h-3.5")
+              if tickets.length === 0
+                div(className="py-12 text-center rounded-[16px] bg-sunken border border-border border-dashed")
+                  div(className="w-12 h-12 rounded-full bg-raised mx-auto flex items-center justify-center mb-3")
+                    Dices(className="w-5 h-5 text-muted-foreground/60")
+                  p(className="text-[13px] text-muted-foreground font-medium")
+                    | No bets yet
+                  p(className="text-[11px] text-muted-foreground/60 mt-1 px-6")
+                    | Pick numbers on the left, choose bet type, then BET. Tickets auto-check on each draw with real prizes.
+              else
+                div(className="space-y-2.5 max-h-[520px] overflow-y-auto custom-scroll pr-1")
+                  if tickets.length > VISIBLE_TICKETS
+                    p(className="text-[10px] text-muted-foreground/70 font-bold text-center py-1")
+                      | #{"Showing the latest "}
+                      | #{VISIBLE_TICKETS}
+                      | #{" of "}
+                      | #{tickets.length}
+                      | #{" tickets — every one still settles on a draw."}
+                  each t in tickets.slice(0, VISIBLE_TICKETS) key t.id
+                    div(className={`rounded-[16px] border p-3 transition ${t.status === 'won' ? 'bg-gradient-to-br from-primary/20 to-primary/5 border-primary/30 shadow-[0_0_18px_var(--lp-glow-soft)]' : t.status === 'lost' ? 'bg-raised border-border opacity-70' : 'bg-raised border-border'}`})
+                      div(className="flex items-center justify-between mb-2")
+                        span(className={`text-[10px] font-black tracking-widest px-2 py-0.5 rounded-full border ${t.status === 'won' ? 'bg-primary text-primary-foreground border-primary' : t.status === 'lost' ? 'bg-elevated text-muted-foreground border-border' : 'bg-primary/15 text-primary border-primary/20'}`})
+                          | #{t.status === 'pending' ? `${BET_LABELS[t.betType]} • PENDING` : t.status === 'won' ? `WIN ${formatPeso(t.prizeWon || 0)} • ${BET_LABELS[t.betType]}` : `LOST • ${t.hits}/${t.required} hits`}
+                        span(className="text-[10px] text-muted-foreground font-mono flex items-center gap-1.5")
+                          span(className="px-1.5 py-0.5 rounded-full bg-elevated border border-border text-foreground/70 font-bold")
+                            | #{t.game}
+                          | #{t.time}
+                      div(className="flex flex-wrap gap-1.5")
+                        each n in t.numbers key n
+                          span(className={`w-7 h-7 rounded-full text-[11px] font-black flex items-center justify-center border transition ${(t.status !== 'pending') && (draws.find(d => d.game === t.game)?.sorted.includes(n)) ? 'bg-primary text-primary-foreground border-primary shadow-[0_0_8px_var(--lp-glow)]' : (t.status !== 'pending') ? 'bg-elevated text-muted-foreground/70 border-border line-through' : 'bg-ball text-ball-ink border-border'}`})
+                            | #{n}
+                      if t.status !== 'pending'
+                        div(className="mt-2 flex items-center gap-2 text-[11px]")
+                          span(className={`w-5 h-5 rounded-full flex items-center justify-center ${t.status === 'won' ? 'bg-primary text-primary-foreground' : 'bg-elevated text-muted-foreground'}`})
+                            | #{t.status === 'won' ? '✓' : '✕'}
+                          span(className={t.status === 'won' ? 'text-primary font-bold' : 'text-muted-foreground'})
+                            | #{t.status === 'won' ? `Won ${formatPeso(t.prizeWon || 0)} — ${t.hits} hits` : `Only ${t.hits}/${t.required} matched`}
+        else
+          fragment
+            div(className="lux-panel p-5")
+              div(className="flex items-center justify-between mb-4")
+                h2(className="text-[13px] font-black tracking-[0.12em] flex items-center gap-2")
+                  Crown(className="w-4 h-4 text-primary")
+                  | #{" LEADERBOARD • "}
+                  | #{roomCode}
+                div(className="flex gap-1.5")
+                  button(
+                    ~ onClick={handleCopyInvite}
+                    ~ className="w-7 h-7 rounded-full bg-elevated border border-border flex items-center justify-center hover:bg-elevated"
+                    ~ )
+                    Link2(className="w-3.5 h-3.5")
+                  button(
+                    ~ onClick={() => showToast('Export as Image — coming soon! Generates PNG of results')}
+                    ~ className="w-7 h-7 rounded-full bg-elevated border border-border flex items-center justify-center hover:bg-elevated"
+                    ~ )
+                    ImageIcon(className="w-3.5 h-3.5")
+              div(className="space-y-2")
+                each p, idx in sortedLeaderboard key p.id
+                  div(className={`rounded-[14px] border p-3 flex items-center gap-3 ${idx === 0 ? 'bg-gradient-to-br from-primary/20 to-primary/5 border-primary/30' : 'bg-sunken border-border'}`})
+                    span(className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black ${idx === 0 ? 'bg-primary text-primary-foreground' : idx === 1 ? 'bg-elevated text-foreground' : idx === 2 ? 'bg-chart-5/40 text-chart-5' : 'bg-elevated text-muted-foreground'}`})
+                      | #{idx + 1}
+                    div(
+                      ~ className="w-9 h-9 rounded-full flex items-center justify-center font-black text-[13px]"
+                      ~ style={paintFor(p.color)}
+                      ~ )
+                      | #{p.avatar}
+                    div(className="flex-1 min-w-0")
+                      p(className="text-[13px] font-black leading-none flex items-center gap-1.5")
+                        | #{p.name}
+                        | #{" "}
+                        if idx === 0
+                          Trophy(className="w-3.5 h-3.5 text-primary")
+                      p(className="text-[11px] text-foreground/70")
+                        | #{p.tickets.length}
+                        | #{" tickets • "}
+                        | #{p.winCount}
+                        | #{" wins • "}
+                        | #{formatPeso(p.winnings)}
+                    div(className="text-right")
+                      p(className="text-[13px] font-black text-primary")
+                        | #{formatPeso(p.winnings)}
+              div(className="mt-4 grid grid-cols-2 gap-2")
+                div(className="rounded-xl bg-sunken border border-border p-2.5 text-center")
+                  p(className="text-[10px] text-muted-foreground font-bold tracking-widest")
+                    | TOTAL POT
+                  p(className="text-[14px] font-black text-primary")
+                    | #{formatPeso(players.reduce((s, p) => s + p.winnings, 0))}
+                div(className="rounded-xl bg-sunken border border-border p-2.5 text-center")
+                  p(className="text-[10px] text-muted-foreground font-bold tracking-widest")
+                    | PLAYERS
+                  p(className="text-[14px] font-black")
+                    | #{players.length}
+                    | /8
+            div(className="lux-panel p-5")
+              h3(className="text-[12px] font-black tracking-widest mb-3 flex items-center gap-2")
+                Users(className="w-4 h-4 text-foreground/70")
+                | #{" "}
+                | #{currentPlayer?.name}
+                | #{"'S TICKETS • "}
+                | #{currentPlayer?.tickets.length}
+              div(className="space-y-2 max-h-[260px] overflow-y-auto custom-scroll pr-1")
+                if (currentPlayer?.tickets || []).length === 0
+                  p(className="text-[12px] text-muted-foreground/70 py-6 text-center")
+                    | #{"No tickets yet for "}
+                    | #{currentPlayer?.name}
+                else
+                  each t in (currentPlayer?.tickets ?? []).slice(0, VISIBLE_TICKETS) key t.id
+                    div(className={`rounded-[14px] border p-2.5 flex items-center justify-between ${t.status === 'won' ? 'bg-primary/15 border-primary/30' : t.status === 'lost' ? 'bg-raised border-border opacity-70' : 'bg-raised border-border'}`})
+                      div(className="flex gap-1 flex-wrap")
+                        span(className="px-1.5 h-6 rounded-full bg-elevated border border-border text-[9px] font-black text-muted-foreground flex items-center")
+                          | #{t.game}
+                        each n in t.numbers key n
+                          span(className={`w-6 h-6 rounded-full text-[10px] font-black flex items-center justify-center ${t.status !== 'pending' && draws.find(d => d.game === t.game)?.sorted.includes(n) ? 'bg-primary text-primary-foreground' : 'bg-ball text-ball-ink'}`})
+                            | #{n}
+                      span(className="text-[10px] font-bold")
+                        | #{t.status === 'won' ? formatPeso(t.prizeWon || 0) : t.status === 'lost' ? `${t.hits}/${t.required}` : BET_LABELS[t.betType]}
+              button(
+                ~ onClick={() => { const filtered = players.map(p => p.id === currentPlayer?.id ? { ...p, tickets: [] } : p); setPlayers(filtered); showToast(`Cleared ${currentPlayer?.name}'s tickets`); }}
+                ~ className="mt-3 w-full h-9 rounded-full bg-raised border border-border text-[11px] font-bold hover:bg-elevated flex items-center justify-center gap-1"
+                ~ )
+                Trash2(className="w-3.5 h-3.5")
+                | #{" Clear "}
+                | #{currentPlayer?.name}
+                | 's tickets
+            div(className="rounded-[22px] bg-card border border-border p-4")
+              h3(className="text-[11px] font-black tracking-widest text-foreground/70 mb-3 flex items-center gap-1.5")
+                MessageCircle(className="w-3.5 h-3.5")
+                | #{" PARTY CHAT • "}
+                | #{chat.length}
+              div(
+                ~ ref={chatScrollRef}
+                ~ className="space-y-2 max-h-[160px] overflow-y-auto custom-scroll pr-1 mb-3"
+                ~ )
+                each m in chat key m.id
+                  div(className="flex gap-2 text-[12px] leading-[1.35]")
+                    span(
+                      ~ className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0"
+                      ~ style={paintFor(m.color)}
+                      ~ )
+                      | #{m.name[0]}
+                    div
+                      span(
+                        ~ className="font-bold"
+                        ~ style={{ color: `var(${m.color})` }}
+                        ~ )
+                        | #{m.name}
+                      | #{" "}
+                      span(className="text-muted-foreground text-[10px]")
+                        | #{m.time}
+                      br
+                      span(className="text-foreground/90")
+                        | #{m.text}
+              div(className="flex gap-2")
+                input(
+                  ~ value={chatInput}
+                  ~ onInput={e => setChatInput(e.currentTarget.value)}
+                  ~ onKeyDown={e => e.key === 'Enter' && handleSendChat()}
+                  ~ placeholder="Say good luck!"
+                  ~ className="flex-1 h-9 rounded-full bg-sunken border border-border px-3.5 text-[12px] placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/30"
+                  ~ )
+                button(
+                  ~ onClick={handleSendChat}
+                  ~ className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:brightness-110"
+                  ~ )
+                  MessageCircle(className="w-4 h-4")
+        if mode === 'solo'
+          div(className="rounded-[20px] bg-card border border-border p-4")
+            h3(className="text-[11px] font-black tracking-widest text-foreground/70 mb-3 flex items-center gap-1.5")
+              Sparkles(className="w-3.5 h-3.5 text-primary")
+              | #{" PRIZE NOTE"}
+            p(className="text-[11px] leading-[1.5] text-foreground/70")
+              | #{game.name}
+              | #{" jackpot starts "}
+              | #{formatPeso(game.baseJackpot)}
+              | #{" and rolls over about "}
+              | #{formatCompactPeso(game.rollover)}
+              | #{" per drawn-out night. A jackpot ticket's lower tiers are the fixed amounts PCSO publishes. Pick bets use a separate paytable priced at a flat "}
+              | #{Math.round(PAYOUT_RTP * 1000) / 10}
+              | #{"% return, anchored on 6/42 pick 3 at ×360. Only 6/42 ships with recorded draws — paste a result for the others."}
+    footer(className="mt-8 text-center text-[11px] text-muted-foreground/60 tracking-wide")
+      | Simulator only • Not affiliated with PCSO • No money involved • 100% local RNG • Real prizes for fun • TV game show edition

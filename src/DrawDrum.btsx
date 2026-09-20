@@ -1,0 +1,136 @@
+import { useEffect, useRef } from 'octane'
+import { createDrumBalls, stepDrum, DRUM_SIZE } from './lib/drum-physics'
+import { readDrumPalette } from './lib/theme-colors'
+
+props { active, drawnNumbers, poolSize, themeKey }: { active: boolean; drawnNumbers: number[]; poolSize: number; themeKey: string }
+setup
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const motionRef = useRef({ active, hidden: new Set(drawnNumbers) });
+
+  useEffect(() => {
+    motionRef.current = { active, hidden: new Set(drawnNumbers) };
+  }, [active, drawnNumbers]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    const balls = createDrumBalls(poolSize);
+    // Tokens resolve to paintable colours once; themeKey re-runs this effect.
+    const palette = readDrumPalette();
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let raf = 0;
+    let last = 0;
+    let accumulator = 0;
+    let simulationTime = 0;
+    let scale = 1;
+    const resize = () => {
+      const size = canvas.getBoundingClientRect().width;
+      canvas.width = canvas.height = Math.max(1, Math.round(size * Math.min(window.devicePixelRatio || 1, 2)));
+      scale = canvas.width / DRUM_SIZE;
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+    resize();
+    const paint = () => {
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      ctx.clearRect(0, 0, DRUM_SIZE, DRUM_SIZE);
+      const running = motionRef.current.active;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(DRUM_SIZE / 2, DRUM_SIZE / 2, 166, 0, Math.PI * 2);
+      ctx.clip();
+
+      const chamberGlow = ctx.createRadialGradient(132, 100, 12, 180, 180, 180);
+      chamberGlow.addColorStop(0, running ? palette.glowSoft : palette.chamber);
+      chamberGlow.addColorStop(0.55, palette.chamber);
+      chamberGlow.addColorStop(1, palette.shadow);
+      ctx.fillStyle = chamberGlow;
+      ctx.fillRect(0, 0, DRUM_SIZE, DRUM_SIZE);
+
+      ctx.strokeStyle = running ? palette.glowSoft : palette.grid;
+      ctx.lineWidth = 0.65;
+      for (let radius = 48; radius <= 144; radius += 32) {
+        ctx.beginPath();
+        ctx.arc(DRUM_SIZE / 2, DRUM_SIZE / 2, radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      for (let angle = 0; angle < Math.PI; angle += Math.PI / 6) {
+        const dx = Math.cos(angle) * 152;
+        const dy = Math.sin(angle) * 152;
+        ctx.beginPath();
+        ctx.moveTo(DRUM_SIZE / 2 - dx, DRUM_SIZE / 2 - dy);
+        ctx.lineTo(DRUM_SIZE / 2 + dx, DRUM_SIZE / 2 + dy);
+        ctx.stroke();
+      }
+
+      for (const ball of balls) {
+        if (motionRef.current.hidden.has(ball.n)) continue;
+        const accented = ball.n % 7 === 0;
+        const fill = ctx.createRadialGradient(ball.x - ball.radius * 0.35, ball.y - ball.radius * 0.42, 1, ball.x, ball.y, ball.radius);
+        fill.addColorStop(0, '#ffffff');
+        fill.addColorStop(0.28, accented ? palette.accentTint : palette.ball);
+        fill.addColorStop(0.72, accented ? palette.accent : palette.ballEdge);
+        fill.addColorStop(1, accented ? palette.accentDeep : palette.ballEdge);
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+        ctx.fillStyle = fill;
+        ctx.shadowColor = running ? (accented ? palette.glow : palette.rim) : palette.shadow;
+        ctx.shadowBlur = running ? 7 : 4;
+        ctx.shadowOffsetY = running ? 1.5 : 3;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.strokeStyle = accented ? palette.accentDeep : palette.ballEdge;
+        ctx.lineWidth = 0.7;
+        ctx.stroke();
+        ctx.fillStyle = accented ? palette.accentInk : palette.ballInk;
+        ctx.font = `700 ${(ball.radius * 0.73).toFixed(1)}px ${palette.font}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(ball.n).padStart(2, '0'), ball.x, ball.y + 0.4);
+
+        ctx.beginPath();
+        ctx.ellipse(ball.x - ball.radius * 0.35, ball.y - ball.radius * 0.42, ball.radius * 0.29, ball.radius * 0.17, -0.55, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+        ctx.fill();
+      }
+      ctx.restore();
+
+      const rim = ctx.createLinearGradient(42, 40, 314, 320);
+      rim.addColorStop(0, palette.rim);
+      rim.addColorStop(0.35, palette.grid);
+      rim.addColorStop(0.72, running ? palette.glow : palette.grid);
+      rim.addColorStop(1, palette.rim);
+      ctx.beginPath();
+      ctx.arc(DRUM_SIZE / 2, DRUM_SIZE / 2, 166, 0, Math.PI * 2);
+      ctx.strokeStyle = rim;
+      ctx.lineWidth = 1.25;
+      ctx.stroke();
+    };
+    const tick = (now: number) => {
+      const elapsed = last ? Math.min((now - last) / 1000, 0.05) : 0;
+      last = now;
+      if (!reducedMotion.matches) {
+        accumulator += elapsed;
+        while (accumulator >= 1 / 120) {
+          simulationTime += 1 / 120;
+          stepDrum(balls, 1 / 120, motionRef.current.active, motionRef.current.hidden, simulationTime);
+          accumulator -= 1 / 120;
+        }
+      }
+      paint();
+      raf = requestAnimationFrame(tick);
+    };
+    const onVisibility = () => { last = 0; accumulator = 0; };
+    document.addEventListener('visibilitychange', onVisibility);
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [poolSize, themeKey]);
+
+canvas.drum-canvas(ref={canvasRef} aria-hidden="true")
