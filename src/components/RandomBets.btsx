@@ -1,0 +1,54 @@
+import { Dice5 } from '@octanejs/lucide';
+import type { GameId } from '../lib/games';
+import { formatPeso } from '../lib/format';
+import { BET_MULTIPLIERS, MAX_TICKETS, type BetCost } from '../lib/lotto';
+
+module
+  // Buys machine picks in bulk: x1 through x200 in one tap, up to MAX_TICKETS.
+  interface RandomBetsProps {
+    gameId: GameId;
+    /** Numbers per ticket, i.e. the selected bet type. */
+    required: number;
+    betCost: BetCost;
+    /** Open tickets already bought by the current buyer. */
+    ticketCount: number;
+    /** Who the batch is bought for, e.g. 'you' or a party player's name. */
+    buyerLabel: string;
+    isDrawing: boolean;
+    onBuy: (count: number) => void;
+  }
+
+props { gameId, required, betCost, ticketCount, buyerLabel, isDrawing, onBuy }: RandomBetsProps
+
+div(className="mt-3 rounded-[16px] bg-sunken border border-border p-3")
+  div(className="flex items-center justify-between gap-2 mb-2")
+    p(className="text-[10px] tracking-widest text-muted-foreground font-bold flex items-center gap-1.5")
+      Dice5(className="w-3.5 h-3.5 text-primary")
+      | #{" RANDOM BETS"}
+    p(className="text-[10px] font-bold text-muted-foreground")
+      | #{formatPeso(betCost)}
+      | #{" / bet • "}
+      | #{ticketCount}
+      | /
+      | #{MAX_TICKETS}
+      | #{" bought"}
+  div(className="grid grid-cols-3 gap-1.5")
+    each m in BET_MULTIPLIERS key m
+      button(
+        ~ onClick={() => onBuy(m)}
+        ~ disabled={isDrawing || ticketCount >= MAX_TICKETS}
+        ~ className="h-11 rounded-[12px] bg-raised border border-border flex flex-col items-center justify-center leading-none hover:bg-primary/15 hover:border-primary/30 active:scale-[0.97] transition disabled:opacity-30 disabled:cursor-not-allowed"
+        ~ )
+        span(className="text-[13px] font-black tracking-tight")
+          | #{'×'}
+          | #{m}
+        span(className="text-[9px] font-bold text-muted-foreground mt-1")
+          | #{formatPeso(m * betCost)}
+  p(className="mt-2 text-[10px] text-muted-foreground/70 leading-[1.4]")
+    | #{"Instantly buys that many machine-picked "}
+    | #{required}
+    | #{"-number "}
+    | #{gameId}
+    | #{" bets for "}
+    | #{buyerLabel}
+    | .

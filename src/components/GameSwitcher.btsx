@@ -1,0 +1,40 @@
+import { GAME_IDS, GAMES, type GameConfig, type GameId } from '../lib/games';
+import { formatCompactPeso } from '../lib/format';
+import { cn } from '../lib/utils';
+
+module
+  interface GameSwitcherProps {
+    game: GameConfig;
+    gameId: GameId;
+    /** Current rolling pot per game, so each chip shows its own headline. */
+    jackpots: Record<GameId, number>;
+    /** A draw in flight locks the switcher. */
+    isDrawing: boolean;
+    onSwitchGame: (next: GameId) => void;
+  }
+
+props { game, gameId, jackpots, isDrawing, onSwitchGame }: GameSwitcherProps
+
+div(className="mb-4 border border-border rounded-lg divide-x overflow-hidden")
+  div(className="flex items-center justify-between flex-wrap")
+    p(className="hidden text-[10px] font-bold text-muted-foreground")
+      | #{game.drawDayLabel}
+      | #{" • 9PM Manila • Pool 1-"}
+      | #{game.pool}
+  div(className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5")
+    each g in GAME_IDS key g
+      button(
+        ~ onClick={() => onSwitchGame(g)}
+        ~ disabled={isDrawing}
+        ~ className={`px-3 py-2 text-left border-r last:border-r-0 transition disabled:opacity-40 disabled:cursor-not-allowed ${gameId === g ? 'bg-foreground/80' : 'bg-background/60 hover:bg-raised'}`}
+        ~ )
+        span(
+          ~ className="flex items-center text-[14px] gap-2 font-bold leading-none"
+          ~ style={{ color: gameId === g ? 'var(--background)' : 'var(--foreground)' }}
+          ~ )
+          span #{g}
+          span &middot;
+          span(className={cn("block text-sm font-semibold text-primary", { 'text-background': gameId === g })})
+            | #{formatCompactPeso(jackpots[g])}
+        span(className={cn("block text-[9px] font-bold tracking-[0.12em] text-foreground mt-1 truncate", { 'text-background': gameId === g })})
+          | #{GAMES[g].name.toUpperCase()}

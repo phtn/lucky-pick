@@ -1,0 +1,48 @@
+import NextDrawCard from './NextDrawCard.btsx';
+import OfficialResultCard from './OfficialResultCard.btsx';
+import PlayVsRealCard from './PlayVsRealCard.btsx';
+import type { GameConfig } from '../lib/games';
+import type { Countdown, OfficialResult } from '../lib/lotto';
+
+module
+  // The three real-draw cards: what PCSO last drew, when the next draw lands,
+  // and the box that plays a pasted result against the current tickets.
+  interface LiveBoardProps {
+    game: GameConfig;
+    jackpot: number;
+    jackpotAnim: boolean;
+    countdown: Countdown;
+    latestOfficial?: OfficialResult;
+    prevOfficial?: OfficialResult;
+    officialInput: string;
+    onOfficialInput: (value: string) => void;
+    onUseOfficialInput: () => void;
+    showIframe: boolean;
+    onToggleIframe: () => void;
+  }
+
+props { game, jackpot, jackpotAnim, countdown, latestOfficial, prevOfficial, officialInput, onOfficialInput, onUseOfficialInput, showIframe, onToggleIframe }: LiveBoardProps
+
+div(className="hidden lux-panel lux-panel--summary mb-5 overflow-hidden relative")
+  div(className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary/50 to-transparent")
+  div(className="p-4 md:p-5 grid grid-cols-1 lg:grid-cols-[1.2fr_0.9fr_1fr] gap-4")
+    OfficialResultCard(
+      ~ game={game}
+      ~ latestOfficial={latestOfficial}
+      ~ prevOfficial={prevOfficial}
+      ~ )
+    NextDrawCard(
+      ~ game={game}
+      ~ jackpot={jackpot}
+      ~ countdown={countdown}
+      ~ jackpotAnim={jackpotAnim}
+      ~ )
+    PlayVsRealCard(
+      ~ game={game}
+      ~ latestOfficial={latestOfficial}
+      ~ officialInput={officialInput}
+      ~ onOfficialInput={onOfficialInput}
+      ~ onUseOfficialInput={onUseOfficialInput}
+      ~ showIframe={showIframe}
+      ~ onToggleIframe={onToggleIframe}
+      ~ )

@@ -1,0 +1,22 @@
+import { BarChart3 } from '@octanejs/lucide';
+import { formatPeso } from '../lib/format';
+import type { SessionTotals } from '../lib/lotto';
+
+props { stats }: { stats: SessionTotals }
+
+div(className="lux-panel lux-panel--compact p-4 flex items-center justify-between")
+  div(className="flex items-center gap-2.5")
+    div(className="w-8 h-8 rounded-full bg-elevated flex items-center justify-center")
+      BarChart3(className="w-4 h-4 text-foreground/70")
+    div
+      p(className="text-[11px] font-bold tracking-wide text-foreground/70")
+        | SESSION
+      p(className="text-[12px] font-bold")
+        | #{stats.total}
+        | #{" plays • "}
+        | #{stats.wins}
+        | #{" wins • "}
+        | #{stats.rate}
+        | #{"% • "}
+        | #{formatPeso(stats.wonAmount)}
+        | #{" won"}

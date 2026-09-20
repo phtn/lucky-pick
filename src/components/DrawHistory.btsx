@@ -1,0 +1,31 @@
+import { Clock } from '@octanejs/lucide';
+import type { Draw } from '../lib/lotto';
+
+module
+  // The last few draws of this session, newest first, across all games.
+
+props { draws }: { draws: Draw[] }
+
+div(className="rounded-[18px] bg-sunken border border-border p-4")
+  div(className="flex items-center justify-between mb-3")
+    h3(className="text-[11px] font-black tracking-widest flex items-center gap-1.5")
+      Clock(className="w-3.5 h-3.5 text-primary")
+      | #{" DRAW HISTORY"}
+    span(className="text-[10px] px-2 py-0.5 rounded-full bg-elevated border border-border")
+      | #{draws.length}
+  if draws.length === 0
+    p(className="text-[12px] text-muted-foreground/70 py-4 text-center")
+      | No draws yet — hit START DRAW
+  else
+    div(className="space-y-2.5 max-h-[132px] overflow-y-auto custom-scroll pr-1")
+      each d in draws key d.id
+        div(className="flex items-center justify-between gap-2")
+          div(className="flex gap-1")
+            each n in d.sorted key n
+              span(className={`w-6 h-6 rounded-full text-[10px] font-black flex items-center justify-center ${d.isOfficial ? 'bg-primary text-primary-foreground' : 'bg-ball text-ball-ink'}`})
+                | #{n}
+          span(className="text-[10px] text-muted-foreground font-mono shrink-0")
+            | #{d.game}
+            | #{" • "}
+            | #{d.time}
+            | #{d.isOfficial ? ' • OFFICIAL' : ''}

@@ -1,0 +1,98 @@
+import { Check, Moon, Palette, Sun, Users, Volume2, VolumeX } from '@octanejs/lucide';
+import { THEMES, type ThemeId, type ThemeMode } from '../lib/theme';
+import type { GameMode } from '../lib/lotto';
+
+module
+  interface AppHeaderProps {
+    /** Ball pool of the selected game, shown inside the wordmark. */
+    pool: number;
+    gameName: string;
+    mode: GameMode;
+    onSelectMode: (next: GameMode) => void;
+    soundOn: boolean;
+    onToggleSound: () => void;
+    theme: ThemeId;
+    themeMode: ThemeMode;
+    onToggleThemeMode: () => void;
+    showThemes: boolean;
+    onToggleThemePicker: () => void;
+    onPickTheme: (next: ThemeId) => void;
+  }
+
+props { pool, gameName, mode, onSelectMode, soundOn, onToggleSound, theme, themeMode, onToggleThemeMode, showThemes, onToggleThemePicker, onPickTheme }: AppHeaderProps
+
+header(className="mb-4")
+  div(className="flex flex-wrap items-center justify-between gap-3")
+    div(className="flex items-center gap-3")
+      div(className="brand-mark")
+        span(className="brand-mark__number")
+          | #{pool}
+        span(className="brand-mark__orbit" aria-hidden="true")
+      div
+        h1(className="flex items-center gap-2 text-[22px] md:text-[28px] font-bold tracking-[-0.04em] leading-none")
+          span Lucky Pick
+          span(className="live-chip text-[10px] uppercase tracking-[0.18em]")
+            span(className=" w-1.5 h-1.5 rounded-full bg-destructive animate-pulse")
+            | #{" Live"}
+        p(className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-semibold mt-1.5 flex items-center gap-2")
+          span
+            | #{gameName}
+            | #{" • Philippines"}
+
+    div(className="flex items-center gap-2")
+      div(className="mode-switch")
+        button(
+          ~ onClick={() => onSelectMode('solo')}
+          ~ className={`mode-switch__item ${mode === 'solo' ? 'mode-switch__item--active' : ''}`}
+          ~ )
+          | Solo
+        button(
+          ~ onClick={() => onSelectMode('party')}
+          ~ className={`mode-switch__item flex items-center gap-1.5 ${mode === 'party' ? 'mode-switch__item--active mode-switch__item--party' : ''}`}
+          ~ )
+          Users(className="w-3.5 h-3.5")
+          | #{" Party"}
+      button(
+        ~ onClick={onToggleSound}
+        ~ className="icon-button"
+        ~ aria-label={soundOn ? 'Mute sound' : 'Turn sound on'}
+        ~ )
+        if soundOn
+          Volume2(className="w-4 h-4")
+        else
+          VolumeX(className="w-4 h-4 text-muted-foreground")
+      button(
+        ~ onClick={onToggleThemeMode}
+        ~ className="icon-button"
+        ~ aria-label={themeMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        ~ )
+        if themeMode === 'dark'
+          Moon(className="w-4 h-4")
+        else
+          Sun(className="w-4 h-4")
+      div(className="relative")
+        button(
+          ~ onClick={onToggleThemePicker}
+          ~ className="icon-button"
+          ~ aria-label="Change theme"
+          ~ aria-expanded={showThemes}
+          ~ )
+          Palette(className="w-4 h-4")
+        if showThemes
+          div(className="absolute right-0 top-[46px] z-50 w-[210px] p-1.5 rounded-2xl border border-border bg-popover shadow-xl")
+            each t in THEMES key t.id
+              button(
+                ~ onClick={() => onPickTheme(t.id)}
+                ~ className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition ${theme === t.id ? 'bg-elevated' : 'hover:bg-raised'}`}
+                ~ )
+                span(
+                  ~ className={`w-5 h-5 rounded-full border border-border shrink-0 ${themeMode === 'dark' ? 'dark' : ''}`}
+                  ~ data-theme={t.id}
+                  ~ style={{ background: 'linear-gradient(135deg, var(--primary) 0 50%, var(--destructive) 50% 100%)' }}
+                  ~ )
+                span(className="min-w-0 flex-1")
+                  span(className="block text-[12px] font-bold leading-none")
+                    | #{t.name}
+                  span(className="block text-[10px] text-muted-foreground mt-1 truncate")
+                    | #{t.blurb}
+                if theme === t.id

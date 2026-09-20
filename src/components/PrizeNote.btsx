@@ -1,0 +1,22 @@
+import { Sparkles } from '@octanejs/lucide';
+import { PAYOUT_RTP, type GameConfig } from '../lib/games';
+import { formatCompactPeso, formatPeso } from '../lib/format';
+
+module
+  // How this game's pot and paytable are priced, in one paragraph.
+
+props { game }: { game: GameConfig }
+
+div(className="rounded-[20px] bg-card border border-border p-4")
+  h3(className="text-[11px] font-black tracking-widest text-foreground/70 mb-3 flex items-center gap-1.5")
+    Sparkles(className="w-3.5 h-3.5 text-primary")
+    | #{" PRIZE NOTE"}
+  p(className="text-[11px] leading-[1.5] text-foreground/70")
+    | #{game.name}
+    | #{" jackpot starts "}
+    | #{formatPeso(game.baseJackpot)}
+    | #{" and rolls over about "}
+    | #{formatCompactPeso(game.rollover)}
+    | #{" per drawn-out night. A jackpot ticket's lower tiers are the fixed amounts PCSO publishes. Pick bets use a separate paytable priced at a flat "}
+    | #{Math.round(PAYOUT_RTP * 1000) / 10}
+    | #{"% return, anchored on 6/42 pick 3 at ×360. Only 6/42 ships with recorded draws — paste a result for the others."}

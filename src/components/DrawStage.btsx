@@ -1,0 +1,132 @@
+import { Zap } from '@octanejs/lucide';
+import Ball from './Ball.btsx';
+import DrawDrum from '../DrawDrum.btsx';
+import DrawHistory from './DrawHistory.btsx';
+import HowItWorks from './HowItWorks.btsx';
+import JackpotBanner from './JackpotBanner.btsx';
+import WinnersList from './WinnersList.btsx';
+import { formatJackpot } from '../lib/format';
+import type { GameConfig } from '../lib/games';
+import type { Draw, WinEntry } from '../lib/lotto';
+
+module
+  // The draw itself: the chamber, the six result slots, the start button, and
+  // whatever the last draw settled.
+  interface DrawStageProps {
+    game: GameConfig;
+    jackpot: number;
+    /** Changes when the theme does, so the canvas re-reads its palette. */
+    themeKey: string;
+    isDrawing: boolean;
+    /** True for the mixing beat before the first ball drops. */
+    isMixing: boolean;
+    drawnBalls: number[];
+    /** The ball currently popping in, or null between reveals. */
+    currentBallAnim: number | null;
+    draws: Draw[];
+    winnerJackpot: WinEntry | null;
+    onDismissJackpot: () => void;
+    winList: WinEntry[];
+    onDismissWins: () => void;
+    onStartDraw: () => void;
+  }
+
+props { game, jackpot, themeKey, isDrawing, isMixing, drawnBalls, currentBallAnim, draws, winnerJackpot, onDismissJackpot, winList, onDismissWins, onStartDraw }: DrawStageProps
+setup const pool = game.pool;
+
+div(className="lux-panel lux-panel--stage overflow-hidden relative")
+  div(className="absolute top-0 left-1/2 -translate-x-1/2 w-[75%] h-[1px] bg-gradient-to-r from-transparent via-primary/60 to-transparent")
+  div(className="relative")
+    div(className="hidden _flex items-center justify-between mb-3")
+      div(className="hidden _flex items-center gap-2")
+        div(className="w-2 h-2 rounded-full bg-destructive shadow-[0_0_8px_var(--destructive)] animate-pulse")
+        span(className="text-[11px] font-black tracking-[0.18em] text-foreground/80")
+          | #{"LIVE DRUM • "}
+          | #{game.name.toUpperCase()}
+          | #{" • "}
+          | #{pool}
+          | #{" BALLS"}
+      div(className="hidden _flex items-center gap-2")
+        span(className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-primary/15 border border-primary/20 text-primary")
+          | #{formatJackpot(jackpot)}
+        span(className={`text-[10px] font-bold px-2 py-1 rounded-full border ${isDrawing ? 'bg-destructive/20 border-destructive/40 text-destructive animate-pulse' : 'bg-raised border-border text-muted-foreground'}`})
+          | #{isDrawing ? '● DRAWING' : '● READY'}
+    div(className={`draw-machine ${isDrawing ? 'draw-machine--active' : ''}`})
+      div(className="draw-machine__rail")
+        each _, i in [...Array(12)] key i
+          span(
+            ~ className={`draw-machine__light ${isDrawing ? 'draw-machine__light--active' : ''}`}
+            ~ style={{ animationDelay: `${i * 80}ms` }}
+            ~ )
+      div(className="draw-machine__chamber")
+        div(className="draw-machine__halo" aria-hidden="true")
+        div(className="draw-machine__grid" aria-hidden="true")
+        div(className="draw-machine__globe")
+          DrawDrum(active={isDrawing} drawnNumbers={drawnBalls} poolSize={pool} themeKey={themeKey})
+          div(className="draw-machine__glare" aria-hidden="true")
+          div(className="draw-machine__status" aria-live="polite")
+            span(className={`status-pulse ${isDrawing ? 'status-pulse--active' : ''}`})
+            span
+              | #{isDrawing ? (isMixing ? 'Calibrating chamber' : `Selecting ball ${Math.min(drawnBalls.length + 1, 6)} of 6`) : drawnBalls.length === 6 ? 'Draw complete' : 'Awaiting draw'}
+        div(className="draw-machine__base" aria-hidden="true")
+          span
+      div(className="draw-machine__tray p-3 md:p-4")
+        div(className="flex items-center justify-between mb-2.5")
+          p(className="text-[10px] font-black tracking-[0.18em] text-muted-foreground")
+            | DRAWN BALLS
+          p(className="text-[10px] font-bold text-muted-foreground")
+            | #{drawnBalls.length}
+            | #{"/6 • "}
+            | #{isDrawing ? 'DRAWING...' : drawnBalls.length === 6 ? 'COMPLETE' : 'READY'}
+            | #{" "}
+            | #{draws[0]?.isOfficial ? '• OFFICIAL' : ''}
+        div(className="grid grid-cols-6 gap-2 md:gap-3")
+          each _, i in Array.from({ length: 6 }) key i
+            div(className="result-slot aspect-square flex items-center justify-center relative overflow-hidden")
+              if (drawnBalls[i])
+                div(className={`${(currentBallAnim === drawnBalls[i]) ? 'animate-[ballPop_0.6s_cubic-bezier(0.34,1.56,0.64,1)]' : 'animate-[ballIn_0.4s_ease]'}`})
+                  Ball(
+                    ~ n={(drawnBalls[i])}
+                    ~ size="lg"
+                    ~ glowing
+                    ~ )
+              else
+                div(className="result-slot__empty")
+              if (currentBallAnim === drawnBalls[i])
+                div(className="absolute inset-0 bg-primary/20 animate-[ping_0.6s_ease] rounded-[18px]")
+        if drawnBalls.length === 6
+          div(className="mt-3 flex items-center justify-center gap-2 flex-wrap")
+            span(className="text-[11px] font-bold text-muted-foreground")
+              | SORTED RESULT:
+            div(className="flex gap-1.5")
+              each n in [...drawnBalls].sort((a, b) => a - b) key n
+                span(className="w-7 h-7 rounded-full bg-primary text-primary-foreground text-[11px] font-black flex items-center justify-center shadow-[0_0_10px_var(--lp-glow)]")
+                  | #{n}
+            span(className="text-[11px] font-mono text-muted-foreground")
+              | #{[...drawnBalls].sort((a, b) => a - b).map(n => String(n).padStart(2, '0')).join('-')}
+    div(className="mt-4")
+      button(
+        ~ onClick={onStartDraw}
+        ~ disabled={isDrawing}
+        ~ className={`draw-cta group ${isDrawing ? 'draw-cta--busy' : ''}`}
+        ~ )
+        if !isDrawing
+          div(className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent -skew-x-12 translate-x-[-120%] group-hover:translate-x-[120%] transition-transform duration-700")
+        if isDrawing
+          fragment
+            span(className="w-5 h-5 border-[3px] border-border/30 border-t-white rounded-full animate-spin")
+            | #{isMixing ? `MIXING ${pool} BALLS...` : `DRAWING ${drawnBalls.length}/6`}
+        else
+          fragment
+            Zap(className="w-6 h-6")
+            | #{" START DRAW "}
+            span(className="w-8 h-8 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-[14px]")
+              | ●
+      div(className={`mx-auto mt-3 h-[2px] w-[60%] bg-gradient-to-r from-transparent via-destructive to-transparent blur-[0.5px] ${isDrawing ? 'opacity-100 animate-pulse' : 'opacity-40'}`})
+    if winnerJackpot
+      JackpotBanner(winner={winnerJackpot} onDismiss={onDismissJackpot})
+    if winList.length > 0 && !winnerJackpot
+      WinnersList(wins={winList} onDismiss={onDismissWins})
+    div(className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-3")
+      DrawHistory(draws={draws})
+      HowItWorks(game={game} jackpot={jackpot})

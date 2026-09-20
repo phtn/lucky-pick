@@ -1,0 +1,66 @@
+import { Dices, Trash2, Trophy } from '@octanejs/lucide';
+import { formatPeso } from '../lib/format';
+import { BET_LABELS, VISIBLE_TICKETS, type Draw, type Ticket } from '../lib/lotto';
+
+module
+  // Solo mode's ticket stack. Every open ticket still settles on a draw; only
+  // the newest VISIBLE_TICKETS are rendered.
+  interface TicketListProps {
+    tickets: Ticket[];
+    /** Used to mark which numbers a settled ticket actually hit. */
+    draws: Draw[];
+    onClear: () => void;
+  }
+
+props { tickets, draws, onClear }: TicketListProps
+
+div(className="lux-panel p-5")
+  div(className="flex items-center justify-between mb-4")
+    h2(className="text-[13px] font-black tracking-[0.12em] flex items-center gap-2")
+      Trophy(className="w-4 h-4 text-primary")
+      | #{" MY TICKETS"}
+    div(className="flex items-center gap-2")
+      span(className="px-2.5 py-1 rounded-full bg-elevated border border-border text-[11px] font-bold")
+        | #{tickets.length}
+      if tickets.length > 0
+        button(
+          ~ onClick={onClear}
+          ~ className="w-7 h-7 rounded-full bg-raised border border-border flex items-center justify-center hover:bg-destructive/20 transition"
+          ~ )
+          Trash2(className="w-3.5 h-3.5")
+  if tickets.length === 0
+    div(className="py-12 text-center rounded-[16px] bg-sunken border border-border border-dashed")
+      div(className="w-12 h-12 rounded-full bg-raised mx-auto flex items-center justify-center mb-3")
+        Dices(className="w-5 h-5 text-muted-foreground/60")
+      p(className="text-[13px] text-muted-foreground font-medium")
+        | No bets yet
+      p(className="text-[11px] text-muted-foreground/60 mt-1 px-6")
+        | Pick numbers on the left, choose bet type, then BET. Tickets auto-check on each draw with real prizes.
+  else
+    div(className="space-y-2.5 max-h-[520px] overflow-y-auto custom-scroll pr-1")
+      if tickets.length > VISIBLE_TICKETS
+        p(className="text-[10px] text-muted-foreground/70 font-bold text-center py-1")
+          | #{"Showing the latest "}
+          | #{VISIBLE_TICKETS}
+          | #{" of "}
+          | #{tickets.length}
+          | #{" tickets — every one still settles on a draw."}
+      each t in tickets.slice(0, VISIBLE_TICKETS) key t.id
+        div(className={`rounded-[16px] border p-3 transition ${t.status === 'won' ? 'bg-gradient-to-br from-primary/20 to-primary/5 border-primary/30 shadow-[0_0_18px_var(--lp-glow-soft)]' : t.status === 'lost' ? 'bg-raised border-border opacity-70' : 'bg-raised border-border'}`})
+          div(className="flex items-center justify-between mb-2")
+            span(className={`text-[10px] font-black tracking-widest px-2 py-0.5 rounded-full border ${t.status === 'won' ? 'bg-primary text-primary-foreground border-primary' : t.status === 'lost' ? 'bg-elevated text-muted-foreground border-border' : 'bg-primary/15 text-primary border-primary/20'}`})
+              | #{t.status === 'pending' ? `${BET_LABELS[t.betType]} • PENDING` : t.status === 'won' ? `WIN ${formatPeso(t.prizeWon || 0)} • ${BET_LABELS[t.betType]}` : `LOST • ${t.hits}/${t.required} hits`}
+            span(className="text-[10px] text-muted-foreground font-mono flex items-center gap-1.5")
+              span(className="px-1.5 py-0.5 rounded-full bg-elevated border border-border text-foreground/70 font-bold")
+                | #{t.game}
+              | #{t.time}
+          div(className="flex flex-wrap gap-1.5")
+            each n in t.numbers key n
+              span(className={`w-7 h-7 rounded-full text-[11px] font-black flex items-center justify-center border transition ${(t.status !== 'pending') && (draws.find(d => d.game === t.game)?.sorted.includes(n)) ? 'bg-primary text-primary-foreground border-primary shadow-[0_0_8px_var(--lp-glow)]' : (t.status !== 'pending') ? 'bg-elevated text-muted-foreground/70 border-border line-through' : 'bg-ball text-ball-ink border-border'}`})
+                | #{n}
+          if t.status !== 'pending'
+            div(className="mt-2 flex items-center gap-2 text-[11px]")
+              span(className={`w-5 h-5 rounded-full flex items-center justify-center ${t.status === 'won' ? 'bg-primary text-primary-foreground' : 'bg-elevated text-muted-foreground'}`})
+                | #{t.status === 'won' ? '✓' : '✕'}
+              span(className={t.status === 'won' ? 'text-primary font-bold' : 'text-muted-foreground'})
+                | #{t.status === 'won' ? `Won ${formatPeso(t.prizeWon || 0)} — ${t.hits} hits` : `Only ${t.hits}/${t.required} matched`}

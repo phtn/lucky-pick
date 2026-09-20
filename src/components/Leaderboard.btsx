@@ -1,0 +1,72 @@
+import { useMemo } from 'octane';
+import { Crown, Image as ImageIcon, Link2, Trophy } from '@octanejs/lucide';
+import { formatPeso } from '../lib/format';
+import { paintFor } from '../lib/theme-colors';
+import type { Player } from '../lib/lotto';
+
+module
+  interface LeaderboardProps {
+    /** The room roster in join order; this panel sorts it by winnings. */
+    players: Player[];
+    roomCode: string;
+    onCopyInvite: () => void;
+    onExportImage: () => void;
+  }
+
+props { players, roomCode, onCopyInvite, onExportImage }: LeaderboardProps
+setup const sortedLeaderboard = useMemo(() => [...players].sort((a, b) => b.winnings - a.winnings), [players]);
+
+div(className="lux-panel p-5")
+  div(className="flex items-center justify-between mb-4")
+    h2(className="text-[13px] font-black tracking-[0.12em] flex items-center gap-2")
+      Crown(className="w-4 h-4 text-primary")
+      | #{" LEADERBOARD • "}
+      | #{roomCode}
+    div(className="flex gap-1.5")
+      button(
+        ~ onClick={onCopyInvite}
+        ~ className="w-7 h-7 rounded-full bg-elevated border border-border flex items-center justify-center hover:bg-elevated"
+        ~ )
+        Link2(className="w-3.5 h-3.5")
+      button(
+        ~ onClick={onExportImage}
+        ~ className="w-7 h-7 rounded-full bg-elevated border border-border flex items-center justify-center hover:bg-elevated"
+        ~ )
+        ImageIcon(className="w-3.5 h-3.5")
+  div(className="space-y-2")
+    each p, idx in sortedLeaderboard key p.id
+      div(className={`rounded-[14px] border p-3 flex items-center gap-3 ${idx === 0 ? 'bg-gradient-to-br from-primary/20 to-primary/5 border-primary/30' : 'bg-sunken border-border'}`})
+        span(className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black ${idx === 0 ? 'bg-primary text-primary-foreground' : idx === 1 ? 'bg-elevated text-foreground' : idx === 2 ? 'bg-chart-5/40 text-chart-5' : 'bg-elevated text-muted-foreground'}`})
+          | #{idx + 1}
+        div(
+          ~ className="w-9 h-9 rounded-full flex items-center justify-center font-black text-[13px]"
+          ~ style={paintFor(p.color)}
+          ~ )
+          | #{p.avatar}
+        div(className="flex-1 min-w-0")
+          p(className="text-[13px] font-black leading-none flex items-center gap-1.5")
+            | #{p.name}
+            | #{" "}
+            if idx === 0
+              Trophy(className="w-3.5 h-3.5 text-primary")
+          p(className="text-[11px] text-foreground/70")
+            | #{p.tickets.length}
+            | #{" tickets • "}
+            | #{p.winCount}
+            | #{" wins • "}
+            | #{formatPeso(p.winnings)}
+        div(className="text-right")
+          p(className="text-[13px] font-black text-primary")
+            | #{formatPeso(p.winnings)}
+  div(className="mt-4 grid grid-cols-2 gap-2")
+    div(className="rounded-xl bg-sunken border border-border p-2.5 text-center")
+      p(className="text-[10px] text-muted-foreground font-bold tracking-widest")
+        | TOTAL POT
+      p(className="text-[14px] font-black text-primary")
+        | #{formatPeso(players.reduce((s, p) => s + p.winnings, 0))}
+    div(className="rounded-xl bg-sunken border border-border p-2.5 text-center")
+      p(className="text-[10px] text-muted-foreground font-bold tracking-widest")
+        | PLAYERS
+      p(className="text-[14px] font-black")
+        | #{players.length}
+        | /8

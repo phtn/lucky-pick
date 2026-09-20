@@ -1,0 +1,50 @@
+import { Flame, Timer } from '@octanejs/lucide';
+import type { GameConfig } from '../lib/games';
+import { formatCompactPeso, formatJackpot, formatPeso } from '../lib/format';
+import type { Countdown } from '../lib/lotto';
+
+module
+  interface NextDrawCardProps {
+    game: GameConfig;
+    /** Rolling pot for this game right now. */
+    jackpot: number;
+    countdown: Countdown;
+    /** Set for a beat after a rollover so the figure can animate up. */
+    jackpotAnim: boolean;
+  }
+
+props { game, jackpot, countdown, jackpotAnim }: NextDrawCardProps
+
+div(className="rounded-[16px] bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/20 p-4 flex flex-col justify-between")
+  div
+    div(className="flex items-center justify-between mb-3")
+      span(className="text-[10px] font-black tracking-widest text-primary/80 flex items-center gap-1")
+        Timer(className="w-3.5 h-3.5")
+        | #{" NEXT "}
+        | #{game.id}
+        | #{" DRAW"}
+      span(className="text-[10px] px-2 py-0.5 rounded-full bg-sunken border border-border text-foreground/70")
+        | #{countdown.label}
+    div(className="grid grid-cols-4 gap-2 mb-3")
+      each k in [ { v: countdown.d, l: 'DAYS' }, { v: countdown.h, l: 'HRS' }, { v: countdown.m, l: 'MIN' }, { v: countdown.s, l: 'SEC' }, ] key k.l
+        div(className="rounded-xl bg-sunken border border-border p-2 text-center")
+          div(className="text-[18px] font-black leading-none")
+            | #{String(k.v).padStart(2, '0')}
+          div(className="text-[9px] font-bold text-muted-foreground tracking-widest mt-1")
+            | #{k.l}
+    div(className="rounded-xl bg-sunken border border-primary/20 p-3")
+      p(className="text-[10px] tracking-widest font-black text-muted-foreground")
+        | CURRENT JACKPOT • ROLLOVER
+      p(className={`text-[22px] font-black tracking-tight text-primary leading-none mt-1 ${jackpotAnim ? 'animate-[jackpotUp_0.9s_ease]' : ''}`})
+        | #{formatJackpot(jackpot)}
+      p(className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1")
+        Flame(className="w-3 h-3 text-chart-5")
+        | #{" +"}
+        | #{formatCompactPeso(game.rollover)}
+        | #{" if no winner • Base "}
+        | #{formatPeso(game.baseJackpot)}
+  p(className="mt-3 text-[10px] text-muted-foreground leading-[1.4]")
+    | #{game.name}
+    | #{" draws "}
+    | #{game.drawDayLabel}
+    | #{" 9PM Manila • Live broadcast IBC13 / PCSO FB"}

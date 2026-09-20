@@ -1,0 +1,44 @@
+import { Check, Dice5 } from '@octanejs/lucide';
+
+module
+  // The 1..pool board plus the three shortcuts that fill it.
+  interface NumberGridProps {
+    pool: number;
+    selected: number[];
+    onToggleNumber: (n: number) => void;
+    onQuickPick: () => void;
+    onEvenOddMix: () => void;
+    onClear: () => void;
+  }
+
+props { pool, selected, onToggleNumber, onQuickPick, onEvenOddMix, onClear }: NumberGridProps
+
+fragment
+  div(className="rounded-[18px] bg-sunken border border-border p-3")
+    div(className={`grid gap-1.5 ${pool > 49 ? 'grid-cols-8' : 'grid-cols-7'}`})
+      each n in Array.from({ length: pool }, (_, i) => i + 1) key n
+        button(
+          ~ onClick={() => onToggleNumber(n)}
+          ~ className={`aspect-square rounded-full text-[13px] font-black transition-all relative flex items-center justify-center ${(selected.includes(n)) ? 'bg-gradient-to-br from-primary/70 to-primary text-black shadow-[0_0_14px_var(--lp-glow),inset_0_1px_2px_rgba(255,255,255,0.9)] scale-[1.06] z-10' : 'lp-ball shadow-[inset_0_1px_2px_rgba(255,255,255,1),0_2px_6px_rgba(0,0,0,0.35)] hover:scale-[1.05]'}`}
+          ~ )
+          | #{n}
+          if (selected.includes(n))
+            span(className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-destructive rounded-full border border-border flex items-center justify-center")
+              Check(className="w-2 h-2 text-foreground")
+  div(className="mt-3 grid grid-cols-3 gap-2")
+    button(
+      ~ onClick={onQuickPick}
+      ~ className="h-9 rounded-full bg-elevated border border-border text-[11px] font-bold hover:bg-elevated transition flex items-center justify-center gap-1"
+      ~ )
+      Dice5(className="w-3.5 h-3.5")
+      | #{" LUCKY PICK"}
+    button(
+      ~ onClick={onEvenOddMix}
+      ~ className="h-9 rounded-full bg-elevated border border-border text-[11px] font-bold hover:bg-elevated transition"
+      ~ )
+      | EVEN/ODD
+    button(
+      ~ onClick={onClear}
+      ~ className="h-9 rounded-full bg-raised border border-border text-[11px] font-bold text-muted-foreground hover:text-foreground/90 transition"
+      ~ )
+      | CLEAR

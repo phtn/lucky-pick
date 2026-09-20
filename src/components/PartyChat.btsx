@@ -1,0 +1,65 @@
+import { useEffect, useRef } from 'octane';
+import { MessageCircle } from '@octanejs/lucide';
+import { paintFor } from '../lib/theme-colors';
+import type { ChatMsg } from '../lib/lotto';
+
+module
+  interface PartyChatProps {
+    messages: ChatMsg[];
+    input: string;
+    onInput: (value: string) => void;
+    onSend: () => void;
+  }
+
+props { messages, input, onInput, onSend }: PartyChatProps
+setup
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Keep the newest message in view as the room talks.
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+div(className="rounded-[22px] bg-card border border-border p-4")
+  h3(className="text-[11px] font-black tracking-widest text-foreground/70 mb-3 flex items-center gap-1.5")
+    MessageCircle(className="w-3.5 h-3.5")
+    | #{" PARTY CHAT • "}
+    | #{messages.length}
+  div(
+    ~ ref={chatScrollRef}
+    ~ className="space-y-2 max-h-[160px] overflow-y-auto custom-scroll pr-1 mb-3"
+    ~ )
+    each m in messages key m.id
+      div(className="flex gap-2 text-[12px] leading-[1.35]")
+        span(
+          ~ className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shrink-0"
+          ~ style={paintFor(m.color)}
+          ~ )
+          | #{m.name[0]}
+        div
+          span(
+            ~ className="font-bold"
+            ~ style={{ color: `var(${m.color})` }}
+            ~ )
+            | #{m.name}
+          | #{" "}
+          span(className="text-muted-foreground text-[10px]")
+            | #{m.time}
+          br
+          span(className="text-foreground/90")
+            | #{m.text}
+  div(className="flex gap-2")
+    input(
+      ~ value={input}
+      ~ onInput={e => onInput(e.currentTarget.value)}
+      ~ onKeyDown={e => e.key === 'Enter' && onSend()}
+      ~ placeholder="Say good luck!"
+      ~ className="flex-1 h-9 rounded-full bg-sunken border border-border px-3.5 text-[12px] placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/30"
+      ~ )
+    button(
+      ~ onClick={onSend}
+      ~ className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:brightness-110"
+      ~ )
+      MessageCircle(className="w-4 h-4")

@@ -1,0 +1,37 @@
+import { Sparkles, Trophy, X } from '@octanejs/lucide';
+import { formatJackpot } from '../lib/format';
+import type { WinEntry } from '../lib/lotto';
+
+module
+  // Shown only for a 6/6 jackpot ticket; every other win goes to WinnersList.
+  interface JackpotBannerProps {
+    winner: WinEntry;
+    onDismiss: () => void;
+  }
+
+props { winner, onDismiss }: JackpotBannerProps
+
+div(className="mt-5 rounded-[20px] bg-gradient-to-br from-primary/25 to-chart-5/25 border border-primary/40 p-4 flex items-center gap-3 animate-[winnerPop_0.6s_cubic-bezier(0.34,1.56,0.64,1)] relative overflow-hidden")
+  div(className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 animate-[shine_1.5s_ease_infinite]")
+  div(className="w-14 h-14 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-[0_0_24px_var(--lp-glow)]")
+    Trophy(className="w-7 h-7")
+  div(className="min-w-0 flex-1")
+    p(className="text-[11px] font-black tracking-widest text-primary flex items-center gap-1")
+      Sparkles(className="w-3 h-3")
+      | #{" JACKPOT HIT!!! "}
+      | #{formatJackpot(winner.prize)}
+    p(className="text-[15px] font-black leading-tight")
+      | #{winner.player ? `${winner.player.name} • ` : ''}
+      | Ticket #
+      | #{winner.ticket.id}
+      | #{" • "}
+      | #{winner.ticket.numbers.join(' - ')}
+      | #{" • 6/6"}
+    p(className="text-[12px] text-foreground/80")
+      | #{formatJackpot(winner.prize)}
+      | #{" won!"}
+  button(
+    ~ onClick={onDismiss}
+    ~ className="w-8 h-8 rounded-full bg-elevated flex items-center justify-center hover:bg-elevated z-10"
+    ~ )
+    X(className="w-4 h-4")

@@ -1,0 +1,42 @@
+import { Gift, X } from '@octanejs/lucide';
+import { formatPeso } from '../lib/format';
+import { BET_LABELS, type WinEntry } from '../lib/lotto';
+
+module
+  // Every non-jackpot winning ticket from the last draw.
+  interface WinnersListProps {
+    wins: WinEntry[];
+    onDismiss: () => void;
+  }
+
+props { wins, onDismiss }: WinnersListProps
+
+div(className="mt-5 rounded-[18px] bg-gradient-to-br from-chart-2/15 to-primary/10 border border-chart-2/25 p-3 animate-[fadeIn_0.4s_ease]")
+  div(className="flex items-center justify-between mb-2")
+    p(className="text-[11px] font-black tracking-widest text-chart-2 flex items-center gap-1.5")
+      Gift(className="w-3.5 h-3.5")
+      | #{" WINNERS • "}
+      | #{wins.length}
+      | #{" ticket(s) • "}
+      | #{formatPeso(wins.reduce((s, w) => s + w.prize, 0))}
+    button(
+      ~ onClick={onDismiss}
+      ~ className="w-6 h-6 rounded-full bg-elevated flex items-center justify-center"
+      ~ )
+      X(className="w-3 h-3")
+  div(className="space-y-1.5 max-h-[120px] overflow-y-auto custom-scroll pr-1")
+    each w, i in wins.slice(0, 50) key i
+      div(className="flex items-center justify-between text-[12px] bg-sunken rounded-full px-3 py-1.5 border border-border")
+        span(className="flex items-center gap-2")
+          span(className="w-5 h-5 rounded-full bg-ball text-ball-ink text-[10px] font-black flex items-center justify-center")
+            | #{w.ticket.numbers.join(' ')}
+          | #{" "}
+          | #{w.player ? w.player.name : ''}
+          | #{" • "}
+          | #{w.ticket.hits}
+          | /
+          | #{w.ticket.required}
+          | #{" "}
+          | #{BET_LABELS[w.ticket.betType]}
+        span(className="font-black text-primary")
+          | #{formatPeso(w.prize)}

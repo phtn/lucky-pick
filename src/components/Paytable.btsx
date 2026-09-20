@@ -1,0 +1,51 @@
+import { PAYOUT_RTP, type BetType, type GameConfig } from '../lib/games';
+import { formatCompactPeso } from '../lib/format';
+import { jackpotLadder, pickPaytable, type BetCost } from '../lib/lotto';
+
+module
+  // A jackpot ticket and a pick bet settle on different odds models, so each
+  // gets its own table rather than one mixed column.
+  interface PaytableProps {
+    game: GameConfig;
+    betType: BetType;
+    /** Rolling pot, shown as the 6/6 prize on the jackpot ladder. */
+    jackpot: number;
+    /** Stake a pick bet is priced against. */
+    betCost: BetCost;
+  }
+
+props { game, betType, jackpot, betCost }: PaytableProps
+
+div(className="mb-4 rounded-[14px] overflow-hidden border border-border bg-sunken")
+  div(className="px-3 py-2 bg-raised flex items-center justify-between")
+    span(className="text-[10px] font-black tracking-widest text-muted-foreground")
+      | #{betType === 6 ? '' : 'PAYTABLE • '}
+      | #{game.name.toUpperCase()}
+    span(className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/15 border border-primary/20 text-primary font-bold")
+      | #{betType === 6 ? formatCompactPeso(game.baseJackpot) + '+ BASE' : Math.round(PAYOUT_RTP * 1000) / 10 + '% RETURN'}
+  if betType === 6
+    div(className="divide-y divide-border")
+      each r in jackpotLadder(game, jackpot) key r.m
+        div(className={`grid grid-cols-[54px_1fr_92px] px-3 py-2 items-center text-[11px] ${r.m === '6/6' ? 'bg-primary/10' : ''}`})
+          span(className={`font-black ${r.m === '6/6' ? 'text-primary' : 'text-foreground'}`})
+            | #{r.m}
+          span(className="flex flex-col leading-tight")
+            span(className={`font-bold ${r.m === '6/6' ? 'text-primary' : 'text-foreground'}`})
+              | #{r.prize}
+            span(className="text-[9px] text-muted-foreground")
+              | #{r.sub}
+          span(className="text-right text-[10px] text-muted-foreground font-mono")
+            | #{r.odds}
+  else
+    div(className="divide-y divide-border")
+      each r in pickPaytable(game, betCost) key r.m
+        div(className={`grid grid-cols-[54px_1fr_92px] px-3 py-2 items-center text-[11px] ${betType === r.bet ? 'bg-primary/10' : ''}`})
+          span(className={`font-black ${betType === r.bet ? 'text-primary' : 'text-foreground'}`})
+            | #{r.m}
+          span(className="flex flex-col leading-tight")
+            span(className={`font-bold ${betType === r.bet ? 'text-primary' : 'text-foreground'}`})
+              | #{r.prize}
+            span(className="text-[9px] text-muted-foreground")
+              | #{r.sub}
+          span(className="text-right text-[10px] text-muted-foreground font-mono")
+            | #{r.odds}

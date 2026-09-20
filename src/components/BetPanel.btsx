@@ -1,0 +1,116 @@
+import { Dices } from '@octanejs/lucide';
+import NumberGrid from './NumberGrid.btsx';
+import Paytable from './Paytable.btsx';
+import RandomBets from './RandomBets.btsx';
+import { betOdds, betPrize, formatOdds, type BetType, type GameConfig } from '../lib/games';
+import { formatJackpot, formatPeso } from '../lib/format';
+import { BET_LABELS, BET_TYPES, type BetCost } from '../lib/lotto';
+
+module
+  // Everything that composes one bet: the bet type, its paytable, the board,
+  // the bulk-buy shortcuts, and the confirm button.
+  interface BetPanelProps {
+    game: GameConfig;
+    jackpot: number;
+    betType: BetType;
+    betCost: BetCost;
+    selected: number[];
+    /** Open tickets for whoever is buying, against the MAX_TICKETS cap. */
+    ticketCount: number;
+    /** '• Name' in party mode, empty in solo, appended to the headings. */
+    buyerTag: string;
+    /** Who a bulk buy is for, e.g. 'you' or a party player's name. */
+    buyerLabel: string;
+    isDrawing: boolean;
+    onSelectBetType: (bt: BetType) => void;
+    onToggleNumber: (n: number) => void;
+    onQuickPick: () => void;
+    onEvenOddMix: () => void;
+    onClearSelection: () => void;
+    onBuyRandom: (count: number) => void;
+    onAddTicket: () => void;
+  }
+
+props { game, jackpot, betType, betCost, selected, ticketCount, buyerTag, buyerLabel, isDrawing, onSelectBetType, onToggleNumber, onQuickPick, onEvenOddMix, onClearSelection, onBuyRandom, onAddTicket }: BetPanelProps
+setup
+  const pool = game.pool;
+  // A bet type is also the count of numbers a ticket holds.
+  const required = betType;
+
+div(className="lux-panel p-5")
+  div(className="flex items-center justify-between mb-4")
+    h2(className="text-[12px] font-black tracking-[0.12em] flex items-center gap-2")
+      Dices(className="w-4 h-4 text-primary")
+      | #{" PICK YOUR NUMBERS"}
+    span(className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-sunken border border-border text-foreground/80")
+      | #{selected.length}
+      | /
+      | #{required}
+      | #{" SELECTED "}
+      | #{buyerTag}
+  div(className="mb-3")
+    p(className="text-[10px] tracking-widest text-muted-foreground font-bold mb-2")
+      | BET TYPE
+    div(className="grid grid-cols-3 gap-1 p-1 rounded-[16px] bg-sunken border border-border")
+      each bt in BET_TYPES key bt
+        button(
+          ~ onClick={() => onSelectBetType(bt)}
+          ~ className={`h-9 rounded-xl text-xs font-black tracking-wide transition ${betType === bt ? 'bg-primary text-primary-foreground shadow-[0_0_12px_var(--lp-glow)]' : 'bg-raised text-foreground/70 hover:bg-elevated hover:text-foreground'}`}
+          ~ )
+          | #{bt}
+          | #{"/6 "}
+          | #{bt === 6 ? 'JACKPOT' : ''}
+  Paytable(
+    ~ game={game}
+    ~ betType={betType}
+    ~ jackpot={jackpot}
+    ~ betCost={betCost}
+    ~ )
+  NumberGrid(
+    ~ pool={pool}
+    ~ selected={selected}
+    ~ onToggleNumber={onToggleNumber}
+    ~ onQuickPick={onQuickPick}
+    ~ onEvenOddMix={onEvenOddMix}
+    ~ onClear={onClearSelection}
+    ~ )
+  RandomBets(
+    ~ gameId={game.id}
+    ~ required={required}
+    ~ betCost={betCost}
+    ~ ticketCount={ticketCount}
+    ~ buyerLabel={buyerLabel}
+    ~ isDrawing={isDrawing}
+    ~ onBuy={onBuyRandom}
+    ~ )
+  div(className="mt-4 rounded-[16px] bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/20 p-3.5 flex items-center justify-between")
+    div
+      p(className="text-[10px] tracking-widest font-black text-primary/80")
+        | YOU WILL WIN
+      p(className="text-[16px] font-black text-primary tracking-tight")
+        | #{betType === 6 ? formatJackpot(jackpot) : formatPeso(betPrize(game, betType, jackpot, betCost))}
+        | #{" "}
+        span(className="text-[11px] text-foreground/70 font-bold")
+          | #{"if "}
+          | #{betType === 6 ? '6/6 hits' : `${betType}/${betType}`}
+      p(className="text-[10px] text-muted-foreground")
+        | #{formatOdds(betOdds(pool, betType))}
+        | #{" • "}
+        | #{BET_LABELS[betType]}
+        | #{" • "}
+        | #{game.id}
+    div(className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-black text-[14px] shadow-[0_0_18px_var(--lp-glow)]")
+      | #{betType}
+      | /6
+  button(
+    ~ onClick={onAddTicket}
+    ~ disabled={selected.length !== required}
+    ~ className="mt-4 w-full h-[52px] rounded-full bg-primary text-primary-foreground font-black text-[14px] tracking-wide disabled:opacity-30 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.98] transition shadow-[0_0_24px_var(--lp-glow)] flex items-center justify-center gap-2"
+    ~ )
+    span
+      | #{"BET "}
+      | #{BET_LABELS[betType]}
+      | #{" "}
+      | #{buyerTag}
+    span(className="w-6 h-6 rounded-full bg-sunken text-primary flex items-center justify-center text-[12px]")
+      | +

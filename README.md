@@ -37,6 +37,19 @@ import { createScope } from "octane/signals"
 
 Record application changes in [CHANGELOG.md](CHANGELOG.md).
 
+## Project layout
+
+`src/App.btsx` owns the application state — the draw, the tickets, the players,
+the audio and the theme — and its template is the page outline, one component
+per section. Every section lives in `src/components/`, takes plain props, and
+raises callbacks rather than reaching for state; a panel that needs its own hook
+(the chat scroller, the leaderboard sort) keeps it locally.
+
+Shared code sits in `src/lib/`: `games.ts` holds the game table and the odds
+maths, `lotto.ts` the tickets, players, prize tables and room helpers, and
+`format.ts` the peso formatters. A component imports what it needs from those
+rather than receiving it through props.
+
 ## Selected stack
 
 - Bundler: rsbuild

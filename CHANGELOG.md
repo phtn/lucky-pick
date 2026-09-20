@@ -4,6 +4,11 @@ All notable changes to `lucky-pick` will be recorded here.
 
 ## [Unreleased]
 
+- Split `src/App.btsx` into one file per interface section under `src/components/`: header, game switcher, live board (official result, next draw, play-vs-real), room panel, bet panel (paytable, number grid, random bets), session stats, draw stage (jackpot banner, winners list, draw history, how it works), ticket list, leaderboard, player tickets, party chat and prize note, plus the shared `Ball` and `Youtube` marks. `App.btsx` keeps the application state and now reads as the page outline.
+- Moved the domain types, tables and constants the sections share out of the `App.btsx` module block into `src/lib/lotto.ts`, and the peso formatters into `src/lib/format.ts`. `BetType` is no longer declared twice; every file uses the one from `src/lib/games.ts`.
+- Gave `PartyChat` its own scroll ref and effect, and `Leaderboard` its own sort, so neither needs the application to own it.
+- The ticket panel and the bet button now build the party-player suffix from one value, so a heading can no longer read "• undefined" between a player leaving and the next selection.
+
 - Repriced the match-all pick bets onto a single paytable at a flat 62.718% return, anchored on 6/42 pick 3 = ×360. Payouts are now a multiple of the stake, so a ₱20 ticket collects proportionally less than a ₱25 one.
 - Pick bets no longer reuse the jackpot ticket's tier prizes. Pick 3 previously paid ₱20 at 1 in 574, which made it strictly worse than pick 2 on both odds and payout; no pick bet is dominated now.
 - Split the prize panel in two: a jackpot ladder (6/6 down to 3/6, PCSO tier odds) when the jackpot bet is selected, and the pick paytable (5/5 down to 1/1, match-all odds) otherwise. The single mixed table stated two different odds models in one column.
