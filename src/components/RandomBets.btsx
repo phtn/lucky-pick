@@ -1,10 +1,12 @@
-import { Dice5 } from '@octanejs/lucide';
+import { useState } from 'octane';
+import { Icon } from '../lib/icons';
 import type { GameId } from '../lib/games';
 import { formatPeso } from '../lib/format';
 import { BET_MULTIPLIERS, MAX_TICKETS, type BetCost } from '../lib/lotto';
+import { cn } from '@/lib/utils';
 
 module
-  // Buys machine picks in bulk: x1 through x200 in one tap, up to MAX_TICKETS.
+  // Buys machine picks in bulk, up to MAX_TICKETS.
   interface RandomBetsProps {
     gameId: GameId;
     /** Numbers per ticket, i.e. the selected bet type. */
@@ -19,12 +21,32 @@ module
     betReady: boolean;
     /** '• Name' in party mode, empty in solo. */
     buyerTag: string;
-    onBuy: (count: number) => void;
+    onBuy: (count: number) => Promise<void>;
     /** Confirms the hand-picked bet; sits in the last slot of the grid. */
     onAddTicket: () => void;
   }
 
 props { gameId, required, betCost, ticketCount, buyerLabel, isDrawing, betReady, buyerTag, onBuy, onAddTicket }: RandomBetsProps
+setup
+  const [pendingCount, setPendingCount, getPendingCount] = useState<number | null>(null);
+  const [buyError, setBuyError] = useState<string | null>(null);
+  const buyRandom = async (count: number) => {
+    if (getPendingCount() !== null || isDrawing || ticketCount >= MAX_TICKETS) return;
+    setPendingCount(count);
+    setBuyError(null);
+    try {
+      // Paint the overlay before starting a potentially large batch.
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      await onBuy(count);
+    } catch {
+      setBuyError('Could not load random bets. Please try again.');
+    } finally {
+      setPendingCount(null);
+    }
+  };
+  const compactCount = (count: number) => count >= 50_000
+    ? `${count / (count >= 1_000_000 ? 1_000_000 : 1_000)}${count >= 1_000_000 ? 'M' : 'K'}`
+    : String(count);
 
 div(className="random-bets mt-3 rounded-[16px] bg-sunken p-3")
   div(className="flex items-center justify-between gap-2 mb-6")
@@ -40,24 +62,32 @@ div(className="random-bets mt-3 rounded-[16px] bg-sunken p-3")
   div(className="random-bets__options grid grid-cols-5 gap-1.5")
     each m in BET_MULTIPLIERS key m
       button(
-        ~ onClick={() => onBuy(m)}
-        ~ disabled={isDrawing || ticketCount >= MAX_TICKETS}
-        ~ className="h-16 rounded-md bg-raised flex flex-col items-center justify-center leading-none hover:bg-primary/15 hover:border-primary/30 active:scale-[0.97] transition disabled:opacity-30 disabled:cursor-not-allowed"
+        ~ onClick={() => void buyRandom(m)}
+        ~ aria-busy={pendingCount === m}
+        ~ aria-label={`${pendingCount === m ? 'Loading' : 'Buy'} ${m.toLocaleString('en-PH')} random bets for ${formatPeso(m * betCost)}`}
+        ~ title={`×${m.toLocaleString('en-PH')} • ${formatPeso(m * betCost)}`}
+        ~ disabled={pendingCount !== null || isDrawing || ticketCount >= MAX_TICKETS}
+        ~ className="relative overflow-hidden h-16 rounded-md bg-raised flex flex-col items-center justify-center leading-none hover:bg-primary/15 hover:border-primary/30 active:scale-[0.97] transition disabled:opacity-30 disabled:cursor-not-allowed aria-busy:opacity-100 aria-busy:cursor-wait"
         ~ )
         span(className="text-sm font-black tracking-tight")
           span(className="text-muted-foreground/80") #{'×'}
-          | #{m}
+          | #{compactCount(m)}
         span(className="text-[9px] font-light text-foreground mt-0.5")
-          | #{formatPeso(m * betCost)}
+          | #{m * betCost >= 50_000 ? `₱${compactCount(m * betCost)}` : formatPeso(m * betCost)}
+        if pendingCount === m
+          span(className={cn("absolute size-8.5 backdrop-blur-[1px] rounded-full flex items-center justify-center bg-mist-300/50 text-primary", {'animate-spin': pendingCount === m})} aria-hidden={true})
+            Icon(name="spinner-ring" size={16} className="text-mist-700")
     button(
       ~ onClick={onAddTicket}
-      ~ disabled={!betReady || isDrawing || ticketCount >= MAX_TICKETS}
+      ~ disabled={pendingCount !== null || !betReady || isDrawing || ticketCount >= MAX_TICKETS}
       ~ className="bet-submit h-16 rounded-md bg-primary text-primary-foreground shadow-[0_0_12px_var(--lp-glow)] flex flex-col items-center justify-center leading-none hover:brightness-110 active:scale-[0.97] transition disabled:opacity-30 disabled:cursor-not-allowed"
       ~ )
       span(className="text-sm font-black tracking-tight")
         | BET
       span(className="text-[9px] font-bold mt-1 opacity-80")
         | #{buyerTag || formatPeso(betCost)}
+  if buyError
+    p(role="alert" className="mt-2 text-xs text-destructive") #{buyError}
   p(className="random-bets__note mt-2 text-[10px] text-muted-foreground/70 leading-[1.4]")
     | #{"Instantly buys that many machine-picked "}
     | #{required}

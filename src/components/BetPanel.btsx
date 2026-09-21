@@ -25,7 +25,7 @@ module
     onQuickPick: () => void;
     onEvenOddMix: () => void;
     onClearSelection: () => void;
-    onBuyRandom: (count: number) => void;
+    onBuyRandom: (count: number) => Promise<void>;
     onAddTicket: () => void;
   }
 

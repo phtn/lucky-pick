@@ -1,15 +1,15 @@
 import { formatJackpot, formatPeso } from './format'
-import type { DrawSeed } from './rng'
 import { formatOdds, matchAllOdds, tierOdds, type BetType, type GameConfig, type GameId } from './games'
+import type { DrawSeed } from './rng'
 
 export type { BetType } from './games'
 
 export const BET_TYPES: BetType[] = [1, 2, 3, 4, 5, 6]
 
 // One tap buys this many random tickets at once.
-export const BET_MULTIPLIERS = [1, 10, 20, 50, 100, 200, 500, 1000, 2500]
-export const MAX_TICKETS = 5000
-export const VISIBLE_TICKETS = 100
+export const BET_MULTIPLIERS = [1, 100, 50, 1000, 5000, 50_000, 250_000, 500_000, 1_000_000]
+export const MAX_TICKETS = 2_000_000
+export const VISIBLE_TICKETS = 1000
 
 export type GameMode = 'solo' | 'party'
 

@@ -669,6 +669,6 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
           PrizeNote(game={game})
         DrawHistory(draws={draws})
         HowItWorks(game={game} jackpot={jackpot})
-    footer(className="app-footer mt-8 text-center text-[11px] text-muted-foreground tracking-wide space-x-1")
-      span built with
+    footer(className="flex items-center justify-end app-footer mt-6 font-mono font-light text-foreground/50 text-[8px] tracking-wide space-x-1")
+      span this simulation is built on
       a(href="https://beast-docs-adv.beastjs.workers.dev/") beastjs
