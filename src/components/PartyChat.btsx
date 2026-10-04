@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'octane';
-import { MessageCircle } from '@octanejs/lucide';
+import {Icon} from '@/lib/icons';
 import { paintFor } from '../lib/theme-colors';
 import type { ChatMsg } from '../lib/lotto';
 
@@ -24,7 +24,7 @@ setup
 
 div(className="rounded-[22px] bg-card p-4")
   h3(className="text-[11px] font-black tracking-widest text-foreground/70 mb-3 flex items-center gap-1.5")
-    MessageCircle(className="w-3.5 h-3.5")
+    Icon(name="message", className="w-3.5 h-3.5")
     | #{" PARTY CHAT • "}
     | #{messages.length}
   div(
@@ -62,4 +62,4 @@ div(className="rounded-[22px] bg-card p-4")
       ~ onClick={onSend}
       ~ className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:brightness-110"
       ~ )
-      MessageCircle(className="w-4 h-4")
+      Icon(name='message' className="w-4 h-4")

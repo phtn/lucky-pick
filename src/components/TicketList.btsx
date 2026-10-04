@@ -1,8 +1,8 @@
 import { useMemo } from 'octane';
-import { Dices, Trash2, Trophy } from '@octanejs/lucide';
 import { formatPeso } from '../lib/format';
 import { BET_LABELS, VISIBLE_TICKETS, rankTickets, type Draw, type Ticket } from '../lib/lotto';
 import type { GameId } from '../lib/games';
+import {Icon} from '@/lib/icons';
 
 module
   // Solo mode's ticket stack. Every open ticket still settles on a draw; only
@@ -37,7 +37,7 @@ div(className="px-5 py-3")
           ~ onClick={onClear}
           ~ className="w-8 h-8 rounded-full bg-raised flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/15 transition"
           ~ )
-          Trash2(className="w-3.5 h-3.5")
+          Icon(name="trash" className="w-3.5 h-3.5")
   if tickets.length === 0
     div(className="py-12 text-center ")
       p(className="text-[13px] text-muted-foreground font-medium")

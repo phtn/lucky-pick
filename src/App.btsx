@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useMemo } from 'octane';
-import AmbientField from './components/AmbientField.btsx';
 import AppHeader from './components/AppHeader.btsx';
 import BetPanel from './components/BetPanel.btsx';
 import DrawHistory from './components/DrawHistory.btsx';

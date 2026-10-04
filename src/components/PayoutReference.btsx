@@ -1,7 +1,7 @@
-import { ChevronDown, TableProperties } from '@octanejs/lucide';
 import Paytable from './Paytable.btsx';
 import type { BetType, GameConfig } from '../lib/games';
 import type { BetCost } from '../lib/lotto';
+import {Icon} from '@/lib/icons';
 
 module
   interface PayoutReferenceProps {
@@ -15,11 +15,11 @@ props { game, jackpot, betType, betCost }: PayoutReferenceProps
 
 details(className="payout-reference collapsible rounded-[20px] bg-card")
   summary(className="flex cursor-pointer list-none items-center gap-2 p-4 text-[11px] font-black tracking-widest text-foreground/70")
-    TableProperties(className="w-3.5 h-3.5 text-primary")
+    Icon(name='table-props' className="w-3.5 h-3.5 text-primary")
     span(className="flex-1") PAYOUT TABLE
     span(className="text-[9px] tracking-normal text-muted-foreground")
       | #{betType === 6 ? 'JACKPOT TIERS' : 'PICK BETS'}
-    ChevronDown(className="collapsible__chevron w-3.5 h-3.5 text-muted-foreground")
+    Icon(name='chevron-down' className="collapsible__chevron w-3.5 h-3.5 text-muted-foreground")
   div(className="px-3 pb-3")
     Paytable(
       ~ game={game}

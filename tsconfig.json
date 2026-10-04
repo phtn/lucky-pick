@@ -9,7 +9,8 @@
     "skipLibCheck": true,
     "jsx": "preserve",
     "types": [
-      "node"
+      "node",
+      "bun"
     ],
     "baseUrl": ".",
     "paths": {

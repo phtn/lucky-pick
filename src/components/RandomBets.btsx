@@ -76,7 +76,7 @@ div(className="random-bets mt-3 rounded-[16px] bg-sunken p-3")
           | #{m * betCost >= 50_000 ? `₱${compactCount(m * betCost)}` : formatPeso(m * betCost)}
         if pendingCount === m
           span(className={cn("absolute size-8.5 backdrop-blur-[1px] rounded-full flex items-center justify-center bg-mist-300/50 text-primary", {'animate-spin': pendingCount === m})} aria-hidden={true})
-            Icon(name="spinner-ring" size={16} className="text-mist-700")
+            Icon(name="check-circle-fill" size={16} className="text-mist-700")
     button(
       ~ onClick={onAddTicket}
       ~ disabled={pendingCount !== null || !betReady || isDrawing || ticketCount >= MAX_TICKETS}

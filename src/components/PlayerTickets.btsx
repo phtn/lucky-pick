@@ -1,8 +1,8 @@
 import { useMemo } from 'octane';
-import { Trash2, Users } from '@octanejs/lucide';
 import { formatPeso } from '../lib/format';
 import { BET_LABELS, VISIBLE_TICKETS, rankTickets, type Draw, type Player } from '../lib/lotto';
 import type { GameId } from '../lib/games';
+import {Icon} from '@/lib/icons';
 
 module
   // The selected party player's own stack, below the leaderboard.
@@ -25,7 +25,7 @@ setup
 
 div(className="lux-panel p-5")
   h3(className="text-[12px] font-black tracking-widest mb-3 flex items-center gap-2")
-    Users(className="w-4 h-4 text-foreground/70")
+    Icon(name='user' className="w-4 h-4 text-foreground/70")
     | #{" "}
     | #{player?.name}
     | #{"'S TICKETS • "}
@@ -50,7 +50,7 @@ div(className="lux-panel p-5")
     ~ onClick={onClearTickets}
     ~ className="pill pill--muted mt-3 w-full text-[11px]"
     ~ )
-    Trash2(className="w-3.5 h-3.5")
+    Icon(name='trash' className="w-3.5 h-3.5")
     | #{" Clear "}
     | #{player?.name}
     | 's tickets

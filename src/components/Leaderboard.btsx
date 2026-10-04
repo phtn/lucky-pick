@@ -1,8 +1,8 @@
 import { useMemo } from 'octane';
-import { Crown, Image as ImageIcon, Link2, Trophy } from '@octanejs/lucide';
 import { formatPeso } from '../lib/format';
 import { paintFor } from '../lib/theme-colors';
 import type { Player } from '../lib/lotto';
+import {Icon} from '@/lib/icons';
 
 module
   interface LeaderboardProps {
@@ -19,7 +19,7 @@ setup const sortedLeaderboard = useMemo(() => [...players].sort((a, b) => b.winn
 div(className="p-3")
   div(className="flex items-center justify-between mb-2")
     h2(className="text-[13px] font-black tracking-[0.12em] flex items-center gap-2")
-      Crown(className="w-4 h-4 text-primary")
+      span(className="w-4 h-4 text-primary")
       | #{" LEADERBOARD • "}
       | #{roomCode}
     div(className="flex gap-1.5")
@@ -27,12 +27,12 @@ div(className="p-3")
         ~ onClick={onCopyInvite}
         ~ className="w-7 h-7 rounded-full bg-elevated flex items-center justify-center hover:bg-elevated"
         ~ )
-        Link2(className="w-3.5 h-3.5")
+        Icon(name="link", className="w-3.5 h-3.5")
       button(
         ~ onClick={onExportImage}
         ~ className="w-7 h-7 rounded-full bg-elevated flex items-center justify-center hover:bg-elevated"
         ~ )
-        ImageIcon(className="w-3.5 h-3.5")
+        Icon(name="image", className="w-3.5 h-3.5")
   div(className="space-y-2")
     each p, idx in sortedLeaderboard key p.id
       div(className={`rounded-[14px] p-3 flex items-center gap-3 ${idx === 0 ? 'bg-gradient-to-br from-primary/20 to-primary/5' : 'bg-sunken'}`})
@@ -48,7 +48,7 @@ div(className="p-3")
             | #{p.name}
             | #{" "}
             if idx === 0
-              Trophy(className="w-3.5 h-3.5 text-primary")
+              Icon(name="trophy", className="w-3.5 h-3.5 text-primary")
           p(className="text-[11px] text-foreground/70")
             | #{p.tickets.length}
             | #{" tickets • "}

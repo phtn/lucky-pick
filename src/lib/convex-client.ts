@@ -1,7 +1,7 @@
 import { auth } from '@/lib/firebase'
 import { ConvexClient } from 'convex/browser'
+import { makeFunctionReference } from 'convex/server'
 import { onAuthStateChanged } from 'firebase/auth'
-import type { api } from '../../convex/_generated/api'
 
 const url = import.meta.env.PUBLIC_CONVEX_URL
 // Debug mode disables proof mutations at their call sites, but owner-scoped
@@ -55,12 +55,16 @@ export const subscribeToConvexAuthState = (onStoreChange: () => void) => {
 // there is nothing here for a caller to forge.
 let syncedUid: string | null = null
 
+// This client references an endpoint whose source is not present in the
+// local generated API. Use the SDK's reference constructor instead of casting
+// a string through a nonexistent generated module.
+const ensureCurrentMutation = makeFunctionReference<'mutation', Record<string, never>, unknown>('users/m:ensureCurrent')
+
 const ensureConvexUser = async () => {
   const uid = auth?.currentUser?.uid
   if (!convexClient || !uid || uid === syncedUid) return
 
   syncedUid = uid
-  const ensureCurrentMutation = 'users/m:ensureCurrent' as unknown as typeof api.users.m.ensureCurrent
 
   try {
     await convexClient.mutation(ensureCurrentMutation, {})

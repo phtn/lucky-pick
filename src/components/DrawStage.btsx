@@ -1,9 +1,7 @@
-import { Zap } from '@octanejs/lucide';
 import { useId, useState } from 'octane';
 import Ball from './Ball.btsx';
 import DrawDrum from '../DrawDrum.btsx';
 import JackpotBanner from './JackpotBanner.btsx';
-import WinnersList from './WinnersList.btsx';
 import { formatJackpot } from '../lib/format';
 import type { GameConfig } from '../lib/games';
 import { DEFAULT_DRUM_GRAVITY, MAX_DRUM_GRAVITY, MIN_DRUM_GRAVITY } from '../lib/drum-physics';
