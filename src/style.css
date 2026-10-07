@@ -1,4 +1,4 @@
-@import "./components/table/table.css";
+@import './components/table/table.css';
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap');
 @import 'tailwindcss';
 
@@ -17,8 +17,13 @@
   transition: opacity 250ms ease;
 }
 .results-dive-backdrop[data-starting-style],
-.results-dive-backdrop[data-ending-style] { opacity: 0; }
-.results-dive-viewport { display: flex; align-items: flex-end; }
+.results-dive-backdrop[data-ending-style] {
+  opacity: 0;
+}
+.results-dive-viewport {
+  display: flex;
+  align-items: flex-end;
+}
 .results-dive-popup {
   width: 100%;
   height: 88dvh;
@@ -29,11 +34,20 @@
   outline: none;
 }
 .results-dive-popup[data-starting-style],
-.results-dive-popup[data-ending-style] { transform: translateY(100%); }
-.results-dive-popup[data-swiping] { transition: none; }
-.results-dive-content { padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); }
+.results-dive-popup[data-ending-style] {
+  transform: translateY(100%);
+}
+.results-dive-popup[data-swiping] {
+  transition: none;
+}
+.results-dive-content {
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+}
 @media (min-width: 768px) {
-  .results-dive-viewport { align-items: stretch; justify-content: flex-end; }
+  .results-dive-viewport {
+    align-items: stretch;
+    justify-content: flex-end;
+  }
   .results-dive-popup {
     width: min(520px, 100%);
     height: 100dvh;
@@ -43,10 +57,15 @@
     transform: translateX(var(--drawer-swipe-movement-x, 0px));
   }
   .results-dive-popup[data-starting-style],
-  .results-dive-popup[data-ending-style] { transform: translateX(100%); }
+  .results-dive-popup[data-ending-style] {
+    transform: translateX(100%);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .results-dive-popup, .results-dive-backdrop { transition: none; }
+  .results-dive-popup,
+  .results-dive-backdrop {
+    transition: none;
+  }
 }
 
 /* Type and shape belong to the app, not the theme — only colour is themed. */
@@ -87,6 +106,7 @@
   --lp-r-panel: 30px;
   --lp-r-well: 22px;
   --lp-r-pill: 999px;
+  --mac-blue: oklch(0.603 0.218 257.42);
 }
 
 .dark {
@@ -98,6 +118,7 @@
   --lp-edge: color-mix(in oklab, white 8%, transparent);
   --lp-veil: color-mix(in oklab, white 4%, transparent);
   --lp-divider: color-mix(in oklab, white 6%, transparent);
+  --mac-blue: oklch(0.686 0.17 253.16);
 }
 
 @theme inline {
@@ -125,6 +146,7 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-mac-blue: var(--mac-blue);
 
   --color-ball: var(--lp-ball);
   --color-ball-ink: var(--lp-ball-ink);

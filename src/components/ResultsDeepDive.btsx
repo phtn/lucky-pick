@@ -29,7 +29,7 @@ component FrequencyList
                   span(className='sr-only') #{' draws, '}
                   span(className='ml-2 text-muted-foreground') #{(entry.share * 100).toFixed(1)}%
               div(aria-hidden='true' className='mt-2 h-1.5 overflow-hidden rounded-full bg-muted')
-                div(className='h-full rounded-full bg-primary' style={{ width: `${entry.share * 100}%` }})
+                div(className='h-full rounded-full bg-mac-blue' style={{ width: `${entry.share * 100}%` }})
               p(className='mt-2 text-[11px] text-muted-foreground') Last drawn #{displayDate(entry.lastSeen)}
     if entries.length
       p(className='text-xs leading-relaxed text-muted-foreground') Share is the percentage of #{draws.toLocaleString()} recorded draws containing the group. Ties are ordered by number.
