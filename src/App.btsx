@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'octane';
 import AppHeader from './components/AppHeader.btsx';
-import Analytics from './pages/Analytics.btsx';
-import { NuqsAdapter } from '@octanejs/nuqs/adapters/react';
+import { Outlet } from '@octanejs/tanstack-router';
+import { AnalyticsSessionContext } from './lib/analytics-session';
 import { usePathname } from './lib/navigation';
 import BetPanel from './components/BetPanel.btsx';
 import DrawHistory from './components/DrawHistory.btsx';
@@ -527,6 +527,9 @@ setup
     }
   },[tickets,players,mode]);
 
+  // Keep the live session available to the analytics outlet.
+  const session = useMemo(()=>({ tickets, players, draws, mode }),[tickets,players,draws,mode]);
+
   // Party mode buys for the selected player; solo buys for you.
   const buyerTag = mode === 'party' && currentPlayer ? `• ${currentPlayer.name}` : '';
   const buyerLabel = mode === 'party' ? (currentPlayer?.name ?? 'this player') : 'you';
@@ -554,29 +557,28 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
     ~ )
   if showMoneyRain
     div(className="fixed inset-0 pointer-events-none z-[90]")
-  div(className="app-frame relative z-10 w-full max-w-[1480px] mx-auto px-4 md:px-6 py-4 md:py-7 overflow-x-hidden")
-    AppHeader(
-      ~ pool={pool}
-      ~ gameName={game.name}
-      ~ game={game}
-      ~ gameId={gameId}
-      ~ jackpots={jackpots}
-      ~ isDrawing={isDrawing}
-      ~ onSwitchGame={switchGame}
-      ~ mode={mode}
-      ~ onSelectMode={selectMode}
-      ~ soundOn={soundOn}
-      ~ onToggleSound={() => setSoundOn(v => !v)}
-      ~ theme={theme}
-      ~ themeMode={themeMode}
-      ~ onToggleThemeMode={toggleMode}
-      ~ onPickTheme={pickTheme}
-      ~ onNotify={showToast}
-      ~ )
-    if pathname === "/analytics"
-      NuqsAdapter
-        Analytics(tickets={tickets} players={players} draws={draws} mode={mode})
-    else
+  div(className="app-frame relative z-10 w-full max-w-[1480px] mx-auto px-4 md:px-6 py-4 overflow-x-hidden")
+    AnalyticsSessionContext(value={session})
+      AppHeader(
+        ~ pool={pool}
+        ~ gameName={game.name}
+        ~ game={game}
+        ~ gameId={gameId}
+        ~ jackpots={jackpots}
+        ~ isDrawing={isDrawing}
+        ~ onSwitchGame={switchGame}
+        ~ mode={mode}
+        ~ onSelectMode={selectMode}
+        ~ soundOn={soundOn}
+        ~ onToggleSound={() => setSoundOn(v => !v)}
+        ~ theme={theme}
+        ~ themeMode={themeMode}
+        ~ onToggleThemeMode={toggleMode}
+        ~ onPickTheme={pickTheme}
+        ~ onNotify={showToast}
+        ~ )
+      Outlet
+    if pathname !== "/analytics"
       fragment
         LiveBoard(
           ~ game={game}

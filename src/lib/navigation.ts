@@ -1,18 +1,12 @@
-import { useSyncExternalStore } from 'octane'
+import { useRouterState } from '@octanejs/tanstack-router'
+import { analyticsRouter } from './analytics-router'
 
-const getPath = () => window.location.pathname.replace(/\/$/, '') || '/'
-const subscribe = (notify: () => void) => {
-  window.addEventListener('popstate', notify)
-  return () => window.removeEventListener('popstate', notify)
-}
-
-export const usePathname = () => useSyncExternalStore(subscribe, getPath, () => '/')
+export const usePathname = () => useRouterState({
+  select: state => state.location.pathname.replace(/\/$/, '') || '/',
+})
 
 export function navigate(path: string) {
-  if (getPath() === path) return
-  window.history.pushState(null, '', path + window.location.hash)
-  window.dispatchEvent(new PopStateEvent('popstate'))
-  window.scrollTo(0, 0)
+  void analyticsRouter.navigate({ to: path, hash: true })
 }
 
 export function followRoute(event: MouseEvent, path: string) {

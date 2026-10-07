@@ -1,0 +1,70 @@
+import { useMemo } from 'octane'
+import ResultsDrawer from './ui/results-drawer.btsx'
+import TabPanel, { TabPanelList, TabPanelTrigger, TabPanelContent } from './ui/tab-panel.btsx'
+import { analyzeResults, type NumberFrequency } from '../lib/results-analytics'
+import type { ResultDataset, ResultGame } from '../lib/results'
+
+module
+  const displayDate = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+  const displayNumber = (number: number, game: ResultGame) => game.min === 0 ? String(number) : String(number).padStart(2, '0')
+
+component FrequencyList
+  props { entries, game, draws, label }: { entries: NumberFrequency[]; game: ResultGame; draws: number; label: string }
+  div(className='space-y-4')
+    div(className='flex items-center justify-between gap-2 text-xs text-muted-foreground')
+      p Top #{Math.min(entries.length, 20)} #{label}
+      p Draws · share
+    if !entries.length
+      p(className='rounded-xl bg-muted p-5 text-sm text-muted-foreground') No recorded #{label} to analyze.
+    ol(aria-label={`Most drawn ${label}`} className='space-y-3')
+      each entry, index in entries.slice(0, 20) key entry.key
+        li(role='listitem' className='rounded-xl border border-border bg-card p-3')
+          div(className='flex items-center gap-3')
+            span(aria-hidden='true' className='w-5 shrink-0 text-xs text-muted-foreground tabular-nums') #{index + 1}
+            div(className='min-w-0 flex-1')
+              div(className='flex items-center justify-between gap-2')
+                span(className='font-mono text-sm font-semibold tabular-nums') #{entry.numbers.map(number => displayNumber(number, game)).join(' · ')}
+                span(className='shrink-0 text-xs tabular-nums')
+                  strong(className='text-sm') #{entry.draws.toLocaleString()}
+                  span(className='sr-only') #{' draws, '}
+                  span(className='ml-2 text-muted-foreground') #{(entry.share * 100).toFixed(1)}%
+              div(aria-hidden='true' className='mt-2 h-1.5 overflow-hidden rounded-full bg-muted')
+                div(className='h-full rounded-full bg-primary' style={{ width: `${entry.share * 100}%` }})
+              p(className='mt-2 text-[11px] text-muted-foreground') Last drawn #{displayDate(entry.lastSeen)}
+    if entries.length
+      p(className='text-xs leading-relaxed text-muted-foreground') Share is the percentage of #{draws.toLocaleString()} recorded draws containing the group. Ties are ordered by number.
+
+component DeepDiveContent
+  props { dataset, game }: { dataset: ResultDataset; game: ResultGame }
+  setup
+    const analytics = useMemo(() => analyzeResults(dataset.records), [dataset.records])
+  div(className='space-y-5')
+    div(className='rounded-xl bg-muted/60 p-4')
+      p(className='text-xs font-medium text-muted-foreground') #{analytics.draws.toLocaleString()} draws
+      p(className='mt-1 text-2xl font-semibold tracking-tight tabular-nums') #{game.label}
+      if analytics.firstDate && analytics.lastDate
+        p(className='mt-1 text-xs text-muted-foreground') #{displayDate(analytics.firstDate)} – #{displayDate(analytics.lastDate)}
+      if analytics.missingNumbers > 0
+        p(className='mt-2 text-xs text-muted-foreground') #{analytics.missingNumbers.toLocaleString()} records without winning numbers omitted.
+    p(className='text-xs leading-relaxed text-muted-foreground') Each number or group counts once per draw, including draws with no prize winners. This uses the full history, independent of table filters.
+    if !game.unique
+      p(className='rounded-lg border border-border p-3 text-xs leading-relaxed text-muted-foreground') Order is ignored here. Repeated numbers count only when they occur more than once in the draw. These rankings group numbers across positions.
+    TabPanel(defaultValue='singles' className='space-y-4')
+      TabPanelList(className='w-full')
+        TabPanelTrigger(value='singles' className='flex-1 px-2') Singles
+        TabPanelTrigger(value='pairs' className='flex-1 px-2') Pairs
+        TabPanelTrigger(value='triples' className='flex-1 px-2') Triples
+      TabPanelContent(value='singles')
+        FrequencyList(entries={analytics.singles} game={game} draws={analytics.draws} label='single numbers')
+      TabPanelContent(value='pairs')
+        FrequencyList(entries={analytics.pairs} game={game} draws={analytics.draws} label='pairs')
+      TabPanelContent(value='triples')
+        if game.count < 3
+          p(className='rounded-xl bg-muted p-5 text-sm text-muted-foreground') #{game.label} draws only two numbers, so triples are unavailable.
+        else
+          FrequencyList(entries={analytics.triples} game={game} draws={analytics.draws} label='triples')
+    p(className='text-xs leading-relaxed text-muted-foreground') Historical frequency does not change the odds of the next draw.
+
+props { dataset, game }: { dataset: ResultDataset; game: ResultGame }
+ResultsDrawer(trigger='Deep dive' title='Deep Dive Analytics' description='Most drawn numbers, pairs, and triples.')
+  DeepDiveContent(dataset={dataset} game={game})

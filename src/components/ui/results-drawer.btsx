@@ -1,0 +1,41 @@
+import { useSyncExternalStore, type OctaneNode } from 'octane'
+import { Drawer } from '@octanejs/base-ui/drawer'
+import { X } from '@octanejs/lucide'
+
+module
+  const DESKTOP_QUERY = '(min-width: 768px)'
+  const subscribeDesktop = (notify: () => void) => {
+    const media = window.matchMedia(DESKTOP_QUERY)
+    media.addEventListener('change', notify)
+    return () => media.removeEventListener('change', notify)
+  }
+  const getDesktop = () => window.matchMedia(DESKTOP_QUERY).matches
+  const getServerDesktop = () => false
+  interface Props {
+    trigger: string
+    title: string
+    description: string
+    children?: OctaneNode
+    open?: boolean
+    onOpenChange?: Drawer.Root.Props['onOpenChange']
+  }
+
+props { trigger, title, description, children, open, onOpenChange }: Props
+setup
+  const desktop = useSyncExternalStore(subscribeDesktop, getDesktop, getServerDesktop)
+
+Drawer.Root(open={open} onOpenChange={onOpenChange} swipeDirection={desktop ? 'right' : 'down'})
+  Drawer.Trigger(type='button' className='inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2') #{trigger}
+  Drawer.Portal
+    Drawer.Backdrop(className='results-dive-backdrop fixed inset-0 z-50 bg-black/50')
+    Drawer.Viewport(className='results-dive-viewport fixed inset-0 z-50')
+      Drawer.Popup(aria-modal='true' className='results-dive-popup flex flex-col border-border bg-background text-foreground shadow-2xl')
+        div(aria-hidden='true' className='mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-border md:hidden')
+        div(className='flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-5 sm:px-6')
+          div
+            Drawer.Title(className='text-xl font-semibold tracking-tight') #{title}
+            Drawer.Description(className='mt-1 text-sm text-muted-foreground') #{description}
+          Drawer.Close(type='button' aria-label={`Close ${trigger.toLowerCase()}`} className='inline-flex size-8 shrink-0 items-center justify-center rounded-lg hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring')
+            X(size={18} aria-hidden='true')
+        Drawer.Content(className='results-dive-content min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6')
+          | #{children}

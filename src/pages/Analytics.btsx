@@ -2,12 +2,10 @@ import { useMemo, useEffect, useRef } from 'octane'
 import { Icon } from '../lib/icons'
 import { GAMES } from '../lib/games'
 import { formatPeso } from '../lib/format'
-import { followRoute } from '../lib/navigation'
 import { summarizeSession } from '../lib/analytics'
 import type { Ticket, Player, Draw, GameMode } from '../lib/lotto'
 import TabPanel, { TabPanelList, TabPanelTrigger, TabPanelContent } from '../components/ui/tab-panel.btsx'
-import DataTable from "../components/table/ui/table/DataTable.btsx";
-import SheetTablePanel from "../components/table/sheet-table-panel.btsx";
+import ResultsPanel from '../components/ResultsPanel.btsx'
 
 props { tickets, players, draws, mode }: { tickets: Ticket[]; players: Player[]; draws: Draw[]; mode: GameMode }
 setup
@@ -25,11 +23,8 @@ setup
   ]
   const maxHits = Math.max(1, ...summary.hits.map(row => row.count))
 
-main(className="mx-auto w-full p-8 space-y-8" aria-label="Session insights")
+main(className="mx-auto w-full px-2 sm:px-4 md:px-8 lg:px-14 space-y-3" aria-label="Session insights")
   title Analytics · Lucky Pick
-  a(href="/" onClick={(event: MouseEvent) => followRoute(event, '/')} className="inline-flex items-center gap-2 rounded-lg text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring")
-    Icon(name="arrow-right" size={16} className="rotate-180")
-    | Back to play
   TabPanel(defaultValue="analytics")
     TabPanelList(aria-label="Session insights")
       TabPanelTrigger(value="analytics")
@@ -94,6 +89,4 @@ main(className="mx-auto w-full p-8 space-y-8" aria-label="Session insights")
             p(className="py-6 text-sm text-muted-foreground") No draws yet. Complete a draw to see it here.
       p(className="text-xs text-muted-foreground") Session-only analytics. Reloading the app starts a fresh session. Clearing tickets removes them from these totals. Past results do not predict future draws.
     TabPanelContent(value="results" className="space-y-8")
-      div
-        p(className="text-xs uppercase tracking-[0.2em] text-primary mb-3") Draw history
-        SheetTablePanel
+      ResultsPanel

@@ -1,6 +1,5 @@
 import { auth } from '@/lib/firebase'
 import { ConvexClient } from 'convex/browser'
-import { makeFunctionReference } from 'convex/server'
 import { onAuthStateChanged } from 'firebase/auth'
 
 const url = import.meta.env.PUBLIC_CONVEX_URL
@@ -49,36 +48,8 @@ export const subscribeToConvexAuthState = (onStoreChange: () => void) => {
   }
 }
 
-// The authenticated API routes upsert the caller's row on their way through, so
-// somebody who only ever signs in never reaches the users table. This closes
-// that gap. The mutation reads everything off the verified Convex identity, so
-// there is nothing here for a caller to forge.
-let syncedUid: string | null = null
-
-// This client references an endpoint whose source is not present in the
-// local generated API. Use the SDK's reference constructor instead of casting
-// a string through a nonexistent generated module.
-const ensureCurrentMutation = makeFunctionReference<'mutation', Record<string, never>, unknown>('users/m:ensureCurrent')
-
-const ensureConvexUser = async () => {
-  const uid = auth?.currentUser?.uid
-  if (!convexClient || !uid || uid === syncedUid) return
-
-  syncedUid = uid
-
-  try {
-    await convexClient.mutation(ensureCurrentMutation, {})
-  } catch (error) {
-    // Sign-in must not hinge on this. Clearing the guard lets the next auth
-    // change retry, and the API routes still upsert on the next request.
-    syncedUid = null
-    console.error('Failed to sync the signed-in user to Convex.', error)
-  }
-}
-
 if (convexClient && auth) {
   onAuthStateChanged(auth, (user) => {
-    if (!user) syncedUid = null
     // Reconfigure only on sign-in and sign-out. Convex owns token rotation;
     // re-registering on every Firebase token change can create refresh races.
     publishConvexAuthState({ isAuthenticated: false, isLoading: Boolean(user), userId: null })
@@ -89,10 +60,6 @@ if (convexClient && auth) {
         isLoading: false,
         userId: isAuthenticated ? (user?.uid ?? null) : null
       })
-      // Only once Convex has accepted the token does the mutation carry an
-      // identity, so the upsert waits for this callback rather than firing off
-      // the Firebase auth change.
-      if (isAuthenticated) void ensureConvexUser()
     })
   })
 }

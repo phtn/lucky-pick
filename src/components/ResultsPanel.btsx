@@ -1,0 +1,149 @@
+import { useEffect, useMemo, useState } from 'octane'
+import { parseAsStringLiteral, useQueryState } from '@octanejs/nuqs'
+import { sortFn_basic, sortFn_text, type ColumnDef } from '@octanejs/tanstack-table'
+import { RESULT_GAMES, loadResults, loadResultReportUrl, type LotteryResult, type ResultDataset, type ResultGameId } from '../lib/results'
+import { formatJackpot } from '../lib/format'
+import DataTable from './table/ui/table/DataTable.btsx'
+import SelectOctane from './table/ui/SelectOctane.btsx'
+import FilterList from './table/ui/table/hyper/FilterList.btsx'
+import ResultsDeepDive from './ResultsDeepDive.btsx'
+import ResultsImportDrawer from './ResultsImportDrawer.btsx'
+import { mergeResultHistory, watchSharedResults } from '../lib/shared-results'
+import { createHeader } from './table/ui/table/hyper/create-header'
+import type { FilterDefinition } from './table/ui/table/hyper/filter-list-config'
+import type { DataTableFilterListProps } from './table/ui/table/types'
+import type { features } from './table/ui/table/hyper/features'
+
+module
+  const GAME_IDS = RESULT_GAMES.map(game => game.id)
+  const GAME_OPTIONS = RESULT_GAMES.map(game => ({ value: game.id, label: game.label }))
+  const NO_SHARED_RESULTS: LotteryResult[] = []
+  const DATE_COLUMN: ColumnDef<typeof features, LotteryResult> = {
+    id: 'date', header: createHeader('Draw date'), accessorFn: row => row.date,
+    sortFn: sortFn_basic, filterFn: 'inDateRange', size: 180,
+  }
+  const TIME_COLUMN: ColumnDef<typeof features, LotteryResult> = {
+    id: 'time', header: createHeader('Draw time'), accessorFn: row => row.time,
+    sortFn: (a, b) => ['2PM', '5PM', '9PM'].indexOf(a.original.time!) - ['2PM', '5PM', '9PM'].indexOf(b.original.time!),
+    filterFn: 'arrHas', size: 140,
+  }
+  const RESULT_COLUMNS: Array<ColumnDef<typeof features, LotteryResult>> = [
+    {
+      id: 'numbers', header: createHeader('Winning numbers'), accessorFn: row => row.rawNumbers ?? '',
+      cell: ({ row }) => row.original.rawNumbers ?? 'Not recorded',
+      sortFn: sortFn_text, size: 260,
+    },
+    {
+      id: 'jackpot', header: createHeader('Jackpot / prize'), accessorFn: row => row.jackpotCents / 100,
+      cell: ({ row }) => formatJackpot(row.original.jackpotCents / 100),
+      sortFn: sortFn_basic, filterFn: 'inNumberRange', size: 220,
+    },
+    {
+      id: 'winners', header: createHeader('Winners'), accessorFn: row => row.winners ?? undefined,
+      cell: ({ row }) => row.original.winners?.toLocaleString() ?? 'Not recorded',
+      sortFn: sortFn_basic, filterFn: 'inNumberRange', sortUndefined: 'last', size: 140,
+    },
+  ]
+  const DAILY_COLUMNS = [DATE_COLUMN, ...RESULT_COLUMNS]
+  const TIMED_COLUMNS = [DATE_COLUMN, TIME_COLUMN, ...RESULT_COLUMNS]
+
+component ResultsFilters
+  props { columns, columnFilters, onReset }: DataTableFilterListProps<LotteryResult, typeof features>
+  setup
+    const filters: FilterDefinition[] = [
+      { id: 'date', label: 'Draw date', variant: 'date-range' },
+      ...(columns.some(column => column.id === 'time') ? [{ id: 'time', label: 'Draw time', variant: 'faceted' as const, values: ['2PM', '5PM', '9PM'] }] : []),
+      { id: 'jackpot', label: 'Jackpot / prize', variant: 'number-range', min: 0, unit: 'PHP' },
+      { id: 'winners', label: 'Winners', variant: 'number-range', min: 0, step: 1 },
+    ]
+
+  FilterList(columns={columns} columnFilters={columnFilters} onReset={onReset} filters={filters} description='Filter historical draw results.')
+
+setup
+  const [gameId, setGameId] = useQueryState('result-game', parseAsStringLiteral(GAME_IDS).withDefault('lotto'))
+  const game = RESULT_GAMES.find(item => item.id === gameId)!
+  const [loaded, setLoaded] = useState<{ game: ResultGameId; attempt: number; dataset?: ResultDataset; error?: string; reportUrl?: string } | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  const current = loaded?.game === gameId && loaded.attempt === attempt ? loaded : null
+  const csvDataset = current?.dataset
+  const [shared, setShared] = useState<{ game: ResultGameId; records: LotteryResult[]; error?: boolean } | null>(null)
+  const sharedCurrent = shared?.game === gameId ? shared : null
+  const sharedRecords = sharedCurrent?.records ?? NO_SHARED_RESULTS
+  const dataset = useMemo(() => csvDataset ? mergeResultHistory(csvDataset, sharedRecords) : undefined, [csvDataset, sharedRecords])
+  const sharedAdded = dataset && csvDataset ? dataset.records.length - csvDataset.records.length : 0
+  const loading = !csvDataset && !current?.error
+  const columns = game.timed ? TIMED_COLUMNS : DAILY_COLUMNS
+
+  useEffect(() => {
+    let active = true
+    void Promise.all([loadResults(gameId), loadResultReportUrl()])
+      .then(([dataset, reportUrl]) => {
+        if (active) setLoaded({ game: gameId, attempt, dataset, reportUrl })
+      })
+      .catch(error => {
+        if (active) setLoaded({ game: gameId, attempt, error: error instanceof Error ? error.message : 'Could not load these results.' })
+      })
+    return () => { active = false }
+  }, [gameId, attempt])
+  useEffect(() => watchSharedResults(gameId,
+    records => setShared({ game: gameId, records }),
+    () => setShared(previous => ({ game: gameId, records: previous?.game === gameId ? previous.records : [], error: true }))), [gameId, attempt])
+
+section(aria-label='Historical lottery results' className='space-y-3')
+  div(className='flex flex-wrap items-center justify-between gap-3')
+    div
+      h2(className='text-lg font-medium tracking-tight') Historical results
+      if dataset
+        p(className='mt-1 text-xs text-muted-foreground' role='status') #{dataset.records.length.toLocaleString()} records
+    div(className='flex w-full flex-wrap items-center gap-2 sm:w-auto')
+      div(className='min-w-40 flex-1 sm:w-64')
+        SelectOctane(
+          ~ aria-label='Lottery game'
+          ~ value={gameId}
+          ~ options={GAME_OPTIONS}
+          ~ onChange={(value) => void setGameId(value as ResultGameId)}
+          ~ isSearchable={false}
+          ~ isClearable={false}
+          ~ controlClassName='min-h-10!'
+          ~ )
+      if dataset
+        ResultsDeepDive(key={gameId} dataset={dataset} game={game})
+      ResultsImportDrawer
+  if !sharedCurrent
+    p(role='status' className='text-xs text-muted-foreground') Loading shared imports…
+  elseif sharedCurrent.error
+    div(role='alert' className='flex flex-wrap items-center gap-2 text-xs text-muted-foreground')
+      p Could not load shared imports. CSV history is available.
+      button(type='button' className='underline underline-offset-4' onClick={() => setAttempt(value => value + 1)}) Retry shared imports
+  elseif sharedAdded > 0
+    p(className='text-xs text-muted-foreground') Includes #{sharedAdded.toLocaleString()} draws imported online.
+  if loading
+    p(role='status' className='py-8 text-center text-sm text-muted-foreground') Loading #{game.label} results…
+  if current?.error
+    div(role='alert' className='rounded-sm border border-border p-4 text-sm space-y-3')
+      p #{current.error}
+      button(type='button' className='underline underline-offset-4' onClick={() => setAttempt(value => value + 1)}) Try again
+  if dataset
+    fragment
+      if dataset.excludedRows > 0
+        p(className='text-xs text-muted-foreground')
+          | #{dataset.excludedRows} duplicate or invalid source records excluded.
+          | #{' '}
+          a(href={current?.reportUrl} download='results-data-issues.json' className='underline underline-offset-4') Download data report
+      DataTable(
+        ~ key={gameId}
+        ~ columns={columns}
+        ~ data={dataset.records}
+        ~ title={game.label}
+        ~ showHeader={false}
+        ~ filterList={ResultsFilters}
+        ~ getRowId={(row: LotteryResult) => row.id}
+        ~ initialSorting={[{ id: 'date', desc: true }]}
+        ~ initialPageSize={100}
+        ~ pageSizes={[50, 100, 250, 500]}
+        ~ urlKeyPrefix={`results-${gameId}-`}
+        ~ rowClassName='normal-case tabular-nums'
+        ~ viewportClassName='h-[calc(100dvh-340px)] min-h-64 w-full'
+        ~ emptyTitle='No results available'
+        ~ emptyDescription='No readable draw results are available for this game.'
+        ~ )

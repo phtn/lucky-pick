@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "rsbuild dev",
-    "build": "rsbuild build",
+    "dev": "bun run results:build && rsbuild dev",
+    "build": "bun run results:build && rsbuild build",
     "preview": "rsbuild preview",
     "typecheck": "tsrx-tsc --noEmit",
     "check": "bun run typecheck && bun run build",
@@ -13,7 +13,11 @@
     "deploy:dry": "bun run build && wrangler deploy --dry-run",
     "cf:preview": "bun run build && wrangler dev",
     "icons:build": "bun scripts/build-icons.ts --svg src/lib/icons/svg --out src/lib/icons/icons.ts",
-    "icons:check": "bun scripts/build-icons.ts --svg src/lib/icons/svg --out src/lib/icons/icons.ts --check"
+    "icons:check": "bun scripts/build-icons.ts --svg src/lib/icons/svg --out src/lib/icons/icons.ts --check",
+    "results:build": "bun scripts/build-results.ts",
+    "results:check": "bun scripts/build-results.ts --check --strict",
+    "results:import": "bun scripts/import-results.ts",
+    "test": "bun test src && vitest run"
   },
   "dependencies": {
     "@beastjs/use-rng": "^0.1.25",
@@ -28,6 +32,7 @@
     "@octanejs/nuqs": "^0.1.49",
     "@octanejs/select": "0.1.9",
     "@octanejs/shadcn": "0.0.48",
+    "@octanejs/tanstack-router": "^0.2.3",
     "@octanejs/tanstack-table": "0.1.58",
     "beast-tsrx": "0.7.1",
     "clsx": "^2.1.1",
@@ -41,15 +46,21 @@
     "xlsx": "0.18.5"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
     "@octanejs/rsbuild-plugin": "0.1.58",
     "@rsbuild/core": "^2.2.11",
     "@rsbuild/plugin-tailwindcss": "^2.0.3",
     "@tsrx/typescript-plugin": "0.6.1",
-    "@types/node": "^26.6.4",
     "@types/bun": "^1.4.2",
+    "@types/node": "^26.6.4",
+    "@types/papaparse": "^5.5.2",
+    "convex-test": "^0.0.60",
+    "papaparse": "^5.7.0",
     "svgo": "^4.1.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
+    "vite": "^8.3.3",
+    "vitest": "^5.0.3",
     "wrangler": "^4.147.0"
   }
 }

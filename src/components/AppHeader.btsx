@@ -1,12 +1,13 @@
-import { Users } from '@octanejs/lucide';
 import AccountSwitcher from './AccountSwitcher.btsx';
 import GameSwitcher from './GameSwitcher.btsx';
 import { DropdownMenuItem, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator } from './ui/dropdown-menu.btsx';
 import { Icon } from '../lib/icons';
-import { followRoute } from '../lib/navigation';
 import { THEMES, type ThemeId, type ThemeMode } from '../lib/theme';
 import type { GameConfig, GameId } from '../lib/games';
 import type { GameMode } from '../lib/lotto';
+import { cn } from '../lib/utils';
+import { Link } from '@octanejs/tanstack-router';
+import { usePathname } from '../lib/navigation';
 
 module
   interface AppHeaderProps {
@@ -36,12 +37,16 @@ module
 
 component AnalyticsLink
   DropdownMenuSeparator
-  DropdownMenuItem(render={<a href="/analytics"/>} onClick={(event: MouseEvent) => followRoute(event, '/analytics')} className="gap-1 p-2 hover:bg-foreground/10!")
-    div(className="flex size-6 items-center justify-center")
-      Icon(name="columns" size={14})
-    span Analytics
+  DropdownMenuItem( className="gap-1 p-2 hover:bg-foreground/10!")
+    Link(to="/analytics" className="flex items-center gap-1")
+      div(className="flex size-6 items-center justify-center")
+        Icon(name="columns" size={14})
+      span Analytics
 
 props { pool, gameName, game, gameId, jackpots, isDrawing, onSwitchGame, mode, onSelectMode, soundOn, onToggleSound, theme, themeMode, onToggleThemeMode, onPickTheme, onNotify }: AppHeaderProps
+
+setup
+  const pathname = usePathname();
 
 header(className="app-header")
   div(className="app-header__layout")
@@ -53,17 +58,18 @@ header(className="app-header")
         span(className="brand-mark__orbit -rotate-12 scale-130 opacity-20 animate-pulse" aria-hidden="true")
         span(className="brand-mark__orbit" aria-hidden="true")
       div
-        h1(className="flex items-center gap-2 text-[22px] md:text-xl font-bold tracking-tighter leading-none")
-          span Lucky Pick
-          span(className="live-chip text-[10px] uppercase tracking-[0.18em]")
-            span(className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse")
-            | #{" Live"}
+        Link(to="/")
+          h1(className="flex items-center gap-2 text-[22px] md:text-xl font-bold tracking-tighter leading-none")
+            span Lucky Pick
+            span(className="live-chip text-[10px] uppercase tracking-[0.18em]")
+              span(className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse")
+              | #{" Live"}
         p(className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-semibold mt-1.5 flex items-center gap-2")
           span
             | #{gameName}
             | #{" • Philippines"}
 
-    div(className="app-header__games")
+    div(className={cn("app-header__games", {hidden: pathname === "/analytics"})})
       GameSwitcher(
         ~ game={game}
         ~ gameId={gameId}
@@ -73,7 +79,7 @@ header(className="app-header")
         ~ )
 
     div(className="app-header__account flex items-start gap-2")
-      AccountSwitcher(onNotify={onNotify} footer={<AnalyticsLink/>})
+      AccountSwitcher(onNotify={onNotify} footer={AnalyticsLink})
         DropdownMenuSeparator
         DropdownMenuLabel(className="font-normal text-xs text-muted-foreground opacity-80") Mode
         DropdownMenuRadioGroup(value={mode} onValueChange={(next: GameMode) => onSelectMode(next)})

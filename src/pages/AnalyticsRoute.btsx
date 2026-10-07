@@ -1,0 +1,11 @@
+import { useContext } from 'octane'
+import { NuqsAdapter } from '@octanejs/nuqs/adapters/react'
+import { AnalyticsSessionContext } from '../lib/analytics-session'
+import Analytics from './Analytics.btsx'
+
+setup
+  const session = useContext(AnalyticsSessionContext)
+  if (!session) throw new Error('Analytics requires the app session.')
+
+NuqsAdapter
+  Analytics(tickets={session.tickets} players={session.players} draws={session.draws} mode={session.mode})

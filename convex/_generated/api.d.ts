@@ -8,13 +8,21 @@
  * @module
  */
 
+import type * as csvBaseline from "../csvBaseline.js";
+import type * as resultValidators from "../resultValidators.js";
+import type * as resultsImport from "../resultsImport.js";
+
 import type {
   ApiFromModules,
   FilterApi,
   FunctionReference,
 } from "convex/server";
 
-declare const fullApi: ApiFromModules<{}>;
+declare const fullApi: ApiFromModules<{
+  csvBaseline: typeof csvBaseline;
+  resultValidators: typeof resultValidators;
+  resultsImport: typeof resultsImport;
+}>;
 
 /**
  * A utility for referencing Convex functions in your app's public API.

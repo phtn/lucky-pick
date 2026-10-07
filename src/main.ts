@@ -1,8 +1,9 @@
-import { createRoot } from 'octane'
-import App from './App.btsx'
+import { createElement, createRoot } from 'octane'
+import { RouterProvider } from '@octanejs/tanstack-router'
+import { analyticsRouter } from './lib/analytics-router'
 import './style.css'
 
 const container = document.getElementById('app')
 if (container === null) throw new Error('Missing #app container.')
 
-createRoot(container).render(App)
+createRoot(container).render(() => createElement(RouterProvider, { router: analyticsRouter }))

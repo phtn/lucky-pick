@@ -1,0 +1,147 @@
+import { useState, useSyncExternalStore } from 'octane'
+import { ConvexError } from 'convex/values'
+import { api } from '../../convex/_generated/api'
+import { convexClient, getConvexAuthState, subscribeToConvexAuthState } from '../lib/convex-client'
+import { signInWithGoogle } from '../lib/firebase/auth'
+import { MAX_IMPORT_TEXT, parseRawResults } from '../lib/results-import'
+import { RESULT_GAMES } from '../lib/results'
+import { formatJackpot } from '../lib/format'
+import type { FunctionReturnType } from 'convex/server'
+import ResultsDrawer from './ui/results-drawer.btsx'
+import Button from './ui/button.btsx'
+
+module
+  type Preview = FunctionReturnType<typeof api.resultsImport.preview>
+  type Saved = FunctionReturnType<typeof api.resultsImport.save>
+  const messageFor = (error: unknown) => error instanceof ConvexError && typeof error.data === 'string' ? error.data : error instanceof Error ? error.message : 'Could not complete the import. Please try again.'
+  const gameLabel = (id: string) => RESULT_GAMES.find(game => game.id === id)?.label ?? id
+
+setup
+  const [text, setText] = useState('')
+  const [preview, setPreview] = useState<Preview | null>(null)
+  const [saved, setSaved] = useState<Saved | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const authState = useSyncExternalStore(subscribeToConvexAuthState, getConvexAuthState, getConvexAuthState)
+  const updateText = (value: string) => {
+    setText(value)
+    setPreview(null)
+    setSaved(null)
+    setError(null)
+  }
+  const loadRaw = async () => {
+    setBusy('Loading text…')
+    setError(null)
+    try {
+      const response = await fetch('/results/raw.txt', { cache: 'no-cache' })
+      if (!response.ok) throw new Error('Could not load raw.txt.')
+      const value = await response.text()
+      if (!value.trim()) throw new Error('raw.txt is empty. Paste results below instead.')
+      parseRawResults(value)
+      updateText(value)
+    } catch (error) { setError(messageFor(error)) }
+    finally { setBusy(null) }
+  }
+  const previewImport = async () => {
+    setBusy('Checking results…')
+    setError(null)
+    setSaved(null)
+    setPreview(null)
+    try {
+      const parsed = parseRawResults(text)
+      if (!parsed.sourceRows) throw new Error('Paste at least one result row.')
+      if (parsed.issues.length) {
+        setPreview({ added: 0, skipped: parsed.duplicateRows, sourceRows: parsed.sourceRows, byGame: [], records: [], issues: parsed.issues })
+        return
+      }
+      if (!convexClient) throw new Error('Shared imports are not configured for this app.')
+      setPreview(await convexClient.query(api.resultsImport.preview, { text }))
+    } catch (error) { setError(messageFor(error)) }
+    finally { setBusy(null) }
+  }
+  const saveImport = async () => {
+    if (!convexClient || !preview || preview.issues.length || !preview.added || !authState.isAuthenticated) return
+    setBusy('Saving results…')
+    setError(null)
+    try {
+      const result = await convexClient.mutation(api.resultsImport.save, { text })
+      setSaved(result)
+      setPreview(null)
+    } catch (error) { setError(messageFor(error)) }
+    finally { setBusy(null) }
+  }
+  const signIn = async () => {
+    setBusy('Signing in…')
+    setError(null)
+    try { await signInWithGoogle() }
+    catch (error) { setError(messageFor(error)) }
+    finally { setBusy(null) }
+  }
+
+ResultsDrawer(trigger='Import results' title='Import results' description='Paste draw results to update the shared history.')
+  div(className='space-y-5')
+    p(className='text-xs leading-relaxed text-muted-foreground') New draws are saved online for everyone. Existing draws are skipped by game, date, and time.
+    div(className='space-y-2')
+      div(className='flex items-center justify-between gap-3')
+        label(htmlFor='results-import-text' className='text-sm font-medium') Raw results
+        Button(type='button' variant='outline' size='sm' disabled={Boolean(busy)} onClick={loadRaw}) Load raw.txt
+      textarea(
+        ~ id='results-import-text'
+        ~ value={text}
+        ~ onInput={(event) => updateText(event.currentTarget.value)}
+        ~ disabled={Boolean(busy)}
+        ~ maxLength={MAX_IMPORT_TEXT}
+        ~ rows={9}
+        ~ spellCheck={false}
+        ~ aria-describedby='results-import-format'
+        ~ placeholder={'Lotto 6/42\t07-35-41-37-08-11\t10/6/2026\t80,317,113.63\t0\n3D Lotto 2PM\t0-6-4\t10/6/2026\t4,500.00\t188'}
+        ~ className='w-full resize-y rounded-xl border border-border bg-muted/30 p-3 font-mono text-xs leading-relaxed focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 disabled:opacity-60'
+        ~ )
+      p(id='results-import-format' className='text-xs leading-relaxed text-muted-foreground') One draw per line: game, winning numbers, M/D/YYYY, jackpot, winners. Tabs or spaces work. Include 2PM, 5PM, or 9PM with 2D and 3D game names. Up to 500 rows per import.
+    Button(type='button' variant='outline' className='h-10 w-full' disabled={!text.trim() || Boolean(busy)} onClick={previewImport}) Preview import
+    if busy
+      p(role='status' className='text-sm text-muted-foreground') #{busy}
+    if error
+      p(role='alert' className='rounded-xl border border-destructive/40 p-3 text-sm') #{error}
+    if preview?.issues.length
+      div(role='alert' className='space-y-3 rounded-xl border border-destructive/40 p-4')
+        p(className='text-sm font-medium') Fix #{preview.issues.length} invalid #{preview.issues.length === 1 ? 'line' : 'lines'} before importing.
+        ul(className='space-y-2 text-xs leading-relaxed text-muted-foreground')
+          each issue in preview.issues key `${issue.line}-${issue.message}`
+            li Line #{issue.line}: #{issue.message}
+    elseif preview
+      div(className='space-y-4 rounded-xl border border-border p-4')
+        div(role='status')
+          p(className='text-xl font-semibold tabular-nums') #{preview.added.toLocaleString()} new #{preview.added === 1 ? 'draw' : 'draws'}
+          p(className='mt-1 text-xs text-muted-foreground') #{preview.skipped.toLocaleString()} existing or repeated draws skipped.
+        if preview.byGame.length
+          dl(className='space-y-2 text-sm')
+            each item in preview.byGame key item.game
+              div(className='flex items-center justify-between gap-3')
+                dt #{gameLabel(item.game)}
+                dd(className='font-mono tabular-nums') +#{item.added}
+        if preview.records.length
+          div(className='space-y-2 border-t border-border pt-3')
+            p(className='text-xs text-muted-foreground') First #{Math.min(10, preview.records.length)} new #{preview.records.length === 1 ? 'draw' : 'draws'}
+            ul(className='space-y-3')
+              each item in preview.records.slice(0, 10) key item.record.id
+                li(className='text-xs')
+                  p(className='font-medium') #{gameLabel(item.game)} · #{item.record.date} #{item.record.time ?? ''}
+                  p(className='mt-1 font-mono text-muted-foreground') #{item.record.rawNumbers}
+                  p(className='mt-1 text-muted-foreground') #{formatJackpot(item.record.jackpotCents / 100)} · #{item.record.winners === null ? 'Winners not recorded' : `${item.record.winners.toLocaleString()} ${item.record.winners === 1 ? 'winner' : 'winners'}`}
+        if preview.added === 0
+          p(className='text-sm text-muted-foreground') All these draws are already in the history.
+    if saved
+      div(role='status' className='rounded-xl bg-muted p-4')
+        p(className='font-medium') #{saved.added.toLocaleString()} #{saved.added === 1 ? 'draw' : 'draws'} saved for everyone.
+        p(className='mt-1 text-xs text-muted-foreground') #{saved.skipped.toLocaleString()} existing or repeated draws skipped. Results and Deep dive update automatically.
+    if !convexClient
+      p(className='text-xs text-muted-foreground') Shared imports are not configured for this app.
+    elseif authState.isLoading
+      p(role='status' className='text-xs text-muted-foreground') Checking your sign-in…
+    elseif !authState.isAuthenticated
+      div(className='space-y-3')
+        p(className='text-xs text-muted-foreground') Sign in to publish new results. Anyone can view the shared history.
+        Button(type='button' variant='outline' className='h-10 w-full' disabled={Boolean(busy)} onClick={signIn}) Sign in with Google
+    else
+      Button(type='button' className='h-10 w-full' disabled={!preview?.added || Boolean(preview?.issues.length) || Boolean(busy)} onClick={saveImport}) Save results for everyone

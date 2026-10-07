@@ -12,6 +12,43 @@
 
 @custom-variant dark (&:is(.dark *));
 
+.results-dive-backdrop {
+  opacity: calc(1 - var(--drawer-swipe-progress, 0));
+  transition: opacity 250ms ease;
+}
+.results-dive-backdrop[data-starting-style],
+.results-dive-backdrop[data-ending-style] { opacity: 0; }
+.results-dive-viewport { display: flex; align-items: flex-end; }
+.results-dive-popup {
+  width: 100%;
+  height: 88dvh;
+  border-top-width: 1px;
+  border-radius: 24px 24px 0 0;
+  transform: translateY(var(--drawer-swipe-movement-y, 0px));
+  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  outline: none;
+}
+.results-dive-popup[data-starting-style],
+.results-dive-popup[data-ending-style] { transform: translateY(100%); }
+.results-dive-popup[data-swiping] { transition: none; }
+.results-dive-content { padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); }
+@media (min-width: 768px) {
+  .results-dive-viewport { align-items: stretch; justify-content: flex-end; }
+  .results-dive-popup {
+    width: min(520px, 100%);
+    height: 100dvh;
+    border-top-width: 0;
+    border-left-width: 1px;
+    border-radius: 0;
+    transform: translateX(var(--drawer-swipe-movement-x, 0px));
+  }
+  .results-dive-popup[data-starting-style],
+  .results-dive-popup[data-ending-style] { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .results-dive-popup, .results-dive-backdrop { transition: none; }
+}
+
 /* Type and shape belong to the app, not the theme — only colour is themed. */
 @theme {
   --font-sans: 'Manrope', 'Geist', system-ui, sans-serif;
