@@ -1,0 +1,48 @@
+import { flexRender } from '@octanejs/tanstack-table'
+import { Icon, type IconName } from '../../../lib/icons/index.ts'
+import { cn } from '../../../lib/utils.ts'
+import type { HyperHeader } from './table-contract.ts'
+
+module
+  type Sorted = 'asc' | 'desc' | false
+  interface Props {
+    header: HyperHeader
+    sorted: Sorted
+  }
+
+props { header, sorted }: Props
+
+setup
+  const handleSort = () => {
+    if (!header.column.getCanSort()) return
+    header.column.toggleSorting(undefined, false)
+  }
+  const sortIcon: Record<'asc' | 'desc' | 'false', { icon: IconName; className: string }> = {
+    asc: {
+      icon: 'sort-ascending',
+      className: 'text-btable-foreground',
+    },
+    desc: {
+      icon: 'sort-descending',
+      className: 'text-btable-foreground',
+    },
+    false: {
+      icon: 'sort-caret',
+      className: 'text-btable-muted-foreground/40',
+    },
+  }
+
+fragment
+  if !header.isPlaceholder
+    if header.column.getCanSort()
+      button(
+        ~ type='button'
+        ~ className='relative flex h-full w-full cursor-pointer items-center gap-1.5 text-left select-none'
+        ~ onClick={handleSort}
+        ~ aria-label={`Sort by ${header.column.id}${sorted ? `, currently ${sorted === 'asc' ? 'ascending' : 'descending'}` : ''}`}
+        ~ )
+        span(className='min-w-0 truncate') #{flexRender(header.column.columnDef.header, header.getContext())}
+        Icon(name={sorted === 'asc' ? 'sort-ascending' : sorted === 'desc' ? 'sort-descending' : 'sort-caret'} className={cn('size-3', sortIcon[sorted || 'false'].className)})
+
+    else
+      | #{flexRender(header.column.columnDef.header, header.getContext())}

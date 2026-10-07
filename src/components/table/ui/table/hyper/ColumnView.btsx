@@ -1,0 +1,200 @@
+import { Button as BaseButton } from '@octanejs/base-ui/button'
+import { Menu } from '@octanejs/base-ui/menu'
+import type { ColumnOrderState, ColumnVisibilityState } from '@octanejs/tanstack-table'
+import { createElement, Suspense, useCallback, useMemo, useState } from 'octane'
+import { lazyComponent } from '../../../lib/component-utils.ts'
+import { Icon } from '../../../lib/icons/index.ts'
+import { cn } from '../../../lib/utils.ts'
+import { mergeColumnOrder } from './column-order.ts'
+import { getColumnHeaderText } from './filter-utils.ts'
+import type { ColumnPositionListProps, HyperViewColumn } from './table-contract.ts'
+import { isColumnVisible } from './visibility.ts'
+import Checkbox from '../../checkbox.btsx'
+
+
+module
+  // dnd-kit sits behind the reorder toggle; see `ColumnPositionList.btsx`.
+  const LazyColumnPositionList = lazyComponent<ColumnPositionListProps>(() => import('./ColumnPositionList.btsx'))
+
+  export interface ColumnViewProps {
+    cols: HyperViewColumn[]
+    columnVisibility?: ColumnVisibilityState
+    onColumnVisibilityChange?: (
+      updater: ColumnVisibilityState | ((old: ColumnVisibilityState) => ColumnVisibilityState)
+    ) => void
+    columnOrder?: ColumnOrderState
+    onColumnOrderChange?: (columnOrder: ColumnOrderState) => void
+  }
+
+  type ColumnViewTriggerProps = Parameters<typeof BaseButton>[0] & {
+    invisibleCount: number
+  }
+
+  interface ColumnVisibilityItemProps {
+    column: HyperViewColumn
+    isVisible: boolean
+    onToggle: (columnId: string, nextVisible: boolean) => void
+  }
+
+  // `cn` runs tailwind-merge. These three sets are finite and independent of any
+  // per-render value, so each is merged once at module load instead of on every
+  // render of the trigger, of the toggle, and of every row in the menu.
+  const TRIGGER_CLASS = cn(
+    'relative h-8 md:w-auto flex items-center justify-center rounded-[4px]',
+    'select-none text-btable-foreground text-sm md:space-x-1 md:px-2 gap-1 w-9',
+    'border-[1.25px] border-btable-border/50 dark:border-zinc-200/2 hover:border-orange-400',
+    'bg-zinc-200/20 dark:bg-zinc-200/8 hover:bg-orange-200/20 dark:hover:bg-btable-muted-foreground/5',
+    'data-pressed:bg-orange-200/40 data-pressed:border-orange-400 dark:data-pressed:bg-zinc-900/80 dark:data-pressed:border-zinc-200/10',
+    'active:bg-zinc-300 dark:active:bg-zinc-700/40 transition-colors duration-100',
+    'focus-visible:bg-none focus-visible:-outline-offset-1 focus-visible:outline-1',
+  )
+  const TRIGGER_CLASSES = {
+    none: TRIGGER_CLASS,
+    some: cn(TRIGGER_CLASS, 'gap-0.5 md:ps-1.5 md:pe-2 border-orange-400/60 dark:border-zinc-200/5 bg-orange-100/5 dark:bg-zinc-200/5')
+  }
+
+  const ITEM_CLASS = 'group/view rounded-xs flex h-9 items-center justify-between opacity-80 dark:bg-zinc-300/5 px-3 py-1 text-sm text-btable-foreground/80 hover:bg-btable-sand/10 dark:hover:bg-orange-100/5 dark:hover:text-btable-sand/95'
+  const ITEM_CLASSES = {
+    hidden: cn(ITEM_CLASS),
+    visible: cn(ITEM_CLASS, 'bg-transparent not-italic opacity-100 dark:bg-transparent dark:text-white')
+  }
+
+  const TOGGLE_ICON_CLASS = 'size-5 text-btable-foreground/80 transition-colors group-hover/toggle:text-btable-foreground'
+  const TOGGLE_ICON_CLASSES = {
+    off: cn(TOGGLE_ICON_CLASS),
+    on: cn(TOGGLE_ICON_CLASS, 'opacity-100 text-orange-400')
+  }
+
+component ColumnViewTrigger
+  props { invisibleCount, children, className, ...buttonProps }: ColumnViewTriggerProps
+
+  BaseButton(
+    ~ {...buttonProps}
+    ~ className={cn(invisibleCount > 0 ? TRIGGER_CLASSES.some : TRIGGER_CLASSES.none, className)}
+    ~ )
+    if invisibleCount > 0
+      span(className='min-w-6 w-6 md:-ml-0.5 grow-0 rounded-xs bg-orange-400 font-okx font-semibold text-white dark:text-white dark:bg-btable-sand/80')
+        | #{invisibleCount > 99 ? '99+' : invisibleCount}
+    else
+      Icon(name='cols' className='size-5 opacity-80')
+    span(className='hidden font-mono text-xs opacity-70 md:flex uppercase') Cols
+    | #{children}
+
+component ColumnVisibilityItem
+  props { column, isVisible, onToggle }: ColumnVisibilityItemProps
+  setup const handleCheckedChange = (value: boolean) => onToggle(column.id, value)
+
+  Menu.CheckboxItem(
+    ~ className={isVisible ? ITEM_CLASSES.visible : ITEM_CLASSES.hidden}
+    ~ checked={isVisible}
+    ~ onCheckedChange={handleCheckedChange}
+    ~ )
+    span #{getColumnHeaderText(column)}
+    // Presentational only. `Menu.CheckboxItem` already carries the role, the
+    // checked state and the keyboard behaviour; leaving this focusable put a
+    // `role="checkbox"` with `tabindex="0"` inside a `menuitemcheckbox`, which
+    // is invalid and announced the state twice. A click still reaches the item.
+    Checkbox(
+      ~ aria-hidden={true}
+      ~ tabIndex={-1}
+      ~ checked={isVisible}
+      ~ )
+
+component ColumnPositionFallback
+  div(className='grid h-16 place-items-center')
+    Icon(name='spinner-ring' className='size-4 opacity-60')
+
+props { cols, columnVisibility, onColumnVisibilityChange, columnOrder, onColumnOrderChange }: ColumnViewProps
+setup
+  const [isPositioning, setIsPositioning] = useState(false)
+  const viewState = useMemo(() => {
+    const hideableColumns = cols.filter((column) => column.getCanHide())
+    const reorderableColumnIds = hideableColumns
+      .filter((column) => !column.getIsPinned())
+      .map((column) => column.id)
+    const visibilityByColumnId = new Map(
+      hideableColumns.map((column) => [
+        column.id,
+        columnVisibility ? isColumnVisible(column.id, columnVisibility) : column.getIsVisible(),
+      ] as const),
+    )
+    const invisibleCount = hideableColumns.reduce(
+      (count, column) => count + (visibilityByColumnId.get(column.id) ? 0 : 1),
+      0,
+    )
+
+    return { hideableColumns, invisibleCount, reorderableColumnIds, visibilityByColumnId }
+  }, [cols, columnVisibility])
+  const { hideableColumns, invisibleCount, reorderableColumnIds, visibilityByColumnId } = viewState
+  const canPositionColumns = Boolean(onColumnOrderChange && reorderableColumnIds.length > 1)
+  const positioningEnabled = isPositioning && canPositionColumns
+
+  const handleToggle = useCallback(
+    (columnId: string, nextVisible: boolean) => {
+      if (onColumnVisibilityChange) {
+        onColumnVisibilityChange((old: ColumnVisibilityState) => ({
+          ...old,
+          [columnId]: nextVisible,
+        }))
+        return
+      }
+      hideableColumns.find((column) => column.id === columnId)?.toggleVisibility(nextVisible)
+    },
+    [hideableColumns, onColumnVisibilityChange],
+  )
+  const handleColumnOrderChange = useCallback(
+    (nextReorderableColumnIds: string[]) => {
+      if (!onColumnOrderChange) return
+      const currentOrder = columnOrder && columnOrder.length > 0
+        ? columnOrder
+        : cols.map((column) => column.id)
+
+      onColumnOrderChange(
+        mergeColumnOrder(currentOrder, nextReorderableColumnIds),
+      )
+    },
+    [cols, columnOrder, onColumnOrderChange],
+  )
+
+Menu.Root
+  Menu.Trigger(render={createElement(ColumnViewTrigger, { invisibleCount })})
+  Menu.Portal
+    Menu.Positioner(align='start' className='isolate z-50 outline-none' sideOffset={7})
+      Menu.Popup(className=' pt-1 select-none origin-(--transform-origin) w-64 rounded-sm border border-btable-border/80 bg-zinc-200/20 dark:bg-zinc-900/50 backdrop-blur-3xl text-origin shadow-none outline-gray-200 transition-[transform,scale,opacity] data-ending-style:scale-90 data-ending-style:opacity-0 data-starting-style:scale-90 data-starting-style:opacity-0 dark:text-zinc-200')
+        div(className='flex items-center justify-between border-b border-dashed border-btable-border px-4 py-1 font-sans text-sm')
+          span(className='font-sans text-sm text-btable-muted-foreground')
+            | #{positioningEnabled ? 'Position Columns' : 'View Options'}
+          BaseButton(
+            ~ id='column-drag-toggle'
+            ~ type='button'
+            ~ aria-label={positioningEnabled ? 'Show column visibility controls' : 'Reorder columns'}
+            ~ aria-pressed={positioningEnabled}
+            ~ disabled={!canPositionColumns}
+            ~ title={canPositionColumns
+            ~   ? positioningEnabled
+            ~     ? 'Show column visibility controls'
+            ~     : 'Reorder columns'
+            ~   : 'At least two unpinned columns are required to reorder'}
+            ~ onClick={() => setIsPositioning((current) => !current)}
+            ~ className='group/toggle flex size-7 items-center justify-center rounded-xs text-btable-muted-foreground transition-colors hover:bg-btable-muted-foreground/50 dark:hover:bg-btable-muted-foreground/10 focus-visible:outline-1 disabled:cursor-not-allowed disabled:opacity-40 -mr-2'
+            ~ )
+            Icon(
+              ~ name='arrow-right-col'
+              ~ className={positioningEnabled ? TOGGLE_ICON_CLASSES.on : TOGGLE_ICON_CLASSES.off}
+              ~ )
+
+        if positioningEnabled
+          Suspense(fallback={ColumnPositionFallback})
+            LazyColumnPositionList(
+              ~ columns={hideableColumns}
+              ~ reorderableColumnIds={reorderableColumnIds}
+              ~ onReorder={handleColumnOrderChange}
+              ~ )
+        else
+          div(className='space-y-0 p-0')
+            each column in hideableColumns key column.id
+              ColumnVisibilityItem(
+                ~ column={column}
+                ~ isVisible={visibilityByColumnId.get(column.id) ?? true}
+                ~ onToggle={handleToggle}
+                ~ )

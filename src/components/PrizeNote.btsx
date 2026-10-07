@@ -1,6 +1,6 @@
-import { ChevronDown, Sparkles } from '@octanejs/lucide';
 import { PAYOUT_RTP, type GameConfig } from '../lib/games';
 import { formatCompactPeso, formatPeso } from '../lib/format';
+import {Icon} from '@/lib/icons';
 
 module
   // How this game's pot and paytable are priced, in one paragraph.
@@ -9,9 +9,9 @@ props { game }: { game: GameConfig }
 
 details(className="collapsible rounded-[20px] bg-card")
   summary(className="flex cursor-pointer list-none items-center gap-1.5 p-4 text-[11px] font-black tracking-widest text-foreground/70")
-    Sparkles(className="w-3.5 h-3.5 text-primary")
-    span(className="flex-1") PRIZE NOTE
-    ChevronDown(className="collapsible__chevron w-3.5 h-3.5 text-muted-foreground")
+    Icon(name="sparkle" className="w-3.5 h-3.5 text-primary")
+    span(className="flex-1 select-none") PRIZE NOTE
+    Icon(name="chevron-down" className="collapsible__chevron w-3.5 h-3.5 text-muted-foreground")
   p(className="px-4 pb-4 text-[11px] leading-[1.5] text-foreground/70")
     | #{game.name}
     | #{" jackpot starts "}

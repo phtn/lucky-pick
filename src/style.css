@@ -1,3 +1,4 @@
+@import "./components/table/table.css";
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap');
 @import 'tailwindcss';
 
@@ -262,7 +263,7 @@
     'games games';
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px 16px;
+  gap: 10px 16px;
 }
 
 .app-header__brand {
@@ -964,7 +965,7 @@
     color-mix(in oklab, var(--primary) 82%, black) 100%
   );
   box-shadow:
-    0 14px 40px var(--lp-glow-soft),
+    0 10px 20px var(--lp-glow-soft),
     inset 0 1px 0 rgba(255, 255, 255, 0.85);
   font-size: clamp(18px, 2vw, 22px);
   font-weight: 800;
@@ -978,7 +979,7 @@
 .draw-cta:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 20px 56px var(--lp-glow),
+    0 10px 18px var(--lp-glow),
     inset 0 1px 0 rgba(255, 255, 255, 0.85);
   filter: brightness(1.05);
 }

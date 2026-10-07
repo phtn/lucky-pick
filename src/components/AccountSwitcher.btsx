@@ -12,6 +12,7 @@ module
     onNotify?: (message: string) => void
     /** App settings rendered inside this menu, below the account rows. */
     children?: unknown
+    footer?: unknown
   }
 
   interface AccountItem {
@@ -45,7 +46,7 @@ module
     return error instanceof Error ? error.message : 'Sign-in failed. Please try again.'
   }
 
-props { onNotify, children }: AccountSwitcherProps
+props { onNotify, children, footer }: AccountSwitcherProps
 
 setup
   const { user, isLoading, authError } = useFirebaseUser()
@@ -104,7 +105,7 @@ setup
   const emptyLabel = isFirebaseConfigured ? 'Sign in' : 'Auth off'
 
 if !isFirebaseConfigured
-  Switcher(items={[]} title={title} activeId={null} emptyLabel={emptyLabel} icon='key' children={children})
+  Switcher(items={[]} title={title} activeId={null} emptyLabel={emptyLabel} icon='key' children={children} footer={footer})
 else
   Switcher(
     ~ items={items}
@@ -119,4 +120,5 @@ else
     ~ onCreate={() => void startSignIn()}
     ~ actions={actions}
     ~ children={children}
+    ~ footer={footer}
     ~ )

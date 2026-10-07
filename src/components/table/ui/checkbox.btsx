@@ -1,0 +1,15 @@
+import type {ClassValue} from 'octane'
+import { Checkbox as CheckboxPrimitive } from '@octanejs/base-ui/checkbox'
+import { Icon } from '../lib/icons/index.ts'
+import { cn } from '../lib/utils.ts'
+
+
+props { animateIn='zoom',indicatorClass, iconClass, className, ...props }: CheckboxPrimitive.Root.Props & {animateIn?: 'slide-top' | 'zoom',  indicatorClass?: ClassValue, iconClass?: ClassValue}
+
+fragment
+  CheckboxPrimitive.Root(
+    ~ data-slot='checkbox'
+    ~ className={cn('peer relative flex h-4 w-4.5 shrink-0 items-center justify-center rounded-[2px] border border-btable-input transition-shadow outline-none group-has-disabled/field:opacity-50 after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-btable-ring focus-visible:ring-[3px] focus-visible:ring-btable-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-btable-destructive aria-invalid:ring-[3px] aria-invalid:ring-btable-destructive/20 aria-invalid:aria-checked:border-btable-primary dark:bg-btable-input/30 dark:aria-invalid:border-btable-destructive/50 dark:aria-invalid:ring-btable-destructive/40 data-checked:border-btable-primary/80 data-checked:bg-btable-primary/80 data-checked:text-btable-primary-foreground dark:data-checked:bg-btable-primary/80', className)}
+    ~ {...props})
+    CheckboxPrimitive.Indicator(data-slot='checkbox-indicator' className={cn('grid place-content-center text-current transition-none [&>svg]:size-3.5', indicatorClass)})
+      Icon(name='check' size={16} className={cn('animate-in zoom-in duration-180 transition-all ease-out', {'slide-in-from-top': animateIn === 'slide-top'}, iconClass)})

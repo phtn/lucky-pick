@@ -1,5 +1,5 @@
-import { ChevronDown, Clock } from '@octanejs/lucide';
 import type { Draw } from '../lib/lotto';
+import {Icon} from '@/lib/icons';
 
 module
   // The last few draws of this session, newest first, across all games.
@@ -8,11 +8,11 @@ props { draws }: { draws: Draw[] }
 
 details(className="collapsible rounded-[18px] bg-sunken")
   summary(className="flex cursor-pointer list-none items-center gap-1.5 p-4 text-[11px] font-black tracking-widest")
-    Clock(className="w-3.5 h-3.5 text-primary")
-    span(className="flex-1") DRAW HISTORY
-    span(className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-elevated")
+    Icon(name='clock' className="w-3.5 h-3.5 text-primary")
+    span(className="flex-1 select-none") DRAW HISTORY
+    span(className="flex items-center justify-center aspect-square size-6 rounded-full bg-elevated/40 text-xs font-bold")
       | #{draws.length}
-    ChevronDown(className="collapsible__chevron w-3.5 h-3.5 text-muted-foreground")
+    Icon(name='chevron-down' className="collapsible__chevron w-3.5 h-3.5 text-muted-foreground")
   if draws.length === 0
     p(className="px-4 pb-4 text-[12px] text-muted-foreground/70 text-center")
       | No draws yet — hit START DRAW

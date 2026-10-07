@@ -1,0 +1,171 @@
+import SelectBase, { mergeStyles } from '@octanejs/select'
+import type { ClassNamesConfig, Props, SingleValue, StylesConfig } from '@octanejs/select'
+import { cn } from '../lib/utils.ts'
+
+module
+  export type Option = {
+    value: string
+    label: string
+    /** Optional metadata available to custom option renderers. */
+    color?: string
+  }
+
+  /**
+   * A single-select over plain string values: `value` and `onChange` speak
+   * strings, and the underlying option objects stay internal to this wrapper.
+   */
+  export type SelectOctaneProps = Omit<Props<Option, false>, 'onChange' | 'options' | 'value'> & {
+    className?: string
+    chevronClassName?: string
+    /** Lets the user commit typed text that is not among `options`. */
+    controlClassName?: string
+    menuClassName?: string
+    menuItemClassName?: string
+    onChange: (value: string) => void
+    options: readonly Option[]
+    value: string
+  }
+
+  /** The shape the per-part callbacks actually receive; the package types it as `unknown`. */
+  interface PartState {
+    isDisabled?: boolean
+    isFocused?: boolean
+    isSelected?: boolean
+  }
+
+  /**
+   * Rendered with `unstyled`, which strips Emotion's default (light-themed)
+   * chrome but keeps the layout primitives — the flex control, the grid-sized
+   * input, absolute menu positioning — so these classes only supply the theme.
+   */
+  const DEFAULT_CLASS_NAMES: ClassNamesConfig<Option, false> = {
+    container: () => 'relative z-50',
+    control: (props) => {
+      const state = props as PartState
+      return cn(
+        'flex min-h-12 cursor-pointer items-center gap-1 rounded-[4px] border-btable-input/50 bg-btable-border/20 px-2 text-sm text-btable-foreground transition-colors hover:bg-btable-border/10!',
+        state.isFocused && 'bg-btable-border/25! dark:bg-btable-sidebar/80!',
+        state.isDisabled && 'cursor-not-allowed opacity-50'
+      )
+    },
+    valueContainer: () => 'flex min-w-0 flex-1 flex-wrap items-center gap-1',
+    singleValue: () => 'truncate text-btable-foreground',
+    placeholder: () => 'truncate text-btable-muted-foreground',
+    input: () => 'text-btable-foreground',
+    indicatorsContainer: () => 'flex shrink-0 items-center',
+    // Emotion keeps a 1px stretched spacer here even when unstyled.
+    indicatorSeparator: () => 'hidden',
+    dropdownIndicator: () =>
+      'flex items-center px-1 text-btable-muted-foreground transition-colors hover:text-btable-foreground [&_svg]:size-4',
+    clearIndicator: () =>
+      'flex items-center px-1 text-btable-muted-foreground transition-colors hover:text-btable-foreground [&_svg]:size-4',
+    menu: () =>
+      'mt-1 overflow-hidden rounded-[4px] border border-btable-border/65 bg-btable-popover text-btable-popover-foreground shadow-lg',
+    menuList: () => 'max-h-60 overflow-y-auto p-0',
+    option: (props) => {
+      const state = props as PartState
+      return cn(
+        'cursor-pointer select-none px-2 py-1.5 text-sm',
+        state.isFocused && 'bg-btable-sidebar/60 text-btable-accent-foreground',
+        state.isSelected && 'bg-btable-active! text-white',
+        state.isDisabled && 'pointer-events-none opacity-50'
+      )
+    },
+    groupHeading: () => 'px-2 py-1 text-xs uppercase tracking-wide text-btable-muted-foreground',
+    noOptionsMessage: () => 'px-2 py-1.5 text-sm text-btable-muted-foreground',
+    loadingMessage: () => 'px-2 py-1.5 text-sm text-btable-muted-foreground',
+    multiValue: () => 'flex items-center gap-1 rounded-[4px] bg-btable-muted px-1.5 py-0.5 text-xs',
+    multiValueLabel: () => 'truncate',
+    multiValueRemove: () => 'cursor-pointer rounded-[2px] px-0.5 hover:bg-btable-destructive/20 hover:text-btable-destructive'
+  }
+
+  /**
+   * Emotion still emits these three properties under `unstyled`, and a utility
+   * class can't reliably outrank a generated one, so they are set as styles.
+   */
+  const DEFAULT_STYLES: StylesConfig<Option, false> = {
+    menu: (base) => ({ ...base, zIndex: 50 }),
+    menuPortal: (base) => ({ ...base, zIndex: 60 }),
+    option: (base) => ({ ...base, cursor: 'pointer' })
+  }
+
+  /**
+   * Per-part overrides append to the defaults rather than replacing them, so a
+   * call site adds to the theme instead of restating it. `cn` does not resolve
+   * conflicting Tailwind utilities, so an override that fights a default (say a
+   * different `bg-`) is decided by stylesheet order, not by argument order.
+   */
+  const mergeClassNames = (
+    overrides?: ClassNamesConfig<Option, false>,
+    chevronClassName?: string,
+    controlClassName?: string,
+    menuClassName?: string,
+    menuItemClassName?: string
+  ): ClassNamesConfig<Option, false> => {
+    if (!overrides && !chevronClassName && !controlClassName && !menuClassName && !menuItemClassName) return DEFAULT_CLASS_NAMES
+
+    const merged: ClassNamesConfig<Option, false> = { ...DEFAULT_CLASS_NAMES }
+
+    if (overrides) {
+      for (const key of Object.keys(overrides) as (keyof ClassNamesConfig<Option, false>)[]) {
+        const base = DEFAULT_CLASS_NAMES[key]
+        const override = overrides[key]
+        merged[key] = (props) => cn(base?.(props), override?.(props))
+      }
+    }
+
+    if (controlClassName) {
+      const control = merged.control
+      merged.control = (props) => cn(control?.(props), controlClassName)
+    }
+
+    if (chevronClassName) {
+      const dropdownIndicator = merged.dropdownIndicator
+      merged.dropdownIndicator = (props) => cn(dropdownIndicator?.(props), chevronClassName)
+    }
+
+    if (menuClassName) {
+      const menu = merged.menu
+      merged.menu = (props) => cn(menu?.(props), menuClassName)
+    }
+
+    if (menuItemClassName) {
+      const option = merged.option
+      merged.option = (props) => cn(option?.(props), menuItemClassName)
+    }
+
+    return merged
+  }
+
+
+props {
+  ~ className,
+  ~ classNames,
+  ~ chevronClassName,
+  ~ controlClassName,
+  ~ menuClassName,
+  ~ menuItemClassName,
+  ~ onChange,
+  ~ options,
+  ~ styles,
+  ~ unstyled = true,
+  ~ value,
+  ~ ...selectProps}: SelectOctaneProps
+
+setup
+  const selectedOption = options.find((option) => option.value === value) ?? null
+  const handleChange = (option: SingleValue<Option>) => onChange(option?.value ?? '')
+  const resolvedClassNames = mergeClassNames(classNames, chevronClassName, controlClassName, menuClassName, menuItemClassName)
+  const resolvedStyles = styles ? mergeStyles(DEFAULT_STYLES, styles) : DEFAULT_STYLES
+
+
+SelectBase(
+  ~ {...selectProps}
+  ~ className={className}
+  ~ classNames={resolvedClassNames}
+  ~ onChange={handleChange}
+  ~ options={options}
+  ~ styles={resolvedStyles}
+  ~ unstyled={unstyled}
+  ~ value={selectedOption}
+  ~ )

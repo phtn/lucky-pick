@@ -1,0 +1,83 @@
+/* Namespaced palette, available to the viewer and its portaled controls. */
+@import "tw-animate-css";
+@source "./";
+@theme inline {
+  --color-btable-accent: var(--btable-accent);
+  --color-btable-accent-foreground: var(--btable-accent-foreground);
+  --color-btable-active: var(--btable-active);
+  --color-btable-background: var(--btable-background);
+  --color-btable-border: var(--btable-border);
+  --color-btable-brand: var(--btable-brand);
+  --color-btable-destructive: var(--btable-destructive);
+  --color-btable-foreground: var(--btable-foreground);
+  --color-btable-input: var(--btable-input);
+  --color-btable-mist: var(--btable-mist);
+  --color-btable-muted: var(--btable-muted);
+  --color-btable-muted-foreground: var(--btable-muted-foreground);
+  --color-btable-popover: var(--btable-popover);
+  --color-btable-popover-foreground: var(--btable-popover-foreground);
+  --color-btable-primary: var(--btable-primary);
+  --color-btable-primary-foreground: var(--btable-primary-foreground);
+  --color-btable-ring: var(--btable-ring);
+  --color-btable-sand: var(--btable-sand);
+  --color-btable-sidebar: var(--btable-sidebar);
+  --color-btable-sidebar-border: var(--btable-sidebar-border);
+  --color-btable-soft: var(--btable-soft);
+  --color-btable-sunken: var(--btable-sunken);
+  --color-btable-surface: var(--btable-surface);
+  --color-btable-table-head: var(--btable-table-head);
+}
+
+:root, .beast-table {
+  --btable-accent: oklch(0.96 0 0);
+  --btable-accent-foreground: oklch(0.2 0 0);
+  --btable-active: oklch(0.55 0.2 265);
+  --btable-background: oklch(1 0 0);
+  --btable-border: oklch(0.88 0 0);
+  --btable-brand: oklch(0.55 0.2 265);
+  --btable-destructive: oklch(0.55 0.22 25);
+  --btable-foreground: oklch(0.2 0 0);
+  --btable-input: oklch(0.85 0 0);
+  --btable-mist: oklch(0.96 0 0);
+  --btable-muted: oklch(0.96 0 0);
+  --btable-muted-foreground: oklch(0.48 0 0);
+  --btable-popover: oklch(1 0 0);
+  --btable-popover-foreground: oklch(0.2 0 0);
+  --btable-primary: oklch(0.3 0 0);
+  --btable-primary-foreground: white;
+  --btable-ring: oklch(0.55 0.2 265);
+  --btable-sand: oklch(0.96 0 0);
+  --btable-sidebar: oklch(0.96 0 0);
+  --btable-sidebar-border: oklch(0.88 0 0);
+  --btable-soft: oklch(0.2 0 0);
+  --btable-sunken: oklch(0.96 0 0);
+  --btable-surface: oklch(0.96 0 0);
+  --btable-table-head: oklch(0.96 0 0);
+}
+
+.dark, .dark .beast-table, .beast-table.dark {
+  --btable-accent: oklch(0.22 0 0);
+  --btable-accent-foreground: oklch(0.97 0 0);
+  --btable-active: oklch(0.75 0.15 265);
+  --btable-background: oklch(0.145 0 0);
+  --btable-border: oklch(0.35 0 0);
+  --btable-brand: oklch(0.75 0.15 265);
+  --btable-destructive: oklch(0.7 0.19 25);
+  --btable-foreground: oklch(0.97 0 0);
+  --btable-input: oklch(0.4 0 0);
+  --btable-mist: oklch(0.22 0 0);
+  --btable-muted: oklch(0.22 0 0);
+  --btable-muted-foreground: oklch(0.72 0 0);
+  --btable-popover: oklch(0.145 0 0);
+  --btable-popover-foreground: oklch(0.97 0 0);
+  --btable-primary: oklch(0.92 0 0);
+  --btable-primary-foreground: oklch(0.2 0 0);
+  --btable-ring: oklch(0.75 0.15 265);
+  --btable-sand: oklch(0.22 0 0);
+  --btable-sidebar: oklch(0.22 0 0);
+  --btable-sidebar-border: oklch(0.35 0 0);
+  --btable-soft: oklch(0.97 0 0);
+  --btable-sunken: oklch(0.22 0 0);
+  --btable-surface: oklch(0.22 0 0);
+  --btable-table-head: oklch(0.22 0 0);
+}

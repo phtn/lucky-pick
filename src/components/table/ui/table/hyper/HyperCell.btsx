@@ -1,0 +1,83 @@
+import { cn } from '../../../lib/utils.ts'
+import { flexRender, type Cell } from '@octanejs/tanstack-table'
+import type { OctaneNode } from 'octane'
+import { getPinnedColumnStyle } from './column-pinning.ts'
+import type { DefaultColumnPinningPosition, PinnedColumnLayout } from './column-pinning.ts'
+import type { HyperCellModel } from './table-contract.ts'
+
+module
+  export interface HyperCellProps {
+    cell: HyperCellModel
+    /** The owning row is selected, active, editing, or selectable. Tints the cell in dark mode. */
+    isEmphasized: boolean
+    /** False while the column is hidden. The cell stays mounted so the colgroup width can animate out. */
+    isVisible: boolean
+    pinnedColumnLayout?: PinnedColumnLayout
+  }
+
+  const CELL_CLASS = 'overflow-hidden p-0 border-b-2 border-r border-btable-table-head first:border-l-0 last:border-r-0 bg-btable-surface'
+  const CELL_PINNED_CLASS = 'sticky z-10 border-r-0 bg-btable-table-head/50 backdrop-blur-3xl transition-[inset-inline-start,inset-inline-end] duration-200 ease-out motion-reduce:transition-none'
+  const CELL_EMPHASIZED_CLASS = 'dark:bg-btable-background/10'
+  const CELL_HIDDEN_CLASS = 'pointer-events-none'
+
+  const CONTENT_CLASS = 'min-w-0 overflow-hidden py-3 ps-4 transition-all duration-180 ease-out motion-reduce:transition-none origin-left'
+  const CONTENT_HIDDEN_CLASS = `${CONTENT_CLASS} opacity-0 scale-50`
+  const CONTENT_VISIBLE_CLASS = `${CONTENT_CLASS} opacity-100 scale-100`
+
+  const CELL_BOUNDARY_CLASSES = {
+    start: 'border-btable-sidebar-border',
+    end: 'border-l'
+  } as const satisfies Record<DefaultColumnPinningPosition, string>
+
+  // `cn` runs tailwind-merge, which is far too costly to repeat for every cell of
+  // every row on every render. The cell has at most 24 distinct appearances, so
+  // each one is merged the first time it is asked for and served from here after.
+  const cellClassNames = new Map<string, string>()
+
+  const getCellClassName = (layout: PinnedColumnLayout | undefined, isEmphasized: boolean, isVisible: boolean) => {
+    const position = layout?.position
+    const isBoundary = layout?.isBoundary === true
+    const cacheKey = `${position ?? 'unpinned'}:${isBoundary}:${isEmphasized}:${isVisible}`
+    const cached = cellClassNames.get(cacheKey)
+    if (cached !== undefined) return cached
+
+    const className = cn(
+      CELL_CLASS,
+      position && CELL_PINNED_CLASS,
+      position && isBoundary && CELL_BOUNDARY_CLASSES[position],
+      !position && isEmphasized && CELL_EMPHASIZED_CLASS,
+      !isVisible && CELL_HIDDEN_CLASS
+    )
+    cellClassNames.set(cacheKey, className)
+
+    return className
+  }
+
+  // The library's `FlexRender` component cannot be used here: its props demand a
+  // nominal `Cell<TFeatures, …>`, which no feature-agnostic type satisfies. This
+  // is its cell branch verbatim, over `flexRender`, which is permissive.
+  const renderCellContent = (cell: HyperCellModel): OctaneNode => {
+    const columnDef = cell.column.columnDef
+    if (cell.getIsAggregated?.()) return flexRender(columnDef.aggregatedCell ?? columnDef.cell, cell.getContext())
+    if (cell.getIsPlaceholder?.()) return null
+
+    return flexRender(columnDef.cell, cell.getContext())
+  }
+
+props { cell, isEmphasized, isVisible, pinnedColumnLayout }: HyperCellProps
+
+setup
+  const pinnedPosition = pinnedColumnLayout?.position
+  const cellClassName = getCellClassName(pinnedColumnLayout, isEmphasized, isVisible)
+  const cellStyle = getPinnedColumnStyle(pinnedColumnLayout)
+  const contentClassName = isVisible ? CONTENT_VISIBLE_CLASS : CONTENT_HIDDEN_CLASS
+
+td(
+  ~ aria-hidden={!isVisible}
+  ~ data-column-visible={isVisible}
+  ~ data-column-pinned={pinnedPosition}
+  ~ inert={!isVisible}
+  ~ style={cellStyle}
+  ~ className={cellClassName}
+  ~ )
+  div(className={contentClassName}) #{renderCellContent(cell)}

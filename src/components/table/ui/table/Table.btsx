@@ -1,0 +1,19 @@
+import type { ClassValue } from 'octane'
+import type { JSX } from 'octane/jsx-runtime'
+
+module
+  type NativeTableProps = JSX.IntrinsicElements['table']
+
+  type Props = Omit<NativeTableProps, 'class' | 'className'> & {
+    className?: ClassValue
+  }
+
+  const baseClassName = 'w-full table-auto border-separate border-spacing-0 whitespace-nowrap'
+
+props { children, className, ...tableProps }: Props
+
+table(
+  ~ {...tableProps}
+  ~ className={[baseClassName, className]}
+  ~ )
+  | #{children}

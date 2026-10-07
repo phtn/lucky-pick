@@ -1,0 +1,61 @@
+import { Menu } from '@octanejs/base-ui/menu'
+import { createElement, type ClassValue } from 'octane'
+import { Icon } from '../../../lib/icons/index.ts'
+import { cn } from '../../../lib/utils.ts'
+import { getColumnHeaderText } from './filter-utils.ts'
+import type { ColumnPositionListProps } from './table-contract.ts'
+import Sortable, { SortableContent, SortableItem, SortableOverlay } from './sortable.btsx'
+
+module
+  // The reorder list is the only dnd-kit consumer in the table toolbar, and it
+  // shows only after the column menu's reorder toggle. `ColumnView` loads this
+  // module lazily so opening a table does not pay for drag and drop.
+  type Props = ColumnPositionListProps
+
+props { columns, reorderableColumnIds, onReorder }: Props
+setup
+  const renderColumnOverlay = ({ value }: { value: string | number }) => {
+    const column = columns.find((candidate) => candidate.id === String(value))
+    return createElement(
+      'div',
+      {
+        className: cn(
+          'flex ml-1 h-8 w-[244px] items-center rounded-xs border border-btable-input/70',
+          'bg-btable-background px-3 text-sm text-btable-foreground shadow-md',
+        ),
+      },
+      column ? getColumnHeaderText(column) : String(value),
+    )
+  }
+Sortable(value={reorderableColumnIds} onValueChange={onReorder})
+  SortableContent(render={createElement('div', {className: 'space-y-0 p-0' as ClassValue})})
+    each column in columns key column.id
+      if Boolean(column.getIsPinned())
+        Menu.Item(
+          ~ disabled
+          ~ closeOnClick={false}
+          ~ title='Pinned columns keep their pinned position'
+          ~ className='flex h-8 items-center justify-between bg-zinc-200/20 ps-3 pe-2 text-sm text-btable-foreground/80 opacity-60 dark:bg-zinc-300/5'
+          ~ )
+          span #{getColumnHeaderText(column)}
+      else
+        SortableItem(
+          ~ value={column.id}
+          ~ asHandle
+          ~ render={createElement(Menu.Item, {
+          ~   closeOnClick: false,
+          ~   title: `Drag ${getColumnHeaderText(column)} to reposition it`,
+          ~   className: 'group/drag flex h-8 items-center justify-between rounded-xs bg-transparent ps-3 pe-1 text-sm text-btable-foreground opacity-100 hover:bg-btable-sand/10 dark:text-white dark:hover:bg-btable-sand/2 dark:hover:text-btable-sand/95',
+          ~ })}
+          ~ )
+          span #{getColumnHeaderText(column)}
+
+          Icon(
+            ~ name='draggable'
+            ~ className='size-5 opacity-60 group-hover/drag:opacity-100 group-hover/drag:text-btable-muted-foreground dark:group-hover/drag:text-orange-200'
+            ~ )
+  SortableOverlay(
+    ~ className='pointer-events-none z-60'
+    ~ dropAnimation={null}
+    ~ children={renderColumnOverlay}
+    ~ )

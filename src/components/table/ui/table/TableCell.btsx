@@ -1,0 +1,19 @@
+import type { JSX } from 'octane/jsx-runtime'
+import { cn } from '../../lib/utils.ts';
+
+module
+  type NativeTableCellProps = JSX.IntrinsicElements['td']
+
+  type Props = Omit<NativeTableCellProps, 'class' | 'className'> & {
+    className?: NativeTableCellProps['className']
+  }
+
+  const baseClassName = 'h-[50px] overflow-hidden border-b border-btable-table-head px-4 py-2'
+
+props { children, className, ...cellProps }: Props
+
+td(
+  ~ {...cellProps}
+  ~ className={cn(baseClassName, className)}
+  ~ )
+  | #{children}

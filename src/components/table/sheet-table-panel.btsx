@@ -1,0 +1,255 @@
+import { createElement, useId, useMemo, useRef, useState } from 'octane'
+import { sortFn_alphanumeric, type ColumnDef } from '@octanejs/tanstack-table'
+import { parseAsString, useQueryStates } from '@octanejs/nuqs'
+import DataTable from './ui/table/DataTable.btsx'
+import SelectOctane from './ui/SelectOctane.btsx'
+import FilterList from './ui/table/hyper/FilterList.btsx'
+import type { FilterDefinition } from './ui/table/hyper/filter-list-config.ts'
+import type { DataTableFilterListProps } from './ui/table/types.ts'
+import type { features } from './ui/table/hyper/features.ts'
+import { Button } from './ui/index.ts'
+import { Icon, type IconName } from './lib/icons/index.ts'
+import { cn } from './lib/utils.ts'
+import { loadSheetDocument, loadGoogleSheetDocument, type SheetDocument } from './lib/sheets.ts'
+import { createHeader } from './ui/table/hyper/create-header.ts'
+import { getColumnHeaderText } from './ui/table/hyper/filter-utils.ts'
+
+module
+  type SheetRow = string[]
+
+  // Clear only this viewer's URL state when a new local dataset is accepted.
+  const SHEET_QUERY_PARSERS = Object.fromEntries(
+    ['q', 'page', 'size', 'sort', 'desc', 'filters', 'visibility', 'order', 'widths']
+      .map((key) => [`sheet-${key}`, parseAsString]),
+  )
+
+  const ACCEPT = '.csv,.tsv,.txt,.md,.markdown,.xls,.xlsx,.xlsm,.xlsb,.ods,.psv,.ssv,.list'
+  const PAGE_SIZES = [50, 100, 250]
+
+  const getSheetPresentation = (source: string): { title: string; icon: IconName } => {
+    if (/^https?:\/\//i.test(source)) return { title: 'Google Sheets', icon: 'sheets' }
+    const extension = source.match(/\.([^.]+)$/)?.[1]?.toLowerCase() ?? ''
+    const icon = extension === 'csv' ? 'csv'
+      : ['xls', 'xlsx', 'xlsm', 'xlsb', 'ods'].includes(extension) ? 'xlsx'
+      : 'grid'
+    const title = source.replace(/\.(csv|tsv|txt|md|markdown|xls|xlsx|xlsm|xlsb|ods|psv|ssv|list)$/i, '').trim()
+    return { title: title || 'Untitled sheet', icon }
+  }
+
+  const inputClass = 'h-10 w-full rounded-sm border border-btable-border/60 bg-btable-background px-3 text-sm'
+  const subtleButton = 'inline-flex h-8 shrink-0 items-center rounded-full px-1 md:px-2 font-mono text-[10px] uppercase tracking-wider text-btable-muted-foreground transition-colors hover:border-btable-active/40 hover:bg-btable-active/10 hover:text-btable-active disabled:opacity-50'
+
+  const buildColumns = (names: string[]): Array<ColumnDef<typeof features, SheetRow>> =>
+    names.map((name, index) => ({
+      id: `col-${index}`,
+      header: createHeader(name),
+      accessorFn: (row) => row[index] ?? '',
+      sortFn: sortFn_alphanumeric,
+      filterFn: 'arrHas',
+      size: 200,
+      minSize: 80
+    }))
+
+component SheetFilters
+  props { columns, columnFilters, onReset }: DataTableFilterListProps<SheetRow, typeof features>
+  setup
+    const filters: FilterDefinition[] = columns.map((column) => ({
+      id: column.id,
+      label: getColumnHeaderText(column),
+      variant: 'faceted',
+    }))
+
+  FilterList(columns={columns} columnFilters={columnFilters} onReset={onReset} filters={filters} description='Filter sheet columns by their values.')
+
+setup
+  const [sheetDocument, setSheetDocument] = useState<SheetDocument | null>(null)
+  const [activeSheetIndex, setActiveSheetIndex] = useState(0)
+  const sheet = sheetDocument?.sheets[activeSheetIndex] ?? null
+  const [sourceName, setSourceName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
+  const [url, setUrl] = useState('')
+  const [sheetVersion, setSheetVersion] = useState(0)
+  const [, resetSheetQuery] = useQueryStates(SHEET_QUERY_PARSERS)
+  const dragDepth = useRef(0)
+  const fileInput = useRef<HTMLInputElement | null>(null)
+  const urlInputId = useId()
+
+  const columns = useMemo(() => buildColumns(sheet?.columns ?? []), [sheet])
+  const data = sheet?.rows ?? []
+  const sheetPresentation = getSheetPresentation(sourceName)
+  const worksheetOptions = sheetDocument?.sheets.map((tab, index) => ({ value: String(index), label: tab.name })) ?? []
+
+  const sheetSummary = sheet ? createElement('p', {
+    className: 'm-0 text-xs text-btable-muted-foreground',
+  }, `${sheet.columns.length} columns · ${sheet.totalRows} rows${sheet.truncated ? ` · showing first ${sheet.rows.length}` : ''}`) : null
+
+  const acceptSheet = async (next: SheetDocument, name: string) => {
+    await resetSheetQuery(null)
+    setSheetDocument(next)
+    setActiveSheetIndex(0)
+    setSheetVersion((version) => version + 1)
+    setSourceName(name)
+    setError(null)
+  }
+
+  const selectSheet = async (index: number) => {
+    if (index === activeSheetIndex || loading) return
+    setLoading(true)
+    try {
+      await resetSheetQuery(null)
+      setActiveSheetIndex(index)
+      setSheetVersion((version) => version + 1)
+      setError(null)
+    } catch {
+      setError('Could not switch worksheets. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleFile = async (file: File | undefined) => {
+    if (!file || loading) return
+    setLoading(true)
+    setError(null)
+    try {
+      await acceptSheet(await loadSheetDocument(file), file.name)
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not read that file.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const pickFile = () => fileInput.current?.click()
+  const handleInputChange = (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement
+    void handleFile(input.files?.[0])
+    input.value = ''
+  }
+  const handleDragEnter = (event: Event) => {
+    event.preventDefault()
+    dragDepth.current += 1
+    setDragActive(true)
+  }
+  const handleDragOver = (event: Event) => {
+    event.preventDefault()
+    const transfer = (event as DragEvent).dataTransfer
+    if (transfer) transfer.dropEffect = 'copy'
+  }
+  const handleDragLeave = (event: Event) => {
+    event.preventDefault()
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) setDragActive(false)
+  }
+  const handleDrop = (event: Event) => {
+    event.preventDefault()
+    dragDepth.current = 0
+    setDragActive(false)
+    const files = (event as DragEvent).dataTransfer?.files
+    void handleFile(files?.[0])
+  }
+  const handleUrlSubmit = (event: Event) => {
+    event.preventDefault()
+    const trimmed = url.trim()
+    if (!trimmed || loading) return
+    setLoading(true)
+    setError(null)
+    void loadGoogleSheetDocument(trimmed)
+      .then((next) => acceptSheet(next, trimmed))
+      .catch((failure: unknown) => {
+        setError(failure instanceof Error ? failure.message : 'Could not import that sheet.')
+      })
+      .finally(() => setLoading(false))
+  }
+  const handleClear = () => {
+    setSheetDocument(null)
+    setActiveSheetIndex(0)
+    setSourceName('')
+    setError(null)
+    setUrl('')
+  }
+
+div(className='space-y-3')
+  input(ref={fileInput} type='file' accept={ACCEPT} className='hidden' aria-hidden={true} tabIndex={-1} onChange={handleInputChange})
+  if !sheet
+    section(
+      ~ aria-label='Sheet source'
+      ~ onDragEnter={handleDragEnter}
+      ~ onDragOver={handleDragOver}
+      ~ onDragLeave={handleDragLeave}
+      ~ onDrop={handleDrop}
+      ~ className={cn('relative rounded-sm p-6 text-center transition-colors sm:p-8', dragActive ? 'border-btable-active/60 bg-btable-active/5' : 'border-btable-border/60 bg-btable-muted/20')}
+      ~ )
+      div(className='flex flex-col items-center gap-3 min-h-60')
+        span(className='grid place-items-center text-btable-muted')
+          Icon(name='table' className='size-12')
+        div(className='max-w-xl space-y-1')
+          p(className='font-sans text-lg font-medium') Drop a sheet file here
+          p(className='text-xs leading-5 text-btable-muted-foreground text-balance') CSV, TSV, Excel (.xls, .xlsx, .ods), Markdown tables, or plain line lists. Parsed in your browser — nothing is uploaded.
+        div(className='flex flex-wrap items-center justify-center gap-2')
+          Button(type='button' variant='dark' size='sm' label={loading ? 'Reading…' : 'Browse files'} icon='plus' onClick={pickFile} disabled={loading})
+      form(onSubmit={handleUrlSubmit} className='mx-auto mt-5 flex max-w-xl gap-2')
+        label(htmlFor={urlInputId} className='sr-only') Google Sheets link
+        input(id={urlInputId} type='url' value={url} disabled={loading} onInput={(event: Event) => setUrl((event.currentTarget as HTMLInputElement).value)} placeholder='Or paste a Google Sheets link…' className={inputClass})
+        Button(type='submit' variant='dark' size='sm' label='Import' icon='link' pending={loading} disabled={!url.trim() || loading})
+  if error
+    p(role='alert' className='rounded-sm bg-btable-destructive/5 px-4 py-3 text-sm text-btable-destructive') #{error}
+  if loading && !sheet
+    p(role='status' className='py-8 text-center text-sm text-btable-muted-foreground') Reading sheet…
+  if sheet
+    section(aria-label='Sheet data' className='md:space-y-1')
+      div(className='flex items-center justify-between gap-4 sm:gap-6 md:gap-8 h-14 px-2 md:px-0')
+        div(className='flex min-w-0 flex-1 basis-full items-center gap-4 sm:gap-6 md:gap-8 md:basis-auto')
+          div(className='flex min-w-0 flex-1 items-center gap-2 md:max-w-xs md:flex-initial' title={sourceName})
+            h2(className='min-w-0 truncate font-sans text-lg font-medium tracking-tight') #{sheetPresentation.title}
+            span(aria-hidden={true} className='flex h-6.5 w-8 shrink-0 items-center justify-center rounded-md bg-btable-muted/30 text-btable-muted-foreground')
+              Icon(name={sheetPresentation.icon} className='size-4')
+          if sheetDocument && sheetDocument.sheets.length > 1
+            fragment
+              nav(aria-label='Worksheets' className='hidden min-w-0 flex-1 items-center overflow-x-auto gap-3 py-0 md:flex border-b border-b-sidebar-border')
+                each tab, index in sheetDocument.sheets key index
+                  button(
+                    ~ type='button'
+                    ~ aria-pressed={index === activeSheetIndex}
+                    ~ disabled={loading}
+                    ~ onClick={() => void selectSheet(index)}
+                    ~ title={tab.name}
+                    ~ className={cn('flex shrink-0 items-center gap-1 p-2 text-xs transition-colors disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-btable-active text-btable-muted-foreground hover:rounded-t-md hover:bg-btable-muted hover:text-btable-foreground border-b-2 border-transparent', {'border-btable-active text-btable-foreground': index === activeSheetIndex}  )}
+                    ~ )
+                    Icon(name='sheet' className='size-3 ml-0')
+                    span(className='max-w-48 truncate') #{tab.name}
+              div(className='w-36 min-w-0 shrink-0 md:hidden')
+                SelectOctane(
+                  ~ aria-label='Worksheet'
+                  ~ value={String(activeSheetIndex)}
+                  ~ options={worksheetOptions}
+                  ~ onChange={(value) => void selectSheet(Number(value))}
+                  ~ isDisabled={loading}
+                  ~ isSearchable={false}
+                  ~ isClearable={false}
+                  ~ controlClassName='min-h-9! text-xs!'
+                  ~ menuPlacement='auto'
+                  ~ )
+        div(className='flex shrink-0 items-center gap-2')
+          Button(type='button' variant='dark' size='sm' label='New' icon={loading ? 'spinner-ring' : 'plus'} onClick={pickFile} disabled={loading})
+          button(type='button' aria-label='Clear sheet' onClick={handleClear} disabled={loading} className={subtleButton})
+            Icon(name='close' className='size-3.5')
+      DataTable(
+        ~ key={sheetVersion}
+        ~ columns={columns}
+        ~ data={data}
+        ~ title={sheet.name}
+        ~ showHeader={false}
+        ~ filterList={SheetFilters}
+        ~ titleActions={sheetSummary}
+        ~ getRowId={(_row: SheetRow, index: number) => String(index)}
+        ~ initialPageSize={100}
+        ~ pageSizes={PAGE_SIZES}
+        ~ urlKeyPrefix='sheet-'
+        ~ rowClassName='normal-case'
+        ~ viewportClassName='h-[calc(100dvh-280px)] min-h-64 w-full md:h-[calc(100dvh-240px)]'
+        ~ emptyTitle='No rows in this sheet'
+        ~ emptyDescription='Select another worksheet or replace this file to view more data.'
+        ~ )

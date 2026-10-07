@@ -1,0 +1,180 @@
+import { cn } from "../lib/utils.ts"
+import { type IconName, Icon } from "../lib/icons/index.ts"
+import type { JSX } from "octane/jsx-runtime"
+import type {OctaneNode} from 'octane'
+
+module
+  export type ButtonSize = "sm" | "md" | "lg" | "icon" | "icon-lg"
+  export type Buttonvariant = "default" | "dark" | 'primary' | 'secondary' | 'ghost'
+  export type ButtonNativeType = "button" | "submit" | "reset"
+  export type ButtonType = ButtonNativeType | "a"
+  export type ButtonTarget = "_blank" | "_self" | "_parent" | "_top"
+  export type ButtonIconPosition = "left" | "right"
+
+  interface ButtonBaseProps {
+    size?: ButtonSize
+    variant?: Buttonvariant
+    disabled?: boolean
+    pending?: boolean
+    pendingLabel?: string
+    label?: string | number
+    icon?: IconName
+    iconPosition?: ButtonIconPosition
+    className?: string
+    id?: string
+    title?: string
+    tabIndex?: number
+    onClick?: (event: MouseEvent) => void
+    "aria-label"?: string
+    "aria-describedby"?: string
+    children?: OctaneNode
+  }
+
+  export interface ButtonButtonProps extends ButtonBaseProps {
+    type?: ButtonNativeType
+    href?: never
+    target?: never
+    rel?: never
+    download?: never
+    referrerPolicy?: never
+    form?: string
+    name?: string
+    value?: JSX.IntrinsicElements["button"]["value"]
+    style?: JSX.IntrinsicElements["button"]["style"]
+    "aria-pressed"?: boolean
+    "aria-current"?: never
+  }
+
+  export interface ButtonLinkProps extends ButtonBaseProps {
+    type: "a"
+    href: string
+    target?: ButtonTarget
+    rel?: string
+    download?: JSX.IntrinsicElements["a"]["download"]
+    referrerPolicy?: JSX.IntrinsicElements["a"]["referrerPolicy"]
+    form?: never
+    name?: never
+    value?: never
+    style?: JSX.IntrinsicElements["a"]["style"]
+    "aria-pressed"?: never
+    "aria-current"?: JSX.IntrinsicElements["a"]["aria-current"]
+  }
+
+  export type ButtonProps = ButtonButtonProps | ButtonLinkProps
+
+  interface ContentProps {
+    size: ButtonSize
+    variant: Buttonvariant
+    label?: string | number
+    icon?: IconName
+    iconPosition: ButtonIconPosition
+    pending: boolean
+    children?: unknown
+  }
+
+  const BUTTON_SIZE_CLASSES = {
+    icon: "size-6",
+    'icon-lg': "h-8 w-9",
+    sm: "h-[32px] rounded-full [&_svg]:size-4",
+    md: "h-[36px] rounded-lg",
+    lg: "h-[40px] rounded-xl",
+  } as const satisfies Record<ButtonSize, string>
+
+  const BUTTON_ICON_SIZES = {
+    icon: 16,
+    'icon-lg': 18,
+    sm: 16,
+    md: 18,
+    lg: 20,
+  } as const satisfies Record<ButtonSize, number>
+
+  const BUTTON_SPINNER_SIZES = {
+    icon: 16,
+    'icon-lg': 17,
+    sm: 16,
+    md: 17,
+    lg: 18,
+  } as const satisfies Record<ButtonSize, number>
+
+  /**
+   * The gap belongs to the content span, not the button.
+   *
+   * The button's only in-flow child is that span - the light overlay is
+   * absolutely positioned, so it is not a flex item - which left any `gap` on the
+   * button with nothing to space. The icon and the label are siblings *inside*
+   * the span, so this is the box whose gap they actually see.
+   */
+  const BUTTON_CONTENT_GAP_CLASSES = {
+    icon: "gap-0",
+    'icon-lg': "gap-0",
+    sm: "gap-1",
+    md: "gap-1.5",
+    lg: "gap-2",
+  } as const satisfies Record<ButtonSize, string>
+
+  const BUTTON_BASE_CLASS = "group relative isolate inline-flex min-w-0 shrink-0 touch-manipulation select-none appearance-none items-center justify-center overflow-hidden border-0 align-middle transition-all duration-250 ease-out focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-btable-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 motion-reduce:transition-none active:scale-[0.97] aria-disabled:scale-100"
+  const BUTTON_CONTENT_CLASS = "font-sans font-medium text-sm leading-5 tracking-[0.01em] relative z-10 inline-flex min-w-0 items-center justify-center whitespace-nowrap transition-[transform,opacity] duration-300 ease-out group-active:opacity-95 group-disabled:scale-100 group-disabled:opacity-100 group-aria-disabled:opacity-100 motion-reduce:transform-none motion-reduce:transition-none"
+  const BUTTON_LIGHT_OVERLAY_CLASS = "pointer-events-none absolute inset-0 rounded-[inherit] bg-white/30 opacity-0 transition-opacity duration-200 ease-out group-hover:opacity-100 group-disabled:opacity-0 group-aria-disabled:opacity-0 motion-reduce:transition-none"
+
+  const BUTTON_VARIANT_CLASSES = {
+    default: "bg-[linear-gradient(in_oklab_180deg,oklab(92.2%_0_0)_0%,oklab(91.3%_0_0)_100%)] hover:bg-[linear-gradient(in_oklab_180deg,oklab(95.2%_0_0)_0%,oklab(91.3%_0_0)_100%)] text-[#121212]! shadow-[inset_0_1px_0_#FFFFFF54,0_3px_4px_-1px_#00000026,0_0_0_1px_#D4D4D4]",
+    dark: "bg-[linear-gradient(in_oklab_180deg,oklab(31.7%_0_0)_0%,oklab(25.2%_0_0)_100%)] text-[#FCFCFC]! shadow-[inset_0_0.5px_1px_#F0F0F020,inset_0_-1px_1.2px_0.35px_#12121280,0_2px_4px_-1px_#0D0D0D40,0_0_0_1px_#0F0F0F50] hover:brightness-110 disabled:hover:brightness-100 aria-disabled:hover:brightness-100",
+    primary: "bg-[linear-gradient(in_oklab_180deg,oklab(56.7%_0_0)_0%,oklab(64.2%_0_0)_100%)] text-[#FCFCFC]! shadow-[inset_0_0.5px_1px_#FFFFFF26,inset_0_-1px_1.2px_0.35px_#121212,0_2px_4px_-1px_#0D0D0D80,0_0_0_1px_#333333] hover:brightness-110 disabled:hover:brightness-100 aria-disabled:hover:brightness-100",
+    secondary: "bg-btable-table-head text-btable-muted-foreground disabled:hover:brightness-50 aria-disabled:hover:brightness-50 hover:text-btable-foreground",
+    ghost: "disabled:text-btable-muted-foreground/50 text-btable-muted-foreground hover:text-btable-foreground",
+    // oklch(0.559 0.201 274.93) oklab(0.559 0.017 -0.2 / 1)
+  } as const satisfies Record<Buttonvariant, string>
+
+  const getSafeAnchorRel = (target: ButtonTarget | undefined, rel: string | undefined) => {
+    if (target !== "_blank") return rel
+    const tokens = (rel ?? "").split(/\s+/).filter(Boolean)
+    return Array.from(new Set([...tokens, "noopener", "noreferrer"])).join(" ")
+  }
+
+component Spinner
+  props { size }: Pick<ContentProps, "size">
+  Icon(name="spinner-ring" size={BUTTON_SPINNER_SIZES[size]})
+
+component Content
+  props { size, variant, label, icon, iconPosition, pending, children }: ContentProps
+  if variant === "default"
+    span(className={BUTTON_LIGHT_OVERLAY_CLASS} aria-hidden={true})
+  span(className={cn(BUTTON_CONTENT_CLASS, BUTTON_CONTENT_GAP_CLASSES[size])})
+    if iconPosition === "left"
+      if pending
+        Spinner(size={size})
+      elseif icon
+        Icon(name={icon} size={BUTTON_ICON_SIZES[size]} className="m-0 shrink-0")
+    if label !== undefined
+      span(className="truncate") #{label}
+    | #{children}
+    if iconPosition === "right"
+      if pending
+        Spinner(size={size})
+      elseif icon
+        Icon(name={icon} size={BUTTON_ICON_SIZES[size]} className="m-0 shrink-0")
+
+props { size = "sm", variant = "default", type = "button", href, target, rel, download, referrerPolicy, disabled = false, pending = false, pendingLabel, label, icon, iconPosition = "left", className, id, title, tabIndex, form, name, value, style, onClick, "aria-label": ariaLabel, "aria-describedby": ariaDescribedBy, "aria-pressed": ariaPressed, "aria-current": ariaCurrent, children }: ButtonProps
+
+setup
+  const isInteractionDisabled = disabled || pending
+  const resolvedLabel = pending && pendingLabel !== undefined ? pendingLabel : label
+  const buttonClassName = cn(BUTTON_BASE_CLASS, BUTTON_VARIANT_CLASSES[variant], BUTTON_SIZE_CLASSES[size], pending ? "cursor-wait aria-disabled:cursor-wait" : "cursor-pointer", {'p-3': label && icon && iconPosition === "left", 'pe-2 ps-4': label && icon && iconPosition === "right", 'px-2.5': label && !icon}, className)
+  const anchorRel = getSafeAnchorRel(target, rel)
+  const handleClick = (event: MouseEvent) => {
+    if (isInteractionDisabled) {
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
+    onClick?.(event)
+  }
+
+if type === "a"
+  a(id={id} title={title} href={isInteractionDisabled ? undefined : href} target={target} rel={anchorRel} download={download} referrerPolicy={referrerPolicy} tabIndex={isInteractionDisabled ? -1 : tabIndex} className={buttonClassName} style={style} onClick={handleClick} aria-label={ariaLabel} aria-describedby={ariaDescribedBy} aria-current={ariaCurrent} aria-disabled={isInteractionDisabled || undefined} aria-busy={pending || undefined})
+    Content(size={size} variant={variant} label={resolvedLabel} icon={icon} iconPosition={iconPosition} pending={pending})
+      | #{children}
+else
+  button(id={id} title={title} type={type} disabled={disabled} form={form} name={name} value={value} tabIndex={tabIndex} className={buttonClassName} style={style} onClick={handleClick} aria-label={ariaLabel} aria-describedby={ariaDescribedBy} aria-pressed={ariaPressed} aria-disabled={pending || undefined} aria-busy={pending || undefined})
+    Content(size={size} variant={variant} label={resolvedLabel} icon={icon} iconPosition={iconPosition} pending={pending})
+      | #{children}

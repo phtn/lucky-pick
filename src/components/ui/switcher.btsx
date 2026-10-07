@@ -41,10 +41,11 @@ module
      * `dropdown-menu.btsx` parts this component uses.
      */
     children?: unknown
+    footer?: unknown
   }
 
 component SwitcherRoot
-  props { items, title, activeId, emptyLabel, busy = false, createLabel, createLabelIcon, onSelect, onCreate, actions, icon, children }: SwitcherProps
+  props { items, title, activeId, emptyLabel, busy = false, createLabel, createLabelIcon, onSelect, onCreate, actions, icon, children, footer }: SwitcherProps
   setup
     // Omitting `activeId` falls back to the first item; passing `null` states
     // that nothing is selected, which is what drops the trigger to `emptyLabel`.
@@ -97,6 +98,9 @@ component SwitcherRoot
               div(className="flex size-6 items-center justify-center rounded-md")
                 Icon(name={action.icon} className='size-3.5')
               div(className="font-sans text-sm -tracking-[0.02em]") #{action.label}
+
+      if footer
+        DropdownMenuGroup(children={footer})
 
 module
   export type { SwitcherItem, SwitcherAction, SwitcherProps }

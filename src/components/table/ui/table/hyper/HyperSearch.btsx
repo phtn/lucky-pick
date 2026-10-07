@@ -1,0 +1,138 @@
+import { Input } from '../../index.ts'
+import { Icon } from '../../../lib/icons/index.ts'
+import { cn } from '../../../lib/utils.ts'
+import type { Column, RowData } from '@octanejs/tanstack-table'
+import { useEffect, useEffectEvent, useId, useRef, useState } from 'octane'
+import type { JSX } from 'octane/jsx-runtime'
+import type { features } from './features.ts'
+import { TABLE_QUERY_LIMITS } from './parsers.ts'
+import { useMobile } from '../../../lib/use-mobile.ts'
+import IconButton from "../../icon-button.btsx";
+
+module
+  type InputProps = JSX.IntrinsicElements['input']
+  type RefObject<T> = { current: T | null }
+
+  interface Props {
+    id?: string
+    col?: Column<typeof features, RowData, unknown>
+    onChange: NonNullable<InputProps['onInput']>
+    placeholder?: string;
+    onClear?: () => void
+    /**
+     * Reports the mobile expanded state so the toolbar can stand its other
+     * controls down while the field owns the row. Always `false` on desktop,
+     * where the field has its own space and hides nothing.
+     */
+    onExpandedChange?: (expanded: boolean) => void
+    ref?: RefObject<HTMLInputElement>
+    value: string
+  }
+
+props { col, value, onChange, onClear, onExpandedChange, placeholder, ref }: Props
+setup
+  const id = useId()
+  const isMobile = useMobile()
+  const fallbackRef = useRef<HTMLInputElement | null>(null)
+  const inputRef = ref ?? fallbackRef
+  const hasValue = value.trim().length > 0 || Boolean(col?.getFilterValue?.()?.toString())
+
+  const [isOpen, setIsOpen] = useState(false)
+
+  // An active query keeps the field open regardless of focus: collapsing back
+  // to an icon would hide the fact that the table is filtered, and the reader
+  // would be looking at a short list with no visible reason for it.
+  const isExpanded = isMobile && (isOpen || hasValue)
+
+  const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented) return
+    const target = event.target
+    const isTyping =
+      target instanceof HTMLElement
+      && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+
+    if (event.key === '/' && !isTyping && inputRef.current && document.activeElement !== inputRef.current) {
+      event.preventDefault()
+      inputRef.current.focus()
+    }
+
+    // Escape backs out of the mobile overlay the same way the close button
+    // does, for anyone on a tablet with a keyboard attached.
+    if (event.key === 'Escape' && isTyping && target === inputRef.current) {
+      inputRef.current?.blur()
+      setIsOpen(false)
+    }
+  })
+
+  useEffect(() => {
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => document.removeEventListener('keydown', onKeyDown, true)
+  }, [])
+
+  const reportExpanded = useEffectEvent((expanded: boolean) => onExpandedChange?.(expanded))
+
+  useEffect(() => {
+    reportExpanded(isExpanded)
+  }, [isExpanded])
+
+  // The input does not exist while collapsed, so focus has to wait for the
+  // expanded render rather than being called from the button's own handler.
+  useEffect(() => {
+    if (isExpanded) inputRef.current?.focus()
+  }, [isExpanded])
+
+  // Leaving the field empty-handed puts the icon back; leaving it with a query
+  // does not, per `isExpanded` above.
+  const handleBlur = () => {
+    if (!hasValue) setIsOpen(false)
+  }
+
+  const handleClear = () => {
+    col?.setFilterValue('')
+    onClear?.()
+    setIsOpen(false)
+  }
+
+// Collapsed mobile: the whole control is one icon button sitting inline with
+// the rest of the toolbar.
+if isMobile && !isExpanded
+  IconButton(
+    ~ type='button'
+    ~ aria-label='Search'
+    ~ aria-expanded={false}
+    ~ onClick={() => setIsOpen(true)}
+    ~ icon='search'
+    ~ )
+else
+  div(className={cn('relative min-w-0', isExpanded ? 'w-full' : 'w-full md:w-auto')})
+    Input(
+      ~ id={id}
+      ~ ref={inputRef}
+      ~ className={cn(
+      ~   'peer h-9 min-w-0 rounded-sm border-none ps-3 outline-0 md:w-48 md:min-w-60',
+      ~   'uppercase placeholder:text-btable-foreground/80 placeholder:select-none placeholder:ps-0.75',
+      ~   'font-mono text-sm bg-btable-sidebar/80 opacity-60 focus:opacity-100 focus:placeholder:text-btable-foreground/60',
+      ~   (hasValue || isExpanded) && 'pe-10 opacity-100',
+      ~ )}
+      ~ value={value}
+      ~ onInput={onChange}
+      ~ onBlur={handleBlur}
+      ~ maxLength={TABLE_QUERY_LIMITS.searchCharacters}
+      ~ placeholder={placeholder ?? 'Search'}
+      ~ type='search'
+      ~ inputMode='search'
+      ~ aria-label='Search'
+      ~ )
+    // The trailing glyph is decoration only, so it steps aside whenever the
+    // clear button needs the same corner.
+    if !hasValue && !isExpanded
+      div(className='pointer-events-none absolute inset-y-0 inset-e-0 flex items-center justify-center pe-1 text-btable-muted-foreground/80 peer-disabled:opacity-40')
+        Icon(name='slash' aria-hidden='true' className='size-3.5 md:size-5')
+    if hasValue || isExpanded
+      button(
+        ~ type='button'
+        ~ className='absolute inset-y-0 inset-e-0 flex h-full w-9 cursor-pointer items-center justify-center rounded-e-md text-btable-muted-foreground/80 outline-none transition-[color,box-shadow] hover:text-btable-foreground focus:z-10 focus-visible:ring-[3px] focus-visible:ring-btable-ring/50'
+        ~ aria-label={hasValue ? 'Clear search' : 'Close search'}
+        ~ onClick={handleClear}
+        ~ )
+        Icon(name='close' size={16} aria-hidden='true')

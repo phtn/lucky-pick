@@ -1,0 +1,56 @@
+import { Icon } from '../../lib/icons/index.ts'
+import { cn } from '../../lib/utils.ts'
+import { Button } from '../index.ts'
+
+module
+  export interface TableEmptyStateProps {
+    title: string
+    description: string
+    /**
+     * True when a search or column filter is what emptied the table, rather
+     * than there being no records at all. The two cases need different copy:
+     * one is a dead end the reader can back out of, the other is just a table
+     * waiting for its first row.
+     */
+    isFiltered?: boolean
+    onClearFilters?: () => void
+    className?: string
+    action?: VoidFunction
+    actionLabel?: string
+  }
+
+props { title, description, isFiltered = false, onClearFilters, className, action, actionLabel }: TableEmptyStateProps
+
+// `place-items-center` on a full-size grid centres on both axes at any width.
+// The panel is rendered outside the table's horizontal scroll, so it measures
+// against the screen rather than against the sum of the column widths — a wide
+// table can no longer push this message off to the right.
+div(
+  ~ role='status'
+  ~ aria-live='polite'
+  ~ className={cn('grid size-full place-items-center px-4 py-8 sm:px-6 bg-btable-sidebar/50', className)}
+  ~ )
+  div(className='flex w-full max-w-xs flex-col items-center gap-3 text-center sm:max-w-sm')
+    span(className='grid place-items-center text-btable-muted')
+      Icon(name={isFiltered ? 'search' : 'table'} className='size-24')
+    div(className='flex flex-col gap-1')
+      p(className='font-sans text-base font-medium text-btable-foreground') #{title}
+      if (!action)
+        p(className='text-pretty font-sans text-xs leading-5 text-btable-muted-foreground') #{description}
+    if action
+      Button(
+        ~ type='button'
+        ~ variant='dark'
+        ~ onClick={action}
+        ~ className='mt-5'
+        ~ icon='add'
+        ~ label={actionLabel}
+        ~ )
+    if isFiltered && onClearFilters
+      button(
+        ~ type='button'
+        ~ onClick={onClearFilters}
+        ~ className='mt-1 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-btable-border/80 px-3 font-mono text-[10px] uppercase tracking-wider text-btable-muted-foreground transition-colors hover:border-btable-active/40 hover:bg-btable-active/10 hover:text-btable-active'
+        ~ )
+        Icon(name='no-filter' className='size-3.5')
+        span Clear filters

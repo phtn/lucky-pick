@@ -1,0 +1,20 @@
+import type { JSX } from 'octane/jsx-runtime'
+import type {ClassValue} from 'octane'
+
+module
+  type NativeTableHeadProps = JSX.IntrinsicElements['th']
+
+  type Props = {
+    className?: ClassValue
+  } & NativeTableHeadProps
+
+  // const baseClassName = 'sticky top-0 z-[2] border-y border-r border-btable-border/50 bg-slate-100/80 dark:bg-slate-100/2 py-0 text-left text-btable-foreground backdrop-blur-sm'
+  const baseClassName = 'sticky top-0 z-[2] bg-btable-table-head dark:bg-[linear-gradient(in_oklab_180deg,oklab(31.7%_0_0)_0%,oklab(25.2%_0_0)_100%)] dark:text-[#FCFCFC] md:first:rounded-s-sm py-0 text-left text-[#71717B] backdrop-blur-xl'
+
+props { children, className, ...props }: Props
+
+th(
+  ~ {...props}
+  ~ className={[baseClassName, className]}
+  ~ )
+  | #{children}

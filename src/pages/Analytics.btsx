@@ -1,0 +1,99 @@
+import { useMemo, useEffect, useRef } from 'octane'
+import { Icon } from '../lib/icons'
+import { GAMES } from '../lib/games'
+import { formatPeso } from '../lib/format'
+import { followRoute } from '../lib/navigation'
+import { summarizeSession } from '../lib/analytics'
+import type { Ticket, Player, Draw, GameMode } from '../lib/lotto'
+import TabPanel, { TabPanelList, TabPanelTrigger, TabPanelContent } from '../components/ui/tab-panel.btsx'
+import DataTable from "../components/table/ui/table/DataTable.btsx";
+import SheetTablePanel from "../components/table/sheet-table-panel.btsx";
+
+props { tickets, players, draws, mode }: { tickets: Ticket[]; players: Player[]; draws: Draw[]; mode: GameMode }
+setup
+  const headingRef = useRef<HTMLHeadingElement | null>(null)
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true }))
+    return () => cancelAnimationFrame(frame)
+  }, [])
+  const summary = useMemo(() => summarizeSession(tickets, players, mode), [tickets, players, mode])
+  const metrics = [
+    { label: 'Tickets placed', value: summary.total.toLocaleString(), detail: `${summary.pending.toLocaleString()} awaiting a draw` },
+    { label: 'Total spent', value: formatPeso(summary.spent), detail: 'Simulated ticket costs' },
+    { label: 'Total won', value: formatPeso(summary.won), detail: `${summary.wins.toLocaleString()} winning tickets` },
+    { label: 'Net return', value: formatPeso(summary.net), detail: 'Winnings minus all ticket costs' },
+  ]
+  const maxHits = Math.max(1, ...summary.hits.map(row => row.count))
+
+main(className="mx-auto w-full p-8 space-y-8" aria-label="Session insights")
+  title Analytics · Lucky Pick
+  a(href="/" onClick={(event: MouseEvent) => followRoute(event, '/')} className="inline-flex items-center gap-2 rounded-lg text-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring")
+    Icon(name="arrow-right" size={16} className="rotate-180")
+    | Back to play
+  TabPanel(defaultValue="analytics")
+    TabPanelList(aria-label="Session insights")
+      TabPanelTrigger(value="analytics")
+        Icon(name="chart" size={16})
+        | Analytics
+      TabPanelTrigger(value="results")
+        Icon(name="calendar" size={16})
+        | Results
+    TabPanelContent(value="analytics" className="space-y-8")
+      div(className="flex flex-wrap items-end justify-between gap-5")
+        div
+          p(className="text-xs uppercase tracking-[0.2em] text-primary mb-3") Session insights
+          h2(id="analytics-title" ref={headingRef} tabIndex={-1} className="text-4xl md:text-5xl font-semibold tracking-tighter outline-none") Analytics
+          p(className="mt-3 text-sm text-muted-foreground max-w-xl") A clearer picture of your play. #{mode === 'solo' ? 'Your solo tickets' : 'All party players'} across every game, in this session.
+        div(className="rounded-full border border-border px-4 py-2 text-xs text-muted-foreground") Simulation only · not real money
+      section(className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" aria-label="Session totals")
+        each metric in metrics key metric.label
+          article(className="rounded-2xl border border-border bg-card p-6")
+            p(className="text-xs text-muted-foreground") #{metric.label}
+            p(className="mt-4 text-2xl md:text-3xl font-semibold tracking-tight tabular-nums break-words") #{metric.value}
+            p(className="mt-3 text-xs text-muted-foreground") #{metric.detail}
+      if !summary.total
+        div(className="rounded-2xl border border-dashed border-border p-8 text-center")
+          p(className="font-medium") Your session starts here
+          p(className="mt-2 text-sm text-muted-foreground") Place a ticket and run a draw to see your results. No sample data is used.
+      div(className="grid grid-cols-1 lg:grid-cols-2 gap-6")
+        section(className="rounded-2xl border border-border bg-card p-6 md:p-8" aria-labelledby="outcomes-title")
+          h3(id="outcomes-title" className="text-lg font-semibold tracking-tight") Ticket outcomes
+          p(className="mt-2 text-sm text-muted-foreground") #{summary.settled.toLocaleString()} settled tickets · #{summary.rate.toFixed(1)}% win rate
+          p(className="mt-1 text-xs text-muted-foreground") Pending tickets are excluded from the win rate.
+          div(className="mt-7 space-y-4")
+            each row in summary.hits key row.hit
+              div(className="grid grid-cols-[55px_1fr_50px] items-center gap-3 text-xs")
+                span #{row.hit} hits
+                div(className="h-2 rounded-full bg-muted overflow-hidden" aria-hidden="true")
+                  div(className="h-full rounded-full bg-primary" style={{ width: `${row.count / maxHits * 100}%` }})
+                span(className="text-right text-muted-foreground tabular-nums") #{row.count.toLocaleString()}
+        section(className="rounded-2xl border border-border bg-card p-6 md:p-8" aria-labelledby="games-title")
+          h3(id="games-title" className="text-lg font-semibold tracking-tight") By game
+          p(className="mt-2 text-sm text-muted-foreground") Ticket activity and returns across all five pools.
+          div(className="mt-6 divide-y divide-border")
+            each row in summary.byGame key row.game
+              div(className="flex flex-wrap justify-between gap-3 py-4")
+                div
+                  p(className="text-sm font-medium") #{GAMES[row.game].name}
+                  p(className="mt-1 text-xs text-muted-foreground") #{row.total.toLocaleString()} tickets · #{row.wins.toLocaleString()} wins
+                div(className="text-right text-xs tabular-nums")
+                  p #{formatPeso(row.won)} won
+                  p(className="mt-1 text-muted-foreground") #{formatPeso(row.spent)} spent
+      section(className="rounded-2xl border border-border bg-card p-6 md:p-8" aria-labelledby="draws-title")
+        div(className="flex items-center justify-between gap-4")
+          h3(id="draws-title" className="text-lg font-semibold tracking-tight") Recent draws
+          span(className="text-xs text-muted-foreground") #{draws.length} in history
+        div(className="mt-5 divide-y divide-border")
+          each draw in draws.slice(0, 10) key draw.id
+            div(className="flex flex-wrap items-center justify-between gap-4 py-4")
+              div
+                p(className="text-sm font-medium") #{GAMES[draw.game].name}
+                p(className="mt-1 text-xs text-muted-foreground") #{draw.dateLabel} · #{draw.time} · #{draw.isOfficial ? 'Official input' : 'Simulated'}
+              p(className="font-mono text-sm tracking-widest") #{draw.sorted.map(n => String(n).padStart(2, '0')).join(' · ')}
+          empty
+            p(className="py-6 text-sm text-muted-foreground") No draws yet. Complete a draw to see it here.
+      p(className="text-xs text-muted-foreground") Session-only analytics. Reloading the app starts a fresh session. Clearing tickets removes them from these totals. Past results do not predict future draws.
+    TabPanelContent(value="results" className="space-y-8")
+      div
+        p(className="text-xs uppercase tracking-[0.2em] text-primary mb-3") Draw history
+        SheetTablePanel

@@ -1,0 +1,161 @@
+
+import { useEffect, useRef } from 'octane'
+import { DayPicker, getDefaultClassNames } from '@octanejs/day-picker'
+import type { ChevronProps, DateRange, DayButtonProps, Matcher, RootProps, WeekNumberProps } from '@octanejs/day-picker'
+import { cn } from '../lib/utils.ts'
+
+module
+  export type CalendarCaptionLayout = 'label' | 'dropdown' | 'dropdown-months' | 'dropdown-years'
+
+  export interface CalendarProps {
+    /** `range` (default) drives `selectedRange`/`handleSelect`; `single` drives `selected`/`onSelectDate`. */
+    mode?: 'range' | 'single'
+    selectedRange?: DateRange | undefined
+    handleSelect?: (range: DateRange | undefined) => void
+    selected?: Date | undefined
+    onSelectDate?: (date: Date | undefined) => void
+    captionLayout?: CalendarCaptionLayout
+    defaultMonth?: Date
+    numberOfMonths?: number
+    disabled?: Matcher | Matcher[]
+    startMonth?: Date
+    endMonth?: Date
+    showOutsideDays?: boolean
+    showWeekNumber?: boolean
+    className?: string
+    classNames?: Record<string, string>
+  }
+
+  // The day cell is a bare `<button>` rather than `Button.btsx` so DayPicker's
+  // `data-*` modifiers survive: the range styling below selects on them. That also
+  // means it doesn't inherit Button's centering, hence `items-center justify-center`.
+  const DAY_BUTTON_CLASS =
+    'flex aspect-square size-auto w-full min-w-(--cell-size) flex-col items-center justify-center gap-1 rounded-md p-0 text-sm leading-none font-normal select-none transition-colors hover:bg-btable-accent hover:text-btable-accent-foreground focus-visible:z-10 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-btable-ring/50 disabled:pointer-events-none disabled:opacity-50 group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-[3px] group-data-[focused=true]/day:ring-btable-ring/50 data-[range-end=true]:rounded-md data-[range-end=true]:rounded-r-md data-[range-end=true]:bg-btable-primary data-[range-end=true]:text-btable-primary-foreground data-[range-middle=true]:rounded-none data-[range-middle=true]:bg-btable-accent data-[range-middle=true]:text-btable-accent-foreground data-[range-start=true]:rounded-md data-[range-start=true]:rounded-l-md data-[range-start=true]:bg-btable-primary data-[range-start=true]:text-btable-primary-foreground data-[selected-single=true]:bg-btable-primary data-[selected-single=true]:text-btable-primary-foreground [&>span]:text-xs [&>span]:opacity-70'
+
+component CalendarRoot
+  props { className, rootRef, ...rootProps }: RootProps
+  div({...rootProps} ref={rootRef} data-slot='calendar' className={className})
+
+// `Icon` puts its className on both the wrapper and the svg, so a rotation
+// utility would be applied twice — this chevron rotates a bare svg instead.
+component CalendarChevron
+  props { className, orientation }: ChevronProps
+  svg(
+    ~ aria-hidden='true'
+    ~ viewBox='0 0 24 24'
+    ~ fill='none'
+    ~ stroke='currentColor'
+    ~ strokeWidth={2}
+    ~ strokeLinecap='round'
+    ~ strokeLinejoin='round'
+    ~ className={cn(
+    ~   'size-4 shrink-0',
+    ~   { 'rotate-90': orientation === 'left', '-rotate-90': orientation === 'right', 'rotate-180': orientation === 'up' },
+    ~   className
+    ~ )}
+    ~ )
+    path(d='m6 9 6 6 6-6')
+
+component CalendarDayButton
+  props { className, day, modifiers, ...buttonProps }: DayButtonProps
+  setup
+    // Arrow-key navigation only moves DayPicker's `focused` modifier; pulling
+    // DOM focus after it is what the default DayButton does, and dropping it
+    // leaves the keyboard stuck on whichever day was tabbed into.
+    const ref = useRef<HTMLButtonElement | null>(null)
+    useEffect(() => {
+      if (modifiers.focused) ref.current?.focus()
+    }, [modifiers.focused])
+
+  button(
+    ~ {...buttonProps}
+    ~ ref={ref}
+    ~ data-slot='calendar-day-button'
+    ~ data-day={day.date.toLocaleDateString()}
+    ~ data-selected-single={modifiers.selected && !modifiers.range_start && !modifiers.range_end && !modifiers.range_middle}
+    ~ data-range-start={modifiers.range_start}
+    ~ data-range-middle={modifiers.range_middle}
+    ~ data-range-end={modifiers.range_end}
+    ~ className={cn(DAY_BUTTON_CLASS, className)}
+    ~ )
+
+component CalendarWeekNumber
+  props { children, week, ...cellProps }: WeekNumberProps
+  td({...cellProps})
+    div(className='flex size-(--cell-size) items-center justify-center text-center') #{children}
+
+props { mode = 'range', selectedRange, handleSelect, selected, onSelectDate, captionLayout = 'label', defaultMonth, numberOfMonths = 1, disabled, startMonth, endMonth, showOutsideDays = true, showWeekNumber = false, className, classNames }: CalendarProps
+
+setup
+  const defaultClassNames = getDefaultClassNames()
+  const mergedClassNames = {
+    ~ ...classNames,
+    ~ root: cn('w-fit min-w-[300px] md:min-w-[300px]', defaultClassNames.root),
+    ~ months: cn('relative flex flex-col gap-4 md:flex-row', defaultClassNames.months),
+    ~ month: cn('flex w-full flex-col gap-4', defaultClassNames.month),
+    ~ nav: cn('absolute inset-x-0 top-0 flex w-full items-center justify-between gap-4', defaultClassNames.nav),
+    ~ button_previous: cn('flex size-(--cell-size) items-center justify-center rounded-md p-0 select-none hover:bg-btable-accent aria-disabled:pointer-events-none aria-disabled:opacity-50', defaultClassNames.button_previous),
+    ~ button_next: cn('flex size-(--cell-size) items-center justify-center rounded-md p-0 select-none hover:bg-btable-accent aria-disabled:pointer-events-none aria-disabled:opacity-50', defaultClassNames.button_next),
+    ~ month_caption: cn('flex h-(--cell-size) w-full items-center justify-center px-(--cell-size)', defaultClassNames.month_caption),
+    ~ dropdowns: cn('flex h-(--cell-size) w-full items-center justify-center gap-1.5 text-sm font-medium', defaultClassNames.dropdowns),
+    ~ dropdown_root: cn('relative rounded-md border border-btable-input shadow-xs has-focus:border-btable-ring has-focus:ring-[3px] has-focus:ring-btable-ring/50', defaultClassNames.dropdown_root),
+    ~ dropdown: cn('absolute inset-0 bg-btable-popover opacity-0', defaultClassNames.dropdown),
+    ~ caption_label: cn('font-medium select-none', captionLayout === 'label' ? 'text-sm' : 'flex h-8 items-center gap-1 rounded-md pr-1 pl-2 text-sm [&>svg]:size-3.5 [&>svg]:text-btable-muted-foreground', defaultClassNames.caption_label),
+    ~ month_grid: cn('w-full border-collapse', defaultClassNames.month_grid),
+    ~ weekdays: cn('flex mt-4! mb-2!', defaultClassNames.weekdays),
+    ~ weekday: cn('flex-1 rounded-md text-sm font-normal text-btable-muted-foreground select-none font-medium', defaultClassNames.weekday),
+    ~ week: cn('mt-1 flex w-full', defaultClassNames.week),
+    ~ week_number_header: cn('w-(--cell-size) select-none', defaultClassNames.week_number_header),
+    ~ week_number: cn('text-[0.8rem] text-btable-muted-foreground select-none', defaultClassNames.week_number),
+    ~ day: cn('group/day relative aspect-square h-full w-full p-0 text-btable-muted-foreground text-center select-none [&:last-child[data-selected=true]_button]:rounded-r-md', showWeekNumber ? '[&:nth-child(2)[data-selected=true]_button]:rounded-l-md' : '[&:first-child[data-selected=true]_button]:rounded-l-md', defaultClassNames.day),
+    ~ range_start: cn('rounded-l-md bg-btable-accent', defaultClassNames.range_start),
+    ~ range_middle: cn('rounded-none', defaultClassNames.range_middle),
+    ~ range_end: cn('rounded-r-md bg-btable-accent', defaultClassNames.range_end),
+    ~ today: cn('rounded-lg bg-btable-primary text-btable-primary-foreground data-[selected=true]:rounded-none', defaultClassNames.today),
+    ~ outside: cn('text-btable-muted-foreground aria-selected:text-btable-muted-foreground', defaultClassNames.outside),
+    ~ disabled: cn('text-btable-muted-foreground opacity-50', defaultClassNames.disabled),
+    ~ hidden: cn('invisible', defaultClassNames.hidden)
+  }
+  const components = {
+    ~ Root: CalendarRoot,
+    ~ Chevron: CalendarChevron,
+    ~ DayButton: CalendarDayButton,
+    ~ WeekNumber: CalendarWeekNumber
+  }
+
+  const rootClassName = cn('group/calendar bg-btable-background p-5 [--cell-size:--spacing(8)] in-data-[slot=card-content]:bg-transparent in-data-[slot=popover-content]:bg-transparent', className)
+
+if mode === 'single'
+  DayPicker(
+    ~ mode='single'
+    ~ selected={selected}
+    ~ onSelect={(date: Date | undefined) => onSelectDate?.(date)}
+    ~ defaultMonth={defaultMonth ?? selected}
+    ~ captionLayout={captionLayout}
+    ~ numberOfMonths={numberOfMonths}
+    ~ disabled={disabled}
+    ~ startMonth={startMonth}
+    ~ endMonth={endMonth}
+    ~ showOutsideDays={showOutsideDays}
+    ~ showWeekNumber={showWeekNumber}
+    ~ className={rootClassName}
+    ~ classNames={mergedClassNames}
+    ~ components={components}
+    ~ )
+else
+  DayPicker(
+    ~ mode='range'
+    ~ selected={selectedRange}
+    ~ onSelect={(range: DateRange | undefined) => handleSelect?.(range)}
+    ~ defaultMonth={defaultMonth ?? selectedRange?.from ?? selectedRange?.to}
+    ~ captionLayout={captionLayout}
+    ~ numberOfMonths={numberOfMonths}
+    ~ disabled={disabled}
+    ~ startMonth={startMonth}
+    ~ endMonth={endMonth}
+    ~ showOutsideDays={showOutsideDays}
+    ~ showWeekNumber={showWeekNumber}
+    ~ className={rootClassName}
+    ~ classNames={mergedClassNames}
+    ~ components={components}
+    ~ )

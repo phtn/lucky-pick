@@ -1,0 +1,126 @@
+import Checkbox from '../../checkbox.btsx'
+import { cn } from '../../../lib/utils.ts'
+import type { ColumnPinningState, ColumnVisibilityState } from '@octanejs/tanstack-table'
+import { TableCell, TableRow } from '../index.ts'
+import { orderCellsByColumnPinning } from './column-pinning.ts'
+import type { PinnedColumnLayout } from './column-pinning.ts'
+import HyperCell from './HyperCell.btsx'
+import type { RowDropPosition } from './reorder.ts'
+import type { HyperRowModel } from './table-contract.ts'
+import { DEFAULT_SELECT_COLUMN_ID } from './selection.ts'
+import { isColumnVisible } from './visibility.ts'
+
+module
+  export interface HyperRowProps {
+    className?: string
+    row: HyperRowModel
+    columnPinning: ColumnPinningState
+    columnVisibility: ColumnVisibilityState
+    dropPosition?: RowDropPosition | null
+    isActive: boolean
+    isDragging?: boolean
+    isEditing: boolean
+    isPinned: boolean
+    isSelected: boolean
+    pinnedColumnLayouts: ReadonlyMap<string, PinnedColumnLayout>
+    /** Column carrying the row checkbox. Only consulted when `showSelectColumn`. */
+    selectColumnId?: string
+    showSelectColumn: boolean
+    onDragOver?: (event: DragEvent, rowId: string) => void
+    onDrop?: (event: DragEvent, rowId: string) => void
+  }
+
+  interface RowAppearance {
+    canSelect: boolean
+    dropPosition: RowDropPosition | null
+    isDragging: boolean
+    isHighlighted: boolean
+    isPinned: boolean
+    isSelected: boolean
+  }
+
+  // A click that lands on a control belongs to that control, not to row selection.
+  const INTERACTIVE_TARGET_SELECTOR =
+    'button, input, select, textarea, a, form, label, [role="button"], [role="menuitem"]'
+
+  const ROW_CLASS = 'group/row h-8 font-mono text-btable-foreground/94 text-sm uppercase active:bg-btable-background/20 dark:hover:bg-btable-sidebar'
+  const ROW_HIGHLIGHTED_CLASS = 'dark:bg-blue-200/50'
+  const ROW_SELECTED_CLASS = 'bg-btable-active hover:bg-btable-brand/15 dark:bg-btable-brand/20'
+  const ROW_PINNED_CLASS = 'bg-sky-300/20 hover:bg-btable-brand/10 dark:bg-btable-background/20 dark:hover:bg-btable-background/30'
+  const ROW_SELECTABLE_CLASS = 'cursor-pointer'
+  const ROW_DRAGGING_CLASS = 'relative z-10'
+  const SELECT_CELL_CLASS = 'border-r border-btable-sidebar-border'
+
+  const ROW_DROP_CLASSES = {
+    before: 'border-t-2 border-t-primary',
+    after: 'border-b-2 border-b-primary'
+  } as const satisfies Record<RowDropPosition, string>
+
+  // Same reasoning as HyperCell: `cn` runs tailwind-merge, which is too costly to
+  // repeat for every row on every render, and a row has only a bounded set of
+  // appearances. Each one is merged once and served from here after that.
+  const rowClassNames = new Map<string, string>()
+
+  const getRowClassName = ({ canSelect, dropPosition, isDragging, isHighlighted, isPinned, isSelected }: RowAppearance) => {
+    const cacheKey = `${isHighlighted}:${isSelected}:${isPinned}:${canSelect}:${isDragging}:${dropPosition ?? 'none'}`
+    const cached = rowClassNames.get(cacheKey)
+    if (cached !== undefined) return cached
+
+    const className = cn(
+      ROW_CLASS,
+      isHighlighted && ROW_HIGHLIGHTED_CLASS,
+      isSelected && !isHighlighted && ROW_SELECTED_CLASS,
+      isPinned && !isHighlighted && !isSelected && ROW_PINNED_CLASS,
+      canSelect && ROW_SELECTABLE_CLASS,
+      isDragging && ROW_DRAGGING_CLASS,
+      dropPosition && ROW_DROP_CLASSES[dropPosition]
+    )
+    rowClassNames.set(cacheKey, className)
+
+    return className
+  }
+
+props { className, row, columnPinning, columnVisibility, dropPosition = null, isActive, isDragging = false, isEditing, isPinned, isSelected, pinnedColumnLayouts, selectColumnId = DEFAULT_SELECT_COLUMN_ID, showSelectColumn, onDragOver, onDrop }: HyperRowProps
+
+setup
+  const isHighlighted = isEditing || isActive
+  const canSelect = showSelectColumn && row.getCanSelect()
+  // Every cell in the row carries the row's emphasis, so resolve it once here
+  // instead of re-deriving the same boolean inside the cell loop.
+  const isEmphasized = isSelected || showSelectColumn || isHighlighted
+  const cells = orderCellsByColumnPinning(row.getAllCells(), columnPinning)
+  const rowClassName = getRowClassName({ canSelect, dropPosition, isDragging, isHighlighted, isPinned, isSelected })
+
+  const handleRowClick = (event: MouseEvent) => {
+    const target = event.target
+    if (target instanceof HTMLElement && target.closest(INTERACTIVE_TARGET_SELECTOR)) return
+    if (canSelect) row.toggleSelected()
+  }
+
+  const handleDragOver = onDragOver ? (event: DragEvent) => onDragOver(event, row.id) : undefined
+  const handleDrop = onDrop ? (event: DragEvent) => onDrop(event, row.id) : undefined
+
+TableRow(
+  ~ data-state={isSelected ? 'selected' : undefined}
+  ~ data-drop-position={dropPosition ?? undefined}
+  ~ data-reorder-row-id={row.id}
+  ~ className={cn(rowClassName, className)}
+  ~ onClick={handleRowClick}
+  ~ onDragOver={handleDragOver}
+  ~ onDrop={handleDrop}
+  ~ )
+  each cell in cells key cell.id
+    if showSelectColumn && cell.column.id === selectColumnId
+      TableCell(className={SELECT_CELL_CLASS})
+        Checkbox(
+          ~ aria-label={`Select ${row.id}`}
+          ~ checked={row.getIsSelected()}
+          ~ onCheckedChange={(checked: boolean) => row.toggleSelected(checked)}
+          ~ )
+    else
+      HyperCell(
+        ~ cell={cell}
+        ~ isEmphasized={isEmphasized}
+        ~ isVisible={isColumnVisible(cell.column.id, columnVisibility, cell.column.getCanHide?.() ?? true)}
+        ~ pinnedColumnLayout={pinnedColumnLayouts.get(cell.column.id)}
+        ~ )

@@ -1,0 +1,7 @@
+import { NuqsAdapter } from '@octanejs/nuqs/adapters/react'
+import SheetTablePanel from './sheet-table-panel.btsx'
+
+// This standalone entry includes the adapter required by URL-backed controls.
+div(className='beast-table')
+  NuqsAdapter
+    SheetTablePanel

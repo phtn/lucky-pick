@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from 'octane';
 import AppHeader from './components/AppHeader.btsx';
+import Analytics from './pages/Analytics.btsx';
+import { NuqsAdapter } from '@octanejs/nuqs/adapters/react';
+import { usePathname } from './lib/navigation';
 import BetPanel from './components/BetPanel.btsx';
 import DrawHistory from './components/DrawHistory.btsx';
 import DrawStage from './components/DrawStage.btsx';
@@ -21,6 +24,7 @@ import { formatCompactPeso, formatPeso } from './lib/format';
 import { MAX_TICKETS, OFFICIAL_RESULTS, PLAYER_COLORS, genRoomCode, getNextDrawDate, type BetCost, type ChatMsg, type Draw, type GameMode, type Player, type PrizeMode, type SessionTotals, type Ticket, type WinEntry } from './lib/lotto';
 
 setup
+  const pathname = usePathname();
   const stored = readStoredTheme();
   const [theme, setTheme] = useState<ThemeId>(stored.theme);
   const [themeMode, setThemeMode] = useState<ThemeMode>(stored.mode);
@@ -569,105 +573,108 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
       ~ onPickTheme={pickTheme}
       ~ onNotify={showToast}
       ~ )
-    LiveBoard(
-      ~ game={game}
-      ~ jackpot={jackpot}
-      ~ jackpotAnim={jackpotAnim}
-      ~ countdown={countdown}
-      ~ latestOfficial={latestOfficial}
-      ~ prevOfficial={prevOfficial}
-      ~ officialInput={officialInput}
-      ~ onOfficialInput={setOfficialInput}
-      ~ onUseOfficialInput={handleUseOfficialInput}
-      ~ showIframe={showIframe}
-      ~ onToggleIframe={() => setShowIframe(v => !v)}
-      ~ )
-    if toast
-      div(className="fixed top-5 right-5 z-[9999] max-w-[min(20rem,calc(100vw-2.5rem))] px-4 py-2.5 rounded-full bg-ball text-ball-ink text-[13px] font-bold shadow-[0_8px_24px_rgba(0,0,0,0.4)] animate-[winnerPop_0.4s_ease]")
-        | #{toast}
-    div(className="app-main-grid grid grid-cols-1 xl:grid-cols-[360px_1fr_380px] gap-4 md:gap-8 items-start")
-      div(className="app-column app-column--bet order-2 xl:order-1 space-y-4")
-        if mode === 'party'
-          RoomPanel(
-            ~ roomCode={roomCode}
-            ~ onCopyInvite={handleCopyInvite}
-            ~ players={players}
-            ~ currentPlayerIdx={currentPlayerIdx}
-            ~ onSelectPlayer={setCurrentPlayerIdx}
-            ~ newPlayerName={newPlayerName}
-            ~ onNewPlayerName={setNewPlayerName}
-            ~ onAddPlayer={addPlayer}
-            ~ )
-        BetPanel(
+    if pathname === "/analytics"
+      NuqsAdapter
+        Analytics(tickets={tickets} players={players} draws={draws} mode={mode})
+    else
+      fragment
+        LiveBoard(
           ~ game={game}
           ~ jackpot={jackpot}
-          ~ betType={betType}
-          ~ betCost={betCost}
-          ~ selected={selected}
-          ~ ticketCount={ticketCount}
-          ~ buyerTag={buyerTag}
-          ~ buyerLabel={buyerLabel}
-          ~ isDrawing={isDrawing}
-          ~ onSelectBetType={selectBetType}
-          ~ onToggleNumber={toggleNumber}
-          ~ onQuickPick={quickPick}
-          ~ onEvenOddMix={evenOddMix}
-          ~ onClearSelection={() => setSelected([])}
-          ~ onBuyRandom={addRandomTickets}
-          ~ onAddTicket={addTicket}
+          ~ jackpotAnim={jackpotAnim}
+          ~ countdown={countdown}
+          ~ latestOfficial={latestOfficial}
+          ~ prevOfficial={prevOfficial}
+          ~ officialInput={officialInput}
+          ~ onOfficialInput={setOfficialInput}
+          ~ onUseOfficialInput={handleUseOfficialInput}
+          ~ showIframe={showIframe}
+          ~ onToggleIframe={() => setShowIframe(v => !v)}
           ~ )
-      div(className="app-column app-column--draw order-1 xl:order-2")
-        DrawStage(
-          ~ game={game}
-          ~ jackpot={jackpot}
-          ~ themeKey={themeKey}
-          ~ isDrawing={isDrawing}
-          ~ isMixing={isMixing}
-          ~ drawnBalls={drawnBalls}
-          ~ currentBallAnim={currentBallAnim}
-          ~ draws={draws}
-          ~ winnerJackpot={winnerJackpot}
-          ~ onDismissJackpot={() => setWinnerJackpot(null)}
-          ~ winList={winList}
-          ~ onDismissWins={() => setWinList([])}
-          ~ onStartDraw={() => startDraw()}
-          ~ )
-      div(className="app-column app-column--info order-3 space-y-4")
-        SessionStats(stats={stats})
-        PayoutReference(game={game} jackpot={jackpot} betType={betType} betCost={betCost})
-        if mode === 'solo'
-          TicketList(
-            ~ tickets={tickets}
-            ~ draws={draws}
-            ~ drawnBalls={drawnBalls}
-            ~ drawGame={drawGameId}
-            ~ onClear={() => setTickets([])}
-            ~ )
-        else
-          fragment
-            Leaderboard(
-              ~ players={players}
-              ~ roomCode={roomCode}
-              ~ onCopyInvite={handleCopyInvite}
-              ~ onExportImage={() => showToast('Export as Image — coming soon! Generates PNG of results')}
+        if toast
+          div(className="fixed top-5 right-5 z-[9999] max-w-[min(20rem,calc(100vw-2.5rem))] px-4 py-2.5 rounded-full bg-ball text-ball-ink text-[13px] font-bold shadow-[0_8px_24px_rgba(0,0,0,0.4)] animate-[winnerPop_0.4s_ease]")
+            | #{toast}
+        div(className="app-main-grid grid grid-cols-1 xl:grid-cols-[360px_1fr_380px] gap-4 md:gap-8 items-start")
+          div(className="app-column app-column--bet order-2 xl:order-1 space-y-4")
+            if mode === 'party'
+              RoomPanel(
+                ~ roomCode={roomCode}
+                ~ onCopyInvite={handleCopyInvite}
+                ~ players={players}
+                ~ currentPlayerIdx={currentPlayerIdx}
+                ~ onSelectPlayer={setCurrentPlayerIdx}
+                ~ newPlayerName={newPlayerName}
+                ~ onNewPlayerName={setNewPlayerName}
+                ~ onAddPlayer={addPlayer}
+                ~ )
+            BetPanel(
+              ~ game={game}
+              ~ jackpot={jackpot}
+              ~ betType={betType}
+              ~ betCost={betCost}
+              ~ selected={selected}
+              ~ ticketCount={ticketCount}
+              ~ buyerTag={buyerTag}
+              ~ buyerLabel={buyerLabel}
+              ~ isDrawing={isDrawing}
+              ~ onSelectBetType={selectBetType}
+              ~ onToggleNumber={toggleNumber}
+              ~ onQuickPick={quickPick}
+              ~ onEvenOddMix={evenOddMix}
+              ~ onClearSelection={() => setSelected([])}
+              ~ onBuyRandom={addRandomTickets}
+              ~ onAddTicket={addTicket}
               ~ )
-            PlayerTickets(
-              ~ player={currentPlayer}
-              ~ draws={draws}
+          div(className="app-column app-column--draw order-1 xl:order-2")
+            DrawStage(
+              ~ game={game}
+              ~ jackpot={jackpot}
+              ~ themeKey={themeKey}
+              ~ isDrawing={isDrawing}
+              ~ isMixing={isMixing}
               ~ drawnBalls={drawnBalls}
-              ~ drawGame={drawGameId}
-              ~ onClearTickets={clearPlayerTickets}
+              ~ currentBallAnim={currentBallAnim}
+              ~ draws={draws}
+              ~ winnerJackpot={winnerJackpot}
+              ~ onDismissJackpot={() => setWinnerJackpot(null)}
+              ~ winList={winList}
+              ~ onDismissWins={() => setWinList([])}
+              ~ onStartDraw={() => startDraw()}
               ~ )
-            PartyChat(
-              ~ messages={chat}
-              ~ input={chatInput}
-              ~ onInput={setChatInput}
-              ~ onSend={handleSendChat}
-              ~ )
-        if mode === 'solo'
-          PrizeNote(game={game})
-        DrawHistory(draws={draws})
-        HowItWorks(game={game} jackpot={jackpot})
+          div(className="app-column app-column--info order-3 space-y-4")
+            SessionStats(stats={stats})
+            PayoutReference(game={game} jackpot={jackpot} betType={betType} betCost={betCost})
+            if mode === 'solo'
+              TicketList(
+                ~ tickets={tickets}
+                ~ draws={draws}
+                ~ drawnBalls={drawnBalls}
+                ~ drawGame={drawGameId}
+                ~ onClear={() => setTickets([])}
+                ~ )
+            else
+              fragment
+                Leaderboard(
+                  ~ players={players}
+                  ~ roomCode={roomCode}
+                  ~ onCopyInvite={handleCopyInvite}
+                  ~ onExportImage={() => showToast('Export as Image — coming soon! Generates PNG of results')}
+                  ~ )
+                PlayerTickets(
+                  ~ player={currentPlayer}
+                  ~ draws={draws}
+                  ~ drawnBalls={drawnBalls}
+                  ~ drawGame={drawGameId}
+                  ~ onClearTickets={clearPlayerTickets}
+                  ~ )
+                PartyChat(
+                  ~ messages={chat}
+                  ~ input={chatInput}
+                  ~ onInput={setChatInput}
+                  ~ onSend={handleSendChat}
+                  ~ )
+            if mode === 'solo'
+              PrizeNote(game={game})
+            DrawHistory(draws={draws})
+            HowItWorks(game={game} jackpot={jackpot})
     footer(className="flex items-center justify-end app-footer mt-6 font-mono font-light text-foreground/50 text-[8px] tracking-wide space-x-1")
-      span this simulation is built on
-      a(href="https://beast-docs-adv.beastjs.workers.dev/") beastjs

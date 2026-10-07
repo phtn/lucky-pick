@@ -27,7 +27,7 @@ setup
 
 div(className="px-5 py-3")
   div(className="flex items-center justify-between mb-1")
-    h2(className="text-xs font-bold tracking-[0.12em] flex items-center gap-2")
+    h2(className="select-none text-xs font-bold tracking-[0.12em] flex items-center gap-2")
       | #{" MY TICKETS"}
     div(className="flex items-center gap-2")
       span(className="flex items-center justify-center aspect-square size-6 rounded-full bg-elevated/40 text-xs font-bold")

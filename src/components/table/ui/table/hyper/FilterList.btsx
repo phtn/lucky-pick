@@ -1,0 +1,303 @@
+import { lazy, Suspense, useId, useMemo, useState, type ClassValue } from 'octane'
+import type { DateRange } from '@octanejs/day-picker'
+import { Command } from '@octanejs/cmdk'
+import type { ColumnFiltersState } from '@octanejs/tanstack-table'
+import Popover, { PopoverContent } from '../../Popover.btsx'
+import { Button, Checkbox, Input } from '../../index.ts'
+import { Icon } from '../../../lib/icons/index.ts'
+import { cn } from '../../../lib/utils.ts'
+import FilterTrigger from './FilterTrigger.btsx'
+import { createInclusiveDateRangeFilterValue, createRangeFilterValue, getRangeBounds, getRangeDate, getRangeInputValue, isOpenRangeBound, OPEN_RANGE_BOUND } from './filter-ranges.ts'
+import { DATE_PRESETS, getActiveFilterCount, getFilterOptions, getFilterSummary, getSelectedValues, matchDatePreset } from './filter-list-config.ts'
+import type { DatePreset, DateRangeFilterDefinition, FacetedFilterDefinition, FilterDefinition, NumberRangeFilterDefinition } from './filter-list-config.ts'
+import type { FilterListColumn } from './table-contract.ts'
+import { getFilterValueToken } from './filter-utils.ts'
+
+module
+  // day-picker only renders once someone drills into the custom date page, so
+  // the closed filter button never pays for the calendar bundle.
+  const LazyCalendar = lazy(() => import('../../calendar.btsx'))
+
+  export interface FilterListProps {
+    columns: FilterListColumn[]
+    columnFilters: ColumnFiltersState
+    onReset: () => void
+    /** Whether the filters differ from the table's defaults; falls back to "any filter is active". */
+    canReset?: boolean
+    /** Which columns this list can filter, in the order they are listed. */
+    filters: readonly FilterDefinition[]
+    /** Screen-reader summary of what this particular table filters by. */
+    description?: string
+  }
+
+  // Shared row geometry: every list row is a uniform 32px tall with the same
+  // inset, root page or drilled in.
+  const ROW_CLASS: ClassValue =
+    'relative flex md:h-9 h-10 cursor-default select-none items-center gap-2 rounded-[1px] ps-2 text-sm outline-hidden data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-btable-sidebar dark:data-[selected=true]:bg-indigo-100/8'
+  const LIST_CLASS: ClassValue = 'max-h-80 scroll-py-1 overflow-x-hidden overflow-y-auto bg-btable-surface/70'
+  const HEADER_CLASS: ClassValue = 'flex md:h-9 h-10 shrink-0 items-center gap-1.5 border-b border-btable-border/35 px-1 bg-btable-surface'
+  const SEARCH_CLASS: ClassValue =
+    'h-8 w-full min-w-0 bg-transparent font-mono text-xs -tracking-[0.02em] outline-hidden placeholder:select-none placeholder:text-btable-muted-foreground/80 px-1'
+  const MUTED_ROW_LABEL_CLASS: ClassValue = 'truncate text-btable-muted-foreground'
+  const SUMMARY_CLASS: ClassValue = 'ml-auto truncate font-mono text-xs text-indigo-500 dark:text-indigo-300'
+  const CHECK_CLASS: ClassValue = 'ml-auto mr-1 size-3.5 shrink-0 text-indigo-500 dark:text-indigo-300'
+  const EMPTY_CLASS: ClassValue = 'py-6 text-center text-sm text-btable-muted-foreground'
+
+  interface FilterPanelProps {
+    column: FilterListColumn
+    rawFilterValue: unknown
+  }
+
+  type FacetedPanelProps = FilterPanelProps & { definition: FacetedFilterDefinition }
+  type NumberRangePanelProps = FilterPanelProps & { definition: NumberRangeFilterDefinition }
+  type DatePanelProps = FilterPanelProps & { definition: DateRangeFilterDefinition; onCustomRange: () => void }
+
+component PanelChip
+  props { label, onBack }: { label: string; onBack: () => void }
+
+  button(
+    ~ type='button'
+    ~ onClick={onBack}
+    ~ className='flex h-7 shrink-0 items-center gap-1 rounded-[3px] ps-2 pe-1 font-sans text-sm hover:border-indigo-400/60 hover:bg-indigo-500/10 dark:bg-indigo-100/8'
+    ~ )
+    span(className='truncate') #{label}
+    Icon(name='select-caret' className='size-3 opacity-65')
+
+component CalendarFallback
+  div(className='grid h-72 place-items-center')
+    Icon(name='spinner-ring' className='size-4 opacity-60')
+
+component FacetedPanel
+  props { column, definition, rawFilterValue }: FacetedPanelProps
+  setup
+    const selectedValues = getSelectedValues(rawFilterValue)
+    const selectedTokens = [...new Set(selectedValues.map(getFilterValueToken).filter(Boolean))]
+    const options = getFilterOptions(column, definition, selectedValues)
+    const toggle = (token: string) => {
+      const next = selectedTokens.includes(token)
+        ? selectedTokens.filter((current) => current !== token)
+        : [...selectedTokens, token]
+      column.setFilterValue(next.length ? next : undefined)
+    }
+
+  Command.List(className={LIST_CLASS})
+    Command.Empty(className={EMPTY_CLASS}) No values found.
+    Command.Group(value='filter-list-values')
+      Command.Item(value={`Any ${definition.label}`} onSelect={() => column.setFilterValue(undefined)} className={ROW_CLASS})
+        span(className={MUTED_ROW_LABEL_CLASS}) #{`Any ${definition.label}`}
+        if selectedTokens.length === 0
+          Icon(name='check' className={CHECK_CLASS})
+      each option in options key option.value
+        Command.Item(value={option.value} keywords={[option.label]} onSelect={() => toggle(option.value)} className={ROW_CLASS})
+          Checkbox(
+            ~ checked={selectedTokens.includes(option.value)}
+            ~ readOnly={true}
+            ~ tabIndex={-1}
+            ~ aria-hidden='true'
+            ~ className='pointer-events-none'
+            ~ )
+          span(className='truncate') #{option.label}
+          span(className={cn('ml-auto mr-2 font-sans text-sm text-btable-foreground/35', { 'text-indigo-500/80 dark:text-indigo-300/80': option.count > 0 })})
+            | #{option.count}
+
+component NumberRangePanel
+  props { column, definition, rawFilterValue }: NumberRangePanelProps
+  setup
+    const [rawMin, rawMax] = getRangeBounds(rawFilterValue)
+    const min = getRangeInputValue(rawMin)
+    const max = getRangeInputValue(rawMax)
+    const isAny = isOpenRangeBound(rawMin) && isOpenRangeBound(rawMax)
+    // base-ui's `Input` is controlled through `onValueChange`; bound to
+    // `onChange` alone it reverts every keystroke back to the filter value.
+    const handleMinChange = (nextMin: string) => {
+      column.setFilterValue((currentValue: unknown) => {
+        const [, currentMax] = getRangeBounds(currentValue)
+        return createRangeFilterValue(nextMin, getRangeInputValue(currentMax))
+      })
+    }
+    const handleMaxChange = (nextMax: string) => {
+      column.setFilterValue((currentValue: unknown) => {
+        const [currentMin] = getRangeBounds(currentValue)
+        return createRangeFilterValue(getRangeInputValue(currentMin), nextMax)
+      })
+    }
+    // The wrapper owns the focus ring so the two bounds read as one control.
+    const numberInputClassName =
+      'h-7! w-full border-none! bg-transparent! px-0 text-center font-mono text-xs outline-none! placeholder:text-btable-muted-foreground/40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
+
+  div(className='p-1')
+    button(type='button' onClick={() => column.setFilterValue(undefined)} className={cn(ROW_CLASS, 'w-full hover:bg-btable-foreground/[0.06] dark:hover:bg-indigo-100/8')})
+      span(className={MUTED_ROW_LABEL_CLASS}) #{`Any ${definition.label}`}
+      if isAny
+        Icon(name='check' className={CHECK_CLASS})
+    div(className='mt-1 flex h-9 items-center gap-2 rounded-[5px] border border-btable-border/50 bg-btable-foreground/[0.03] px-2 focus-within:border-indigo-400/60 focus-within:bg-indigo-500/5')
+      label(htmlFor={`${column.id}-min`} className='shrink-0 font-mono text-[10px] tracking-widest opacity-60') MIN
+      Input(
+        ~ id={`${column.id}-min`}
+        ~ type='number'
+        ~ inputMode='decimal'
+        ~ min={definition.min}
+        ~ max={definition.max}
+        ~ step={definition.step ?? 'any'}
+        ~ value={min}
+        ~ placeholder='Any'
+        ~ aria-label={`${definition.label} minimum`}
+        ~ className={numberInputClassName}
+        ~ onValueChange={handleMinChange}
+        ~ )
+      span(className='h-4 w-px shrink-0 bg-btable-border/70')
+      label(htmlFor={`${column.id}-max`} className='shrink-0 font-mono text-[10px] tracking-widest opacity-60') MAX
+      Input(
+        ~ id={`${column.id}-max`}
+        ~ type='number'
+        ~ inputMode='decimal'
+        ~ min={definition.min}
+        ~ max={definition.max}
+        ~ step={definition.step ?? 'any'}
+        ~ value={max}
+        ~ placeholder='Any'
+        ~ aria-label={`${definition.label} maximum`}
+        ~ className={numberInputClassName}
+        ~ onValueChange={handleMaxChange}
+        ~ )
+      if definition.unit
+        span(className='shrink-0 font-mono text-[10px] uppercase opacity-40') #{definition.unit}
+
+component DatePanel
+  props { column, definition, rawFilterValue, onCustomRange }: DatePanelProps
+  setup
+    const presets = definition.presets ?? DATE_PRESETS
+    const [rawFrom, rawTo] = getRangeBounds(rawFilterValue)
+    const isAny = isOpenRangeBound(rawFrom) && isOpenRangeBound(rawTo)
+    const activePreset = matchDatePreset(rawFilterValue, presets)
+    const applyPreset = (preset: DatePreset) => {
+      column.setFilterValue(createRangeFilterValue(preset.getStart().toISOString(), OPEN_RANGE_BOUND))
+    }
+
+  Command.List(className={LIST_CLASS})
+    Command.Empty(className={EMPTY_CLASS}) No ranges found.
+    Command.Group(value='filter-list-dates')
+      Command.Item(value={`Any ${definition.label}`} onSelect={() => column.setFilterValue(undefined)} className={ROW_CLASS})
+        span(className={MUTED_ROW_LABEL_CLASS}) Any Date
+        if isAny
+          Icon(name='check' className={CHECK_CLASS})
+      each preset in presets key preset.id
+        Command.Item(value={preset.label} onSelect={() => applyPreset(preset)} className={ROW_CLASS})
+          span(className='truncate') #{preset.label}
+          if activePreset?.id === preset.id
+            Icon(name='check' className={CHECK_CLASS})
+      Command.Item(value='Custom Date Range' onSelect={onCustomRange} className={ROW_CLASS})
+        span(className='truncate') Custom Date Range
+        span(className={SUMMARY_CLASS}) #{!isAny && !activePreset ? 'Set' : ''}
+        Icon(name='chevron-right' className='size-3.5 shrink-0 opacity-50')
+
+component CustomDatePanel
+  props { column, rawFilterValue }: FilterPanelProps
+  setup
+    const [rawFrom, rawTo] = getRangeBounds(rawFilterValue)
+    const from = getRangeDate(rawFrom)
+    const to = getRangeDate(rawTo)
+    const selectedRange = from || to ? { from, to } : undefined
+    // The stored bounds stay whole-day inclusive ISO timestamps, so a day
+    // picked in the calendar filters the same rows the presets above do.
+    const handleSelect = (range: DateRange | undefined) => {
+      column.setFilterValue(createInclusiveDateRangeFilterValue(range?.from, range?.to))
+    }
+
+  div(className='p-1')
+    Suspense(fallback={CalendarFallback})
+      LazyCalendar(selectedRange={selectedRange} handleSelect={handleSelect} numberOfMonths={1} className='w-full bg-transparent p-1')
+
+props { columns, columnFilters, onReset, canReset, filters, description }: FilterListProps
+setup
+  const [open, setOpen] = useState(false)
+  const [activeFilterId, setActiveFilterId] = useState<string | null>(null)
+  const [isCustomDateRange, setIsCustomDateRange] = useState(false)
+  const [search, setSearch] = useState('')
+  const baseId = useId()
+  const labelId = `${baseId}-label`
+  const descriptionId = `${baseId}-description`
+  const columnsById = useMemo(() => new Map(columns.map((column) => [column.id, column])), [columns])
+  const filterValuesById = useMemo(() => new Map(columnFilters.map((filter) => [filter.id, filter.value] as const)), [columnFilters])
+  const activeFilterCount = filters.reduce(
+    (total, definition) => total + getActiveFilterCount(definition, filterValuesById.get(definition.id)),
+    0
+  )
+  const activeFilterLabel = activeFilterCount > 99 ? '99+' : String(activeFilterCount)
+  const activeDefinition = filters.find((definition) => definition.id === activeFilterId)
+  const activeColumn = activeDefinition ? columnsById.get(activeDefinition.id) : undefined
+  const activeFilterValue = activeDefinition ? filterValuesById.get(activeDefinition.id) : undefined
+  // A range panel has nothing to search, and the calendar owns its own page.
+  const hasSearch = !isCustomDateRange && activeDefinition?.variant !== 'number-range'
+  const goToRoot = () => {
+    setActiveFilterId(null)
+    setIsCustomDateRange(false)
+    setSearch('')
+  }
+  const goToFilter = (id: string) => {
+    setActiveFilterId(id)
+    setIsCustomDateRange(false)
+    setSearch('')
+  }
+  // The popover unmounts its content, so navigation resets with it rather than
+  // reopening three pages deep.
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next)
+    if (!next) goToRoot()
+  }
+
+Popover(open={open} onOpenChange={handleOpenChange})
+  FilterTrigger(activeFilterCount={activeFilterCount} activeFilterLabel={activeFilterLabel})
+  PopoverContent(
+    ~ aria-describedby={descriptionId}
+    ~ aria-labelledby={labelId}
+    ~ align='start'
+    ~ sideOffset={7}
+    ~ className='w-76 gap-0 overflow-hidden rounded-sm border border-btable-border/80 bg-zinc-200 dark:bg-zinc-900/50 p-0! backdrop-blur-3xl'
+    ~ )
+    h4(id={labelId} className='sr-only') Add Filter
+    p(id={descriptionId} className='sr-only') #{description ?? 'Narrow this table down to the rows you want.'}
+    Command(shouldFilter={hasSearch} loop={true} className='flex flex-col')
+      div(className={HEADER_CLASS})
+        if activeDefinition
+          div(className='flex shrink-0 items-center gap-1')
+            PanelChip(label={activeDefinition.label} onBack={isCustomDateRange ? () => setIsCustomDateRange(false) : goToRoot})
+            span(className='h-9 w-px bg-btable-border/25')
+        if hasSearch
+          Command.Input(
+            ~ value={search}
+            ~ onValueChange={setSearch}
+            ~ placeholder='Filter by...'
+            ~ autoFocus={true}
+            ~ className={SEARCH_CLASS}
+            ~ )
+        else
+          span(className='font-sans text-sm text-btable-muted-foreground/60')
+            | #{isCustomDateRange ? 'Pick a range' : 'Set a range'}
+      if !activeDefinition || !activeColumn
+        Command.List(className={LIST_CLASS})
+          Command.Empty(className={EMPTY_CLASS}) No filters found.
+          Command.Group(value='filter-list-filters')
+            each definition in filters key definition.id
+              Command.Item(
+                ~ value={definition.label}
+                ~ keywords={[definition.id]}
+                ~ onSelect={() => goToFilter(definition.id)}
+                ~ className={ROW_CLASS}
+                ~ )
+                span(className='truncate') #{definition.label}
+                span(className={SUMMARY_CLASS}) #{getFilterSummary(definition, filterValuesById.get(definition.id))}
+                Icon(name='chevron-right' className='size-3.5 shrink-0 opacity-50')
+      elseif isCustomDateRange
+        CustomDatePanel(column={activeColumn} rawFilterValue={activeFilterValue})
+      elseif activeDefinition.variant === 'faceted'
+        FacetedPanel(column={activeColumn} definition={activeDefinition} rawFilterValue={activeFilterValue})
+      elseif activeDefinition.variant === 'number-range'
+        NumberRangePanel(column={activeColumn} definition={activeDefinition} rawFilterValue={activeFilterValue})
+      else
+        DatePanel(column={activeColumn} definition={activeDefinition} rawFilterValue={activeFilterValue} onCustomRange={() => setIsCustomDateRange(true)})
+      if canReset ?? activeFilterCount > 0
+        div(className='flex justify-end border-t border-dashed border-btable-border/60 py-1 px-3')
+          Button(type='button' variant='ghost' size='sm' onClick={onReset} className='h-7 rounded-[5px]')
+            Icon(name='no-filter' className='size-3.5')
+            span Reset Filters

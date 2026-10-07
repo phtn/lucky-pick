@@ -1,0 +1,57 @@
+import { Popover as P } from '@octanejs/base-ui/popover'
+import type { ComponentProps } from 'octane'
+import { cn } from '../lib/utils.ts'
+
+module
+  type PopoverRoot = ComponentProps<typeof P.Root>
+  type PopoverPositioner = ComponentProps<typeof P.Positioner>
+  type PopoverPopup = ComponentProps<typeof P.Popup>
+
+  /** Placement props forwarded to the positioner rather than the popup. */
+  type PopoverPlacement = Pick<PopoverPositioner, 'align' | 'alignOffset' | 'side' | 'sideOffset'>
+
+  export type PopoverProps = PopoverRoot
+  export type PopoverTriggerProps = ComponentProps<typeof P.Trigger>
+  export type PopoverContentProps = PopoverPopup & PopoverPlacement
+  export type PopoverTitleProps = ComponentProps<typeof P.Title>
+  export type PopoverDescriptionProps = ComponentProps<typeof P.Description>
+
+  const POSITIONER_CLASS_NAME = 'isolate z-50'
+  const POPUP_CLASS_NAME =
+    'z-50 flex w-72 origin-(--transform-origin) flex-col gap-4 rounded-2xl bg-btable-popover p-4 text-sm text-btable-popover-foreground shadow-2xl ring-1 ring-btable-foreground/5 outline-hidden duration-100 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95'
+  const TITLE_CLASS_NAME = 'text-base font-medium'
+  const DESCRIPTION_CLASS_NAME = 'text-btable-muted-foreground'
+
+  /** Base UI parts are re-exported so advanced callers can compose custom popovers. */
+  export const PopoverRoot = P.Root
+  export const PopoverPortal = P.Portal
+  export const PopoverPositioner = P.Positioner
+  export const PopoverPopup = P.Popup
+  export const PopoverArrow = P.Arrow
+  export const PopoverBackdrop = P.Backdrop
+  export const PopoverClose = P.Close
+  export const PopoverViewport = P.Viewport
+
+component PopoverTrigger
+  props { className, ...triggerProps }: PopoverTriggerProps
+  P.Trigger(data-slot='popover-trigger' className={className} {...triggerProps})
+
+component PopoverContent
+  props { className, align, alignOffset, side, sideOffset, ...popupProps }: PopoverContentProps
+  P.Portal
+    P.Positioner(align={align} alignOffset={alignOffset} side={side} sideOffset={sideOffset} className={POSITIONER_CLASS_NAME})
+      P.Popup(data-slot='popover-content' className={cn(POPUP_CLASS_NAME, className)} {...popupProps})
+
+component PopoverTitle
+  props { className, ...titleProps }: PopoverTitleProps
+  P.Title(data-slot='popover-title' className={cn(TITLE_CLASS_NAME, className)} {...titleProps})
+
+component PopoverDescription
+  props { className, ...descriptionProps }: PopoverDescriptionProps
+  P.Description(data-slot='popover-description' className={cn(DESCRIPTION_CLASS_NAME, className)} {...descriptionProps})
+
+module
+  export { PopoverTrigger, PopoverContent, PopoverTitle, PopoverDescription }
+
+props { ...rootProps }: PopoverProps
+P.Root(data-slot='popover' {...rootProps})

@@ -1,0 +1,431 @@
+import { functionalUpdate, useTable } from '@octanejs/tanstack-table'
+import type { ColumnDef, ColumnFiltersState, ColumnPinningState, ColumnVisibilityState, PaginationState, RowData, SortingState } from '@octanejs/tanstack-table'
+import { useMemo, useState, type ClassValue } from 'octane'
+import { Button } from '../index.ts'
+import SelectOctane from '../SelectOctane.btsx'
+import { TableBody } from './index.ts'
+import Header from '../header.btsx'
+import HyperRow from './hyper/HyperRow.btsx'
+import HyperTable from './hyper/HyperTable.btsx'
+import ColumnView from './hyper/ColumnView.btsx'
+import Search from './hyper/HyperSearch.btsx'
+import { getPinnedColumnLayouts, orderColumnsByPinning } from './hyper/column-pinning.ts'
+import { DEFAULT_SELECT_COLUMN_ID } from './hyper/selection.ts'
+import { features } from './hyper/features.ts'
+import type { DataTableFilterListProps } from './types.ts'
+import type { OctaneNode } from 'octane'
+import Popper from '../popper.btsx'
+import TableEmptyState from './table-empty-state.btsx'
+import { cn } from '../../lib/utils.ts'
+import { parseAsBoolean, parseAsInteger, parseAsString, parseAsStringLiteral, useQueryStates } from '@octanejs/nuqs'
+import { createColumnFiltersParser, createColumnOrderParser, createColumnSizingParser, createColumnVisibilityParser } from './hyper/parsers.ts'
+
+
+module
+  /**
+   * A client-side table for arbitrary record-shaped data. Column definitions are
+   * intentionally supplied by the consumer so this component has no knowledge
+   * of a particular API, entity, or field name.
+   */
+  export interface DataTableProps {
+    columns: Array<ColumnDef<typeof features, any>>
+    data: ReadonlyArray<RowData>
+    /**
+     * Optional call to action for the empty panel — typically "create the first
+     * record". The table never learns what it does; it only decides when to
+     * offer it, which is when there are no records rather than when a query has
+     * hidden them. Pair it with `emptyActionLabel`.
+     */
+    emptyAction?: VoidFunction
+    emptyActionLabel?: string
+    emptyDescription?: string
+    emptyTitle?: string
+    eyebrow?: string
+    /**
+     * Optional filter-list component rendered beside the column picker. It
+     * receives the leaf columns, the current column-filter state, and a reset
+     * callback, so the table stays unaware of any particular entity's filters.
+     */
+    filterList?: (props: DataTableFilterListProps<any, typeof features>) => unknown
+    /**
+     * The `any` in `filterList` and here is the row type, which this component
+     * cannot name: Beast has no syntax for a type parameter on a component
+     * (`props <TData>{ … }` does not parse), so `DataTable` cannot be generic.
+     * Both sit in parameter position, where `any` is what lets a consumer pass a
+     * callback typed to its own row — `RowData` would reject `(row) => row._id`.
+     */
+    getRowId?: (row: any, index: number) => string
+    /** Applied when the URL carries no `filters`; resetting the filters returns here. */
+    initialColumnFilters?: ColumnFiltersState
+    initialColumnPinning?: ColumnPinningState
+    initialColumnVisibility?: ColumnVisibilityState
+    initialPageSize?: number
+    initialSorting?: SortingState
+    pageSizes?: number[]
+    /**
+     * Progress of an out-of-band (async) filter/sort pass, when the consumer
+     * runs one. Left unset the table filters synchronously and the progress
+     * readouts stay hidden.
+     */
+    queryState?: DataTableQueryProgress
+    showHeader?: boolean
+    rowClassName?: string
+    viewportClassName?: string
+    title?: string
+    /** A compact table-scoping control rendered directly after the filter control. */
+    titleActions?: OctaneNode
+    /**
+     * Namespace for this table's query-string keys (`q` becomes `<prefix>q`,
+     * and so on). Set it when more than one table shares a route so they don't
+     * write over each other's state.
+     */
+    urlKeyPrefix?: string
+    children?: OctaneNode
+    /**
+     * Rendered in the toolbar row immediately after the filter control, for
+     * actions that belong with the query controls rather than with the title —
+     * "create a record", say. `children` stays the header slot.
+     */
+    toolbarActions?: OctaneNode
+  }
+  /** Progress of a consumer-run async filter/sort pass. */
+  export interface DataTableQueryProgress {
+    completed: number
+    elapsedMs: number
+    error: string | null
+    matched: number
+    phase: 'idle' | 'filtering' | 'sorting' | 'ready' | 'error'
+    total: number
+  }
+
+  const DEFAULT_PAGE_SIZES = [50, 100, 250, 500]
+  const DEFAULT_PINNING: ColumnPinningState = { start: [], end: [] }
+  const NO_COLUMN_FILTERS: ColumnFiltersState = []
+  const IDLE_QUERY_STATE: DataTableQueryProgress = {
+    completed: 0,
+    elapsedMs: 0,
+    error: null,
+    matched: 0,
+    phase: 'idle',
+    total: 0,
+  }
+  const QUERY_KEYS = ['q', 'page', 'size', 'sort', 'desc', 'filters', 'visibility', 'order', 'widths'] as const
+
+  /**
+   * Shared by the table viewport and the empty panel so the section keeps the
+   * same height either way and the footer never jumps. `dvh` rather than `vh`
+   * so a mobile browser's collapsing toolbar doesn't push the footer off.
+   */
+  const VIEWPORT_CLASS_NAME = 'h-[calc(100dvh-157px)] md:h-[calc(100dvh-184px)] w-full'
+  const SCROLLBAR_CLASS_NAME =
+    'overflow-auto scrollbar-track-btable-background scrollbar-track:rounded-full ::-webkit-scrollbar:horizontal:h-0.5 scrollbar-track-horizontal:w-1 dark:scrollbar-track-btable-sidebar hover:scrollbar-thumb-btable-sidebar-border scrollbar-thumb-btable-table-head scrollbar-thin scroll-smooth transision-colors duration-300 ease-out'
+
+  // Copy for a table emptied by the reader's own query. The `empty*` props stay
+  // reserved for the other case — a table with no records at all — because the
+  // two want to say completely different things.
+  const FILTERED_EMPTY_TITLE = 'No matching rows'
+  const FILTERED_EMPTY_DESCRIPTION = 'Nothing matches the current search and filters.'
+
+props {
+  ~ columns,
+  ~ data,
+  ~ emptyAction,
+  ~ emptyActionLabel,
+  ~ emptyDescription = 'Nothing has been recorded here yet.',
+  ~ emptyTitle = 'No rows yet',
+  ~ eyebrow,
+  ~ filterList,
+  ~ getRowId,
+  ~ initialColumnFilters = NO_COLUMN_FILTERS,
+  ~ initialColumnPinning = DEFAULT_PINNING,
+  ~ initialColumnVisibility = {},
+  ~ initialPageSize,
+  ~ initialSorting = [],
+  ~ pageSizes = DEFAULT_PAGE_SIZES,
+  ~ queryState = IDLE_QUERY_STATE,
+  ~ titleActions,
+  ~ urlKeyPrefix = '',
+  ~ children,
+  ~ toolbarActions,
+  ~ showHeader = true,
+  ~ rowClassName,
+  ~ viewportClassName = VIEWPORT_CLASS_NAME,
+  ~ title = ''}: DataTableProps
+
+setup
+
+  // Capitalised alias so the template can render the prop as a component.
+  const FilterList = filterList
+  const safePageSizes = pageSizes.length > 0 ? pageSizes : DEFAULT_PAGE_SIZES
+  const defaultPageSize = safePageSizes.includes(initialPageSize ?? safePageSizes[0])
+    ? initialPageSize ?? safePageSizes[0]
+    : safePageSizes[0]
+  const defaultSort = initialSorting[0]
+  // Only real column ids are accepted from the URL, so `?sort=` can't be used
+  // to push an arbitrary key into the sorting state.
+  const sortIds = useMemo(
+    () => columns.map((column) => String(column.id)).filter((id) => id.length > 0),
+    [columns],
+  )
+  const pageSizeOptions = useMemo(
+    () => safePageSizes.map((size) => ({ value: String(size), label: String(size) })),
+    [safePageSizes.join(',')],
+  )
+
+  // Whether the mobile search field has taken over the toolbar row. Owned here
+  // rather than inside `HyperSearch` because the controls it hides are the
+  // field's siblings, not its children.
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false)
+
+  // Column pinning stays local: it is a layout preference, not part of the
+  // shareable query the URL describes.
+  const [columnPinning, setColumnPinning] = useState(initialColumnPinning)
+
+  const queryParsers = useMemo(
+    () => ({
+      q: parseAsString.withDefault(''),
+      page: parseAsInteger.withDefault(1),
+      size: parseAsInteger.withDefault(defaultPageSize),
+      sort: parseAsStringLiteral(sortIds).withDefault(defaultSort?.id ?? ''),
+      desc: parseAsBoolean.withDefault(defaultSort?.desc ?? true),
+      filters: createColumnFiltersParser(initialColumnFilters),
+      visibility: createColumnVisibilityParser(initialColumnVisibility),
+      order: createColumnOrderParser(),
+      widths: createColumnSizingParser(),
+    }),
+    [sortIds.join(','), defaultPageSize, defaultSort?.id, defaultSort?.desc, JSON.stringify(initialColumnFilters)],
+  )
+  const queryOptions = useMemo(
+    () =>
+      urlKeyPrefix
+        ? { urlKeys: Object.fromEntries(QUERY_KEYS.map((key) => [key, `${urlKeyPrefix}${key}`])) }
+        : {},
+    [urlKeyPrefix],
+  )
+  const [query, setQuery] = useQueryStates(queryParsers, queryOptions)
+
+  const globalFilter = query.q
+  const columnFilters = query.filters
+  const columnOrder = query.order
+  const columnVisibility = query.visibility
+  const columnSizing = query.widths
+  const sorting = useMemo<SortingState>(
+    () => (query.sort ? [{ id: query.sort, desc: query.desc }] : []),
+    [query.sort, query.desc],
+  )
+  const pagination = useMemo<PaginationState>(
+    () => ({
+      pageIndex: Math.max(0, query.page - 1),
+      pageSize: safePageSizes.includes(query.size) ? query.size : defaultPageSize,
+    }),
+    [query.page, query.size, defaultPageSize, safePageSizes.join(',')],
+  )
+  // The table re-announces its controlled state while mounting. Writing those
+  // echoes back would clear `?page` before the reader ever sees it, so every
+  // handler drops updates that don't actually change anything.
+  const isSameState = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right)
+  const setPagination = (updater: unknown) => {
+    const next = functionalUpdate(updater, pagination) as PaginationState
+    if (isSameState(next, pagination)) return
+    void setQuery({ page: next.pageIndex + 1, size: next.pageSize })
+  }
+
+  const table = useTable(
+    {
+      data,
+      columns,
+      features,
+      key: title,
+      globalFilterFn: 'includesString',
+      getRowId: getRowId ?? ((row, index) => String(row.id ?? row._id ?? index)),
+      state: { columnFilters, columnOrder, columnPinning, columnSizing, columnVisibility, globalFilter, pagination, sorting },
+      onColumnFiltersChange: (updater) => {
+        const next = functionalUpdate(updater, columnFilters)
+        if (isSameState(next, columnFilters)) return
+        // Narrowing the result set can strand the reader on a page that no
+        // longer exists, so every filter/search change rewinds to page 1.
+        void setQuery({ filters: next, page: 1 })
+      },
+      onColumnOrderChange: (updater) => {
+        const next = functionalUpdate(updater, columnOrder)
+        if (isSameState(next, columnOrder)) return
+        void setQuery({ order: next })
+      },
+      onColumnPinningChange: setColumnPinning,
+      onColumnVisibilityChange: (updater) => {
+        const next = functionalUpdate(updater, columnVisibility)
+        if (isSameState(next, columnVisibility)) return
+        void setQuery({ visibility: next })
+      },
+      columnResizeMode: 'onChange',
+      onColumnSizingChange: (updater) => {
+        // Read the latest queued widths during a drag; nuqs throttles URL writes
+        // while updating the rendered state immediately.
+        void setQuery((current) => {
+          const next = functionalUpdate(updater, current.widths)
+          return queryParsers.widths.eq(next, current.widths) ? {} : { widths: next }
+        })
+      },
+      onGlobalFilterChange: (updater) => {
+        const next = String(functionalUpdate(updater, globalFilter) ?? '')
+        if (next === globalFilter) return
+        void setQuery({ q: next, page: 1 })
+      },
+      onPaginationChange: setPagination,
+      onSortingChange: (updater) => {
+        const next = functionalUpdate(updater, sorting) as SortingState
+        if (isSameState(next, sorting)) return
+        const primary = next[0]
+        void setQuery({ sort: primary?.id ?? null, desc: primary?.desc ?? null })
+      },
+      // atoms: { cellSelection: cellSelectionAtom },
+    },
+    (state) => ({
+      columnFilters: state.columnFilters,
+      columnOrder: state.columnOrder,
+      columnPinning: state.columnPinning,
+      columnVisibility: state.columnVisibility,
+      columnResizing: state.columnResizing,
+      columnSizing: state.columnSizing,
+      globalFilter: state.globalFilter,
+      pagination: state.pagination,
+      rowSelection: state.rowSelection,
+      sorting: state.sorting,
+    }),
+  )
+  const visibleRows = table.getRowModel().rows
+  // Read the table's resolved state once. These are distinct from the local
+  // `columnPinning`/`columnVisibility` above: those are what we ask for, these
+  // are what the table settled on, and the rows must be handed the latter.
+  const tableColumnPinning = table.state.columnPinning
+  const tableColumnVisibility = table.state.columnVisibility
+  const tablePagination = table.state.pagination
+  const leafColumns = table.getAllLeafColumns()
+  // Hoisted out of the row loop: this was one lookup per row, per render, for a
+  // value that is the same for every row. Probing `leafColumns` rather than
+  // calling `table.getColumn`, which logs "Column with id 'select' does not
+  // exist" on a miss — a miss is the normal case for a table without checkboxes.
+  const showSelectColumn = leafColumns.some((column) => column.id === DEFAULT_SELECT_COLUMN_ID)
+  const pinnedColumnLayouts = useMemo(
+    () => getPinnedColumnLayouts(
+      orderColumnsByPinning(table.getAllLeafColumns(), table.state.columnPinning),
+      table.state.columnPinning,
+      table.state.columnVisibility,
+    ),
+    [table, table.state.columnPinning, table.state.columnVisibility, table.state.columnSizing],
+  )
+  const handleResetFilters = () => {
+    void setQuery({ filters: null, page: null })
+  }
+  // Clears everything the reader can narrow by, not just the column filters,
+  // since the empty panel offers one button for the whole dead end.
+  // With default filters, dropping the key would restore them, so an explicit
+  // empty list is written instead.
+  const handleClearQuery = () => {
+    void setQuery({ q: null, filters: initialColumnFilters.length > 0 ? [] : null, page: null })
+  }
+  // Only a table that *has* records can be filtered down to none. With no
+  // records at all, clearing a stale `?q=` would not reveal anything, so that
+  // case keeps the consumer's own "nothing here yet" copy.
+  const hasActiveQuery = data.length > 0 && (globalFilter.trim().length > 0 || columnFilters.length > 0)
+  const isEmpty = visibleRows.length === 0
+  const handleSearchChange = (event: Event) => table.setGlobalFilter((event.currentTarget as HTMLInputElement).value)
+  // The field's own clear button only resets its local state; the query lives
+  // here, so clearing it has to come back through this.
+  const handleClearSearch = () => table.setGlobalFilter('')
+
+  const isQuerying = queryState.phase === 'filtering' || queryState.phase === 'sorting'
+  const queryPercent = queryState.total === 0
+    ? 0
+    : Math.min(100, (queryState.completed / queryState.total) * 100)
+  const queryLabel = queryState.phase === 'sorting' ? 'Ranking' : 'Searching'
+
+section(className='relative overflow-hidden rounded-xs md:bg-btable-surface')
+  if showHeader
+    div(className='hidden md:flex items-center justify-between p-2')
+      Header(eyebrow={eyebrow} title={title} description='Browse, sort, filter, and select your data.')
+      | #{children}
+
+  // On a phone the search field takes over this row when it opens, so every
+  // other control in it stands down for the duration. Hidden rather than
+  // unmounted: they keep their own state and the row is whole again the moment
+  // the field closes. `HyperSearch` never reports expanded on desktop.
+  div(className='flex items-center justify-between h-12 px-2 dark:bg-btable-sunken dark:md:bg-btable-surface')
+    div(className={cn('flex items-end gap-1.5 md:gap-2 h-fit', isSearchExpanded && 'hidden md:flex')})
+      ColumnView(
+        ~ cols={leafColumns}
+        ~ columnVisibility={tableColumnVisibility}
+        ~ onColumnVisibilityChange={table.setColumnVisibility}
+        ~ columnOrder={table.state.columnOrder}
+        ~ onColumnOrderChange={table.setColumnOrder}
+        ~ )
+      if FilterList
+        FilterList(
+          ~ columns={leafColumns}
+          ~ columnFilters={columnFilters}
+          ~ onReset={handleResetFilters}
+          ~ canReset={!isSameState(columnFilters, initialColumnFilters)}
+          ~ )
+      if titleActions && !isSearchExpanded
+        div(className='min-w-0')
+          | #{titleActions}
+    div(className={cn('flex items-center gap-2.5 h-12', isSearchExpanded && 'w-full md:w-auto')})
+      if toolbarActions
+        | #{toolbarActions}
+      Search(value={globalFilter} onChange={handleSearchChange} onClear={handleClearSearch} onExpandedChange={setIsSearchExpanded})
+
+  if isEmpty
+    div(className={viewportClassName})
+      TableEmptyState(
+        ~ title={hasActiveQuery ? FILTERED_EMPTY_TITLE : emptyTitle}
+        ~ description={hasActiveQuery ? FILTERED_EMPTY_DESCRIPTION : emptyDescription}
+        ~ isFiltered={hasActiveQuery}
+        ~ onClearFilters={handleClearQuery}
+        ~ action={hasActiveQuery ? undefined : emptyAction}
+        ~ actionLabel={emptyActionLabel}
+        ~ )
+  else
+    div(className={cn(viewportClassName, SCROLLBAR_CLASS_NAME)})
+      HyperTable(
+        ~ table={table}
+        ~ title={title}
+        ~ columnPinning={tableColumnPinning}
+        ~ columnVisibility={tableColumnVisibility}
+        ~ selectAllChecked={table.getIsAllPageRowsSelected()}
+        ~ onSelectAllChange={(checked: boolean) => table.toggleAllPageRowsSelected(checked)}
+        ~ )
+        TableBody
+          each row in visibleRows key row.id
+            HyperRow(
+              ~ row={row}
+              ~ className={rowClassName}
+              ~ isActive={false}
+              ~ isEditing={false}
+              ~ isPinned={false}
+              ~ isSelected={row.getIsSelected()}
+              ~ showSelectColumn={showSelectColumn}
+              ~ columnPinning={tableColumnPinning}
+              ~ columnVisibility={tableColumnVisibility}
+              ~ pinnedColumnLayouts={pinnedColumnLayouts}
+              ~ )
+
+  footer(className='flex min-h-[50px] items-center justify-between gap-5 border-t border-btable-sidebar-border bg-btable-surface p-3 md:p-0 text-xs')
+    div(className='flex items-center gap-4')
+      SelectOctane(
+        ~ className='text-xs'
+        ~ controlClassName='bg-btable-surface! border-0! text-sm text-btable-muted-foreground'
+        ~ menuPlacement='top'
+        ~ value={String(tablePagination.pageSize)}
+        ~ onChange={(value) => table.setPageSize(Number(value))}
+        ~ options={pageSizeOptions}
+        ~ )
+      Popper(condition={isQuerying && !isSearchExpanded} lead={queryLabel} value={queryPercent.toFixed(0)} trail='%' role='status' className='text-orange-500 justify-end')
+      Popper(condition={queryState.phase === 'error' && !isSearchExpanded} lead='error' trail='index interrupted')
+      span(className='hidden sm:flex uppercase font-mono text-btable-active text-xs whitespace-nowrap') SHOWING #{visibleRows.length.toLocaleString()} ROWS
+    div(className='flex items-center gap-4 md:gap-8')
+      p(className='m-0 font-normal text-btable-muted-foreground/80') #{tablePagination.pageIndex + 1} / #{Math.max(1, table.getPageCount()).toLocaleString()}
+      div(className='flex items-center overflow-hidden h-9.5 rounded-sm divide-x divide-btable-border')
+        Button(className='rounded-none h-full! w-10! rotate-180' variant='ghost' size='icon-lg' aria-label='First page' icon='chevrons-right' disabled={!table.getCanPreviousPage()} onClick={() => table.firstPage()})
+        Button(className='rounded-none h-full! w-10! rotate-180' variant='ghost' size='icon-lg' aria-label='Previous page' icon='chevron-right' disabled={!table.getCanPreviousPage()} onClick={() => table.previousPage()})
+        Button(className='rounded-none h-full! w-10!' variant='ghost' size='icon-lg' aria-label='Next page' icon='chevron-right' disabled={!table.getCanNextPage()} onClick={() => table.nextPage()})
+        Button(className='rounded-none h-full! w-10!' variant='ghost' size='icon-lg' aria-label='Last page' icon='chevrons-right' disabled={!table.getCanNextPage()} onClick={() => table.lastPage()})

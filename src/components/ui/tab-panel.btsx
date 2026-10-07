@@ -1,0 +1,31 @@
+import { Tabs } from '@octanejs/base-ui/tabs'
+import { cn } from '../../lib/utils'
+
+module
+  type TabPanelProps = Omit<Tabs.Root.Props, 'className'> & { className?: string }
+  type TabPanelListProps = Omit<Tabs.List.Props, 'className'> & { className?: string }
+  type TabPanelTriggerProps = Omit<Tabs.Tab.Props, 'className'> & { className?: string }
+  type TabPanelContentProps = Omit<Tabs.Panel.Props, 'className'> & { className?: string }
+
+component TabPanelList
+  props { className, ...props }: TabPanelListProps
+  Tabs.List(data-slot="tab-panel-list" className={cn('flex gap-1 overflow-x-auto border-b border-border', className)} {...props})
+
+component TabPanelTrigger
+  props { className, ...props }: TabPanelTriggerProps
+  Tabs.Tab(
+    ~ data-slot="tab-panel-trigger"
+    ~ className={cn('inline-flex shrink-0 items-center justify-center gap-2 border-b-2 border-transparent px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground data-active:border-primary data-active:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-2 data-disabled:pointer-events-none data-disabled:opacity-40 motion-reduce:transition-none', className)}
+    ~ {...props}
+    ~ )
+
+component TabPanelContent
+  props { className, ...props }: TabPanelContentProps
+  Tabs.Panel(data-slot="tab-panel-content" className={cn('min-w-0 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-4', className)} {...props})
+
+module
+  export { TabPanelList, TabPanelTrigger, TabPanelContent }
+  export type { TabPanelProps, TabPanelListProps, TabPanelTriggerProps, TabPanelContentProps }
+
+props { className, ...props }: TabPanelProps
+Tabs.Root(data-slot="tab-panel" className={cn('min-w-0 space-y-8', className)} {...props})

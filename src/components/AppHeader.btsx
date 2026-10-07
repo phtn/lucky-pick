@@ -1,7 +1,9 @@
-import { Moon, Sun, User, Users, Volume2, VolumeX } from '@octanejs/lucide';
+import { Users } from '@octanejs/lucide';
 import AccountSwitcher from './AccountSwitcher.btsx';
 import GameSwitcher from './GameSwitcher.btsx';
-import { DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator } from './ui/dropdown-menu.btsx';
+import { DropdownMenuItem, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator } from './ui/dropdown-menu.btsx';
+import { Icon } from '../lib/icons';
+import { followRoute } from '../lib/navigation';
 import { THEMES, type ThemeId, type ThemeMode } from '../lib/theme';
 import type { GameConfig, GameId } from '../lib/games';
 import type { GameMode } from '../lib/lotto';
@@ -31,6 +33,13 @@ module
   // Checkbox and radio rows keep the menu open on click, so the whole header's
   // worth of settings can be worked through in one visit.
   const rowClass = 'gap-1 p-2 hover:bg-foreground/10!';
+
+component AnalyticsLink
+  DropdownMenuSeparator
+  DropdownMenuItem(render={<a href="/analytics"/>} onClick={(event: MouseEvent) => followRoute(event, '/analytics')} className="gap-1 p-2 hover:bg-foreground/10!")
+    div(className="flex size-6 items-center justify-center")
+      Icon(name="columns" size={14})
+    span Analytics
 
 props { pool, gameName, game, gameId, jackpots, isDrawing, onSwitchGame, mode, onSelectMode, soundOn, onToggleSound, theme, themeMode, onToggleThemeMode, onPickTheme, onNotify }: AppHeaderProps
 
@@ -64,38 +73,38 @@ header(className="app-header")
         ~ )
 
     div(className="app-header__account flex items-start gap-2")
-      AccountSwitcher(onNotify={onNotify})
+      AccountSwitcher(onNotify={onNotify} footer={<AnalyticsLink/>})
         DropdownMenuSeparator
         DropdownMenuLabel(className="font-normal text-xs text-muted-foreground opacity-80") Mode
-        DropdownMenuRadioGroup(value={mode} onValueChange={(next) => onSelectMode(next as GameMode)})
+        DropdownMenuRadioGroup(value={mode} onValueChange={(next: GameMode) => onSelectMode(next)})
           DropdownMenuRadioItem(value="solo" className={rowClass})
             div(className="flex size-6 items-center justify-center")
-              User(className="w-3.5 h-3.5")
+              Icon(name="user" className="w-3.5 h-3.5")
             span(className="truncate") Solo
           DropdownMenuRadioItem(value="party" className={rowClass})
             div(className="flex size-6 items-center justify-center")
-              Users(className="w-3.5 h-3.5")
+              Icon(name="user-plus" className="w-3.5 h-3.5")
             span(className="truncate") Party
 
         DropdownMenuSeparator
         DropdownMenuCheckboxItem(checked={soundOn} onCheckedChange={onToggleSound} className={rowClass})
           div(className="flex size-6 items-center justify-center")
             if soundOn
-              Volume2(className="w-3.5 h-3.5")
+              Icon(name="radio" className="w-3.5 h-3.5")
             else
-              VolumeX(className="w-3.5 h-3.5 text-muted-foreground")
+              Icon(name="mute" className="w-3.5 h-3.5 text-muted-foreground")
           span(className="truncate") Sound
         DropdownMenuCheckboxItem(checked={themeMode === 'dark'} onCheckedChange={onToggleThemeMode} className={rowClass})
           div(className="flex size-6 items-center justify-center")
             if themeMode === 'dark'
-              Moon(className="w-3.5 h-3.5")
+              Icon(name="moon" className="w-3.5 h-3.5")
             else
-              Sun(className="w-3.5 h-3.5")
+              Icon(name="sun" className="w-3.5 h-3.5")
           span(className="truncate") Dark mode
 
         DropdownMenuSeparator
         DropdownMenuLabel(className="font-normal text-xs text-muted-foreground opacity-80") Theme
-        DropdownMenuRadioGroup(value={theme} onValueChange={(next) => onPickTheme(next as ThemeId)})
+        DropdownMenuRadioGroup(value={theme} onValueChange={(next: ThemeId) => onPickTheme(next)})
           each t in THEMES key t.id
             DropdownMenuRadioItem(value={t.id} className={rowClass})
               div(className="flex size-6 items-center justify-center")
