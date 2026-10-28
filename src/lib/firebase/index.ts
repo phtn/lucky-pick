@@ -7,8 +7,8 @@ export const firebaseConfig = {
   projectId: import.meta.env.PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.PUBLIC_FIREBASE_APP_ID,
-  measurementId: import.meta.env.PUBLIC_FIREBASE_MEASUREMENT_ID
+  appId: import.meta.env.PUBLIC_FIREBASE_APP_ID
+  // measurementId: import.meta.env.PUBLIC_FIREBASE_MEASUREMENT_ID
 } satisfies FirebaseOptions
 
 // Analytics and storage are optional; these four are what `getAuth` needs to
@@ -33,7 +33,9 @@ if (!isFirebaseConfigured) {
 }
 
 export const firebaseApp: FirebaseApp | null = isFirebaseConfigured
-  ? (getApps().length > 0 ? getApp() : initializeApp(firebaseConfig))
+  ? getApps().length > 0
+    ? getApp()
+    : initializeApp(firebaseConfig)
   : null
 
 export const auth: Auth | null = firebaseApp ? getAuth(firebaseApp) : null

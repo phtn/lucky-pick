@@ -2,10 +2,20 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "lucky-pick",
   "compatibility_date": "2026-09-20",
-  // Static-assets-only Worker: the rsbuild output is served directly, and any
-  // unknown path falls back to index.html so client routing keeps working.
+  // `firebase-admin` runs in the Worker (Asgard's session cookie and the god
+  // roster are verified there), which needs the Node built-ins.
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./src/worker.ts",
+  // The rsbuild output is served through the Worker, which falls back to
+  // index.html itself so client routing keeps working on every hostname.
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "not_found_handling": "none"
+  },
+  "observability": {
+    "logs": {
+      "enabled": true
+    }
   }
 }

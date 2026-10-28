@@ -1,0 +1,45 @@
+import { useState } from 'octane'
+import { cn } from '@/lib/utils'
+import { formatCount, formatPercent, ratio, type Segment } from '@/lib/overview/metrics'
+
+module
+  export interface DistributionProps {
+    /** Pre-filtered to non-zero values; order carries the reading order. */
+    segments: readonly Segment[]
+    /** Sentence-case caption naming what the whole bar is. */
+    caption?: string
+    className?: string
+  }
+
+props { segments, caption, className }: DistributionProps
+
+setup
+  const [hovered, setHovered] = useState<string | null>(null)
+  const total = segments.reduce((running, segment) => running + segment.value, 0)
+
+div(className={className})
+  if total === 0
+    div(className='h-2.5 w-full rounded-[3px] bg-muted')
+  else
+    div(className='flex h-2.5 w-full gap-[2px]' onMouseLeave={() => setHovered(null)})
+      each segment in segments key segment.key
+        div(
+          ~ role='presentation'
+          ~ onMouseEnter={() => setHovered(segment.key)}
+          ~ className={cn('h-full rounded-[3px] transition-opacity duration-150 ease-out', segment.tone, hovered !== null && hovered !== segment.key && 'opacity-30')}
+          ~ style={{ flexGrow: segment.value, flexBasis: 0, minWidth: '4px' }}
+          ~ )
+
+  div(className='mt-4 flex flex-wrap gap-x-6 gap-y-2.5' onMouseLeave={() => setHovered(null)})
+    each segment in segments key segment.key
+      div(
+        ~ onMouseEnter={() => setHovered(segment.key)}
+        ~ className={cn('flex items-center gap-2 transition-opacity duration-150 ease-out', hovered !== null && hovered !== segment.key && 'opacity-45')}
+        ~ )
+        span(aria-hidden={true} className={cn('h-2.5 w-0.5 shrink-0 rounded-full', segment.tone)})
+        span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') #{segment.label}
+        span(className='text-sm tabular-nums text-foreground') #{formatCount(segment.value)}
+        span(className='font-mono text-2xs tabular-nums text-muted-foreground/70') #{formatPercent(ratio(segment.value, total))}
+
+  if caption
+    p(className='mt-4 text-xs text-muted-foreground') #{caption}

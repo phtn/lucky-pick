@@ -72,6 +72,7 @@
 @theme {
   --font-sans: 'Manrope', 'Geist', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', 'Geist Mono', monospace;
+  --text-2xs: 10px;
 }
 
 /* Tokens the shadcn sets do not carry, derived from each theme's own palette
@@ -107,6 +108,22 @@
   --lp-r-well: 22px;
   --lp-r-pill: 999px;
   --mac-blue: oklch(0.603 0.218 257.42);
+
+  /* Asgard console tokens. The overview reads as instrumentation, so its
+     readings take a fixed semantic set rather than the themed chart ramp:
+     a colour means the same thing on every theme. */
+  --active: var(--mac-blue);
+  --surface: var(--card);
+  --control-line: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --chart-good: #1cc375;
+  --chart-info: #0086ff;
+  --chart-warn: #f0b100;
+  --chart-idle: #8a8a8a;
+  --chart-critical: #e7000b;
+  --tier-1: #74affa;
+  --tier-2: #4398fc;
+  --tier-3: #007df3;
+  --tier-4: #0060c3;
 }
 
 .dark {
@@ -119,6 +136,15 @@
   --lp-veil: color-mix(in oklab, white 4%, transparent);
   --lp-divider: color-mix(in oklab, white 6%, transparent);
   --mac-blue: oklch(0.686 0.17 253.16);
+
+  --control-line: color-mix(in oklab, white 12%, transparent);
+  --chart-info: #3592fd;
+  --chart-idle: #9e9e9e;
+  --chart-critical: #ea3c3f;
+  --tier-1: #0056a9;
+  --tier-2: #0072e0;
+  --tier-3: #3592fd;
+  --tier-4: #7cbbff;
 }
 
 @theme inline {
@@ -154,6 +180,19 @@
   --color-sunken: var(--lp-sunken);
   --color-raised: var(--lp-raised);
   --color-elevated: var(--lp-elevated);
+
+  --color-active: var(--active);
+  --color-surface: var(--surface);
+  --color-control-line: var(--control-line);
+  --color-chart-good: var(--chart-good);
+  --color-chart-info: var(--chart-info);
+  --color-chart-warn: var(--chart-warn);
+  --color-chart-idle: var(--chart-idle);
+  --color-chart-critical: var(--chart-critical);
+  --color-tier-1: var(--tier-1);
+  --color-tier-2: var(--tier-2);
+  --color-tier-3: var(--tier-3);
+  --color-tier-4: var(--tier-4);
 }
 
 @layer base {
@@ -489,10 +528,11 @@
 
   .number-grid {
     padding: 8px;
+    select: none;
   }
 
   .number-grid__matrix {
-    gap: 5px;
+    gap: 8px;
   }
 
   .number-grid__matrix > button {

@@ -1,0 +1,254 @@
+import { useEffect, useState } from 'octane'
+import { Outlet } from '@octanejs/tanstack-router'
+import { Icon } from '@/lib/icons'
+import { cn } from '@/lib/utils'
+import { useFirebaseUser } from '@/lib/firebase/auth'
+import { useConsoleFirebaseSession } from '@/lib/firebase/console-session'
+import { buildAsgardHandoffUrl, isAsgardConsoleHostname } from '@/lib/routing/asgard-subdomain'
+import { buildAppUrl } from '@/lib/routing/app-url'
+
+module
+  /**
+   * `unavailable` is deliberately not `unauthorized`: a console whose API is
+   * missing or whose server credentials are unset is a deployment that cannot
+   * answer, not a visitor who may not enter. Reporting one as the other sends
+   * a god off to fix access they already hold.
+   */
+  type Status = 'loading' | 'ready' | 'unauthorized' | 'unavailable' | 'error'
+
+  const SESSION_ENDPOINT = '/api/asgard/session'
+
+  const blockClass = 'grid min-h-screen place-items-center px-6 text-center'
+
+  type Failure = { status: 'unauthorized' | 'unavailable' | 'error'; detail: string }
+
+  /** The server's own message, when it sent one. */
+  async function readServerError(response: Response) {
+    try {
+      const payload: unknown = await response.json()
+      const error = typeof payload === 'object' && payload !== null ? (payload as { error?: unknown }).error : undefined
+      return typeof error === 'string' && error.length > 0 ? error : null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Names what actually went wrong on the way in.
+   *
+   * The dev server answers an unknown API path with the SPA shell, so a 404 or
+   * an HTML body means the Worker is not the thing serving this origin — the
+   * single likeliest reason the console refuses a god who is properly signed in.
+   */
+  async function describeFailure(response: Response): Promise<Failure> {
+    const serverError = await readServerError(response)
+
+    if (response.status === 401 || response.status === 403) {
+      return { status: 'unauthorized', detail: serverError ?? 'This account does not hold the god claim.' }
+    }
+
+    if (response.status === 503) {
+      return {
+        status: 'unavailable',
+        detail: serverError ?? 'Asgard’s Firebase Admin credentials are not configured on this deployment.'
+      }
+    }
+
+    if (response.status === 404 || serverError === null) {
+      return {
+        status: 'unavailable',
+        detail: 'Asgard’s API did not answer on this origin. It runs in the Worker, so use `bun run cf:preview` locally rather than the dev server.'
+      }
+    }
+
+    return { status: 'error', detail: serverError }
+  }
+
+component Blocked
+  props { title, detail, homeUrl }: { title: string; detail: string; homeUrl: string }
+  div(className={blockClass})
+    div(className='max-w-md')
+      div(className='mx-auto mb-5 grid size-10 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
+        Icon(name='key' size={18})
+      p(className='text-sm text-foreground') #{title}
+      p(className='mt-2 text-xs text-muted-foreground') #{detail}
+      a(href={homeUrl} className='mt-6 inline-flex h-10 items-center rounded-full bg-foreground px-5 text-sm font-medium text-background') Return to Lucky Pick
+
+setup
+  const { hasGodAccess, isLoading: isAuthLoading, user } = useFirebaseUser()
+  // True on Asgard's own subdomain, and on an origin standing in for one where
+  // no subdomain is possible. Either way, this is where the console runs.
+  const isAsgardHost = typeof window !== 'undefined' && isAsgardConsoleHostname(window.location.hostname)
+  const [email, setEmail] = useState<string | null>(null)
+  const [status, setStatus] = useState<Status>('loading')
+  const [detail, setDetail] = useState<string | null>(null)
+  const homeUrl =
+    typeof window === 'undefined' ? '/' : buildAppUrl(new URL(window.location.href), '/').toString()
+
+  // Firebase auth state is per-origin, so a god who arrived through the handoff
+  // holds only the session cookie. This trades it for the client session, which
+  // is what gives the console a name and a photo.
+  useConsoleFirebaseSession('asgard', status === 'ready')
+
+  useEffect(() => {
+    let cancelled = false
+
+    const setFailure = (failure: Failure) => {
+      if (cancelled) return
+      setStatus(failure.status)
+      setDetail(failure.detail)
+    }
+
+    const openAsgard = async () => {
+      if (!isAsgardHost) {
+        // Firebase restores the session and its claims asynchronously; judging
+        // before then flashes the unauthorized block for signed-in gods.
+        if (isAuthLoading) return
+
+        if (!user) {
+          setFailure({ status: 'unauthorized', detail: 'You are not signed in on Lucky Pick.' })
+          return
+        }
+
+        if (!hasGodAccess) {
+          setFailure({ status: 'unauthorized', detail: 'This account does not hold the god claim.' })
+          return
+        }
+
+        try {
+          const idToken = await user.getIdToken(true)
+          window.location.assign(buildAsgardHandoffUrl(new URL(window.location.href), idToken).toString())
+        } catch {
+          setFailure({ status: 'error', detail: 'Your sign-in token could not be refreshed for the handoff.' })
+        }
+        return
+      }
+
+      // On the console's own subdomain the token arrives in the fragment. On a
+      // stand-in origin there was no redirect to carry one, so the console
+      // mints it from the sign-in this origin already holds — which is only
+      // knowable once Firebase has restored that session.
+      const handedOffToken = new URLSearchParams(window.location.hash.slice(1)).get('idToken')
+
+      if (!handedOffToken && isAuthLoading) return
+
+      let idToken = handedOffToken
+      if (!idToken && user && hasGodAccess) {
+        try {
+          idToken = await user.getIdToken(true)
+        } catch {
+          setFailure({ status: 'error', detail: 'Your sign-in token could not be refreshed for this console.' })
+          return
+        }
+      }
+
+      let exchanged = false
+
+      try {
+        if (idToken) {
+          const response = await fetch(SESSION_ENDPOINT, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ idToken })
+          })
+
+          if (!response.ok) {
+            setFailure(await describeFailure(response))
+            return
+          }
+
+          exchanged = true
+          // A token that travelled in the URL has been spent; it has no
+          // business staying there.
+          if (handedOffToken) window.history.replaceState(null, '', window.location.pathname)
+        }
+
+        const response = await fetch(SESSION_ENDPOINT, { credentials: 'same-origin' })
+        if (!response.ok) {
+          // The exchange succeeded a moment ago, so the claim is not in doubt:
+          // the cookie it set did not come back. That is a transport problem —
+          // a mixed scheme, a stripped cookie, a different host than the one it
+          // was set on — and saying "no access" would send the reader hunting
+          // for a claim they already hold.
+          if (exchanged && (response.status === 401 || response.status === 403)) {
+            setFailure({
+              status: 'error',
+              detail: 'Your access was accepted, but the session cookie did not come back on the next request. Check that Asgard is reached on one origin, over https in production.'
+            })
+            return
+          }
+
+          setFailure(await describeFailure(response))
+          return
+        }
+
+        // A dev server answers an unknown API path with the SPA shell — a 200
+        // carrying HTML. Reading it as the session is what would otherwise turn
+        // "the Worker is not serving this origin" into a vague failure.
+        let payload: unknown
+        try {
+          payload = await response.json()
+        } catch {
+          setFailure({
+            status: 'unavailable',
+            detail: 'Asgard’s API answered with a page instead of a session. It runs in the Worker, so use `bun run cf:preview` locally rather than the dev server.'
+          })
+          return
+        }
+
+        const nextEmail =
+          typeof payload === 'object' && payload !== null && typeof (payload as { email?: unknown }).email === 'string'
+            ? (payload as { email: string }).email
+            : null
+
+        if (!cancelled) {
+          setEmail(nextEmail)
+          setStatus('ready')
+        }
+      } catch {
+        setFailure({ status: 'error', detail: 'Asgard could not be reached from this origin.' })
+      }
+    }
+
+    void openAsgard()
+    return () => {
+      cancelled = true
+    }
+  }, [hasGodAccess, isAuthLoading, isAsgardHost, user])
+
+div(className='min-h-screen bg-sunken')
+  header(className='sticky top-0 z-20 flex h-14 items-center justify-between gap-4 border-b border-control-line bg-background px-4 md:px-6')
+    div(className='flex min-w-0 items-center gap-2.5')
+      span(aria-hidden={true} className='h-3 w-0.5 rounded-full bg-active')
+      h1(className='truncate font-sans text-base font-medium tracking-tight text-foreground') Asgard
+    div(className='flex shrink-0 items-center gap-3')
+      if status === 'ready'
+        span(className={cn('max-w-[46vw] truncate font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground')}) #{email ?? user?.email ?? 'signed in'}
+      a(href={homeUrl} aria-label='Return to Lucky Pick' className='inline-flex size-8 items-center justify-center rounded-full border border-control-line text-muted-foreground transition-colors hover:bg-accent hover:text-foreground')
+        Icon(name='arrow-right' size={13})
+  main
+    if status === 'loading'
+      div(className='flex min-h-screen items-center justify-center gap-2.5')
+        Icon(name='spinner' size={16} className='animate-spin text-muted-foreground')
+        p(className='text-sm text-muted-foreground') Verifying your administrator session
+    elseif status === 'ready'
+      Outlet
+    elseif status === 'unauthorized'
+      Blocked(
+        ~ title='You do not have an active administrator session.'
+        ~ detail={detail ?? 'Asgard is open to accounts holding the god claim.'}
+        ~ homeUrl={homeUrl}
+        ~ )
+    elseif status === 'unavailable'
+      Blocked(
+        ~ title='Asgard is not answering on this deployment.'
+        ~ detail={detail ?? 'The console’s server is not available here.'}
+        ~ homeUrl={homeUrl}
+        ~ )
+    else
+      Blocked(
+        ~ title='We could not verify your administrator session.'
+        ~ detail={detail ?? 'Something went wrong on the way in. Please try again.'}
+        ~ homeUrl={homeUrl}
+        ~ )
