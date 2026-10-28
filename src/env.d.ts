@@ -9,6 +9,12 @@ declare module '*.btsx' {
 // absent from the loaded env files is replaced with `undefined`, so every key is
 // optional here and guarded at the point of use.
 interface ImportMetaEnv {
+  /** Rsbuild's own build-time flags, inlined the same way. */
+  readonly DEV?: boolean
+  readonly PROD?: boolean
+  readonly MODE?: 'development' | 'production' | 'none'
+  /** Opens Asgard's client gate in a dev build. See `lib/asgard/dev-gate.ts`. */
+  readonly PUBLIC_ASGARD_OPEN?: string
   readonly PUBLIC_FIREBASE_API_KEY?: string
   readonly PUBLIC_FIREBASE_AUTH_DOMAIN?: string
   readonly PUBLIC_FIREBASE_PROJECT_ID?: string

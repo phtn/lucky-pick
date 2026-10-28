@@ -1,0 +1,303 @@
+/* Asgard's shell: a resizable, collapsible sidebar beside a scrolling console.
+   Ported from the admin dashboard in meld-io, with its hard-coded palette
+   swapped for this app's tokens so it follows every theme. */
+
+.asgard-frame {
+  width: 100%;
+  height: 100dvh;
+  margin: 0 auto;
+  background: var(--background);
+}
+
+.asgard-layout {
+  gap: 0;
+}
+
+.asgard-sidebar-panel,
+.asgard-content-panel {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.asgard-resize-separator {
+  position: relative;
+  width: 1px;
+  outline: none;
+  cursor: col-resize;
+}
+
+.asgard-resize-separator::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--lp-divider);
+  content: '';
+  transform: translateX(-50%);
+  transition: background-color 150ms ease;
+}
+
+.asgard-resize-separator:hover::before,
+.asgard-resize-separator:focus-visible::before,
+.asgard-resize-separator[data-separator='active']::before {
+  background: var(--active);
+}
+
+.asgard-sidebar {
+  display: flex;
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  padding: 10px 3px 9px;
+  background: var(--lp-sunken);
+}
+
+.asgard-sidebar-body {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.asgard-sidebar-header {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+}
+
+.asgard-brand {
+  display: flex;
+  width: 100%;
+  height: 52px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 11px 10px;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+}
+
+.asgard-brand-link {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  /*gap: 4px;*/
+  color: inherit;
+  text-decoration: none;
+}
+
+.asgard-nav {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  padding: 24px 8px 4px;
+}
+
+.asgard-nav-label {
+  margin: 0 8px 10px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 450;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.asgard-compact-nav {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  gap: 3px;
+  padding: 19px 6px 6px;
+}
+
+.asgard-link {
+  display: flex;
+  position: relative;
+  z-index: 10;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  text-decoration: none;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.asgard-link:hover {
+  color: var(--foreground);
+}
+
+.asgard-link--active,
+.asgard-link--active:hover {
+  background: color-mix(in srgb, var(--mac-blue), transparent 20%);
+  color: #ffffff;
+}
+
+.asgard-link--active:hover {
+  background: color-mix(in srgb, var(--mac-blue), transparent 35%);
+}
+
+.asgard-link--active .asgard-link-icon {
+  color: #ffffff;
+}
+
+.asgard-link-icon {
+  flex-basis: 24px;
+  color: var(--muted-foreground);
+}
+
+.asgard-compact-link {
+  justify-content: center;
+  min-height: 42px;
+  gap: 0;
+  padding: 0;
+}
+
+.asgard-compact-link .asgard-link-icon {
+  flex-basis: auto;
+  margin: 0;
+}
+
+/* Compact is the collapsed rail: labels go, icons centre, the second nav
+   takes over. */
+.asgard-sidebar[data-compact] .asgard-brand {
+  min-height: 60px;
+  height: auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.asgard-sidebar[data-compact] .asgard-brand-link {
+  flex: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
+}
+
+.asgard-sidebar[data-compact] .asgard-brand-link > span {
+  display: block;
+  font-size: 11px;
+}
+
+.asgard-sidebar[data-compact] .asgard-nav {
+  display: none;
+}
+
+.asgard-sidebar[data-compact] .asgard-compact-nav {
+  display: flex;
+}
+
+.asgard-sidebar[data-compact] .asgard-sidebar-bottom {
+  align-items: center;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.asgard-sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 3px;
+  padding: 9px 7px 0;
+  border-top: 1px solid var(--lp-divider);
+}
+
+.asgard-sidebar-identity {
+  min-width: 0;
+  padding: 6px 8px 2px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asgard-sidebar[data-compact] .asgard-sidebar-identity {
+  display: none;
+}
+
+.asgard-content {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+}
+
+/* The hover plate that follows the pointer between nav rows. */
+.asgard-hover-plate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  margin: 0;
+  border-radius: 10px;
+  background: var(--lp-raised);
+  pointer-events: none;
+  transition:
+    transform 200ms ease-out,
+    width 200ms ease-out,
+    height 200ms ease-out,
+    opacity 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asgard-hover-plate {
+    transition: none;
+  }
+}
+
+/* A page's own header inside the content panel, with its tab strip beneath. */
+.asgard-topbar {
+  display: flex;
+  min-height: 84px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 16px 16px;
+}
+
+.asgard-topbar-tabs {
+  padding: 0 16px;
+  border-bottom: 1px solid var(--lp-divider);
+}
+
+@media (min-width: 768px) {
+  .asgard-topbar,
+  .asgard-topbar-tabs {
+    padding-inline: 24px;
+  }
+}
+
+/* Shown only while the dev gate is open, so an unguarded console is never
+   mistaken for a signed-in one. */
+.asgard-open-gate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  background: color-mix(in oklab, var(--chart-warn) 16%, transparent);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

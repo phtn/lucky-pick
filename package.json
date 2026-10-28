@@ -32,6 +32,7 @@
     "@octanejs/dnd-kit": "0.1.53",
     "@octanejs/lucide": "0.1.53",
     "@octanejs/nuqs": "^0.1.49",
+    "@octanejs/resizable-panels": "^0.0.26",
     "@octanejs/select": "0.1.9",
     "@octanejs/shadcn": "0.0.48",
     "@octanejs/tanstack-router": "^0.2.3",
@@ -64,6 +65,6 @@
     "typescript": "^5.9.3",
     "vite": "^8.3.3",
     "vitest": "^5.0.3",
-    "wrangler": "^4.147.0"
+    "wrangler": "^4.154.0"
   }
 }

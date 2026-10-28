@@ -1,0 +1,106 @@
+import type { JSX } from 'octane/jsx-runtime'
+import { useLayoutEffect, useRef } from 'octane'
+import { Icon } from '@/lib/icons'
+import type { IconName } from '@/lib/icons'
+import { cn } from '@/lib/utils'
+import { Link } from '@octanejs/tanstack-router'
+
+module
+  export interface TabItem {
+    id: string
+    label: string
+    // omit href when the parent handles selection through onSelect
+    href?: string
+    shortLabel?: string
+    icon?: IconName
+  }
+
+  type NativeNavProps = JSX.IntrinsicElements['nav']
+
+  type Props = Omit<NativeNavProps, 'aria-label' | 'children' | 'class' | 'className' | 'onSelect'> & {
+    activeId: string
+    className?: NativeNavProps['className']
+    items: readonly TabItem[]
+    label?: string
+    // renders the items as buttons instead of route links
+    onSelect?: (id: string) => void
+  }
+
+  const itemClassName = 'relative z-10 flex items-center justify-center gap-2 cursor-pointer font-sans hover:text-foreground px-1 py-2.5 capitalize whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  const baseClassName = 'relative inline-flex items-center justify-self-end gap-5 md:gap-7 lg:gap-8 border-b border-sidebar-border dark:border-surface/33 min-w-lg'
+
+props { activeId, className, items, label = 'Tabs', onSelect, ref, ...navProps }: Props
+
+setup
+  const tabListRef = useRef<HTMLElement | null>(null)
+  useLayoutEffect(() => {
+    const tabList = tabListRef.current
+    if (!tabList) return
+
+    const updateIndicator = () => {
+      const activeTab = tabList.querySelector<HTMLElement>(':scope > [data-tab][data-tab-active]')
+      if (!activeTab) {
+        tabList.style.setProperty('--active-tab-width', '0px')
+        return
+      }
+
+      tabList.style.setProperty('--active-tab-left', `${activeTab.offsetLeft}px`)
+      tabList.style.setProperty('--active-tab-width', `${activeTab.offsetWidth}px`)
+    }
+
+    updateIndicator()
+
+    // A sibling's width can move the active link without resizing the nav.
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(updateIndicator)
+    resizeObserver?.observe(tabList)
+    for (const tab of tabList.querySelectorAll<HTMLElement>(':scope > [data-tab]')) {
+      resizeObserver?.observe(tab)
+    }
+    window.addEventListener('resize', updateIndicator)
+
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', updateIndicator)
+    }
+  }, [activeId, items, className])
+
+nav(
+  ~ {...navProps}
+  ~ ref={[tabListRef, ref]}
+  ~ className={cn(baseClassName, items.length >= 5 && 'w-full', className)}
+  ~ aria-label={label}
+  ~ )
+  each item in items key item.id
+    if onSelect || !item.href
+      button(
+        ~ type='button'
+        ~ data-tab=''
+        ~ aria-pressed={activeId === item.id}
+        ~ data-tab-active={activeId === item.id ? '' : undefined}
+        ~ onClick={() => onSelect?.(item.id)}
+        ~ className={cn(itemClassName, items.length >= 5 && 'min-w-0 flex-1', activeId === item.id ? 'text-foreground' : 'text-muted-foreground')}
+        ~ )
+        if item.icon
+          Icon(name={item.icon} className='md:size-3 size-5 md:opacity-80')
+        span(className='truncate font-sans font-[450] text-xs -tracking-[0.01em]') #{item.label}
+    else
+      Link(
+        ~ to={item.href.startsWith('#') ? '.' : item.href}
+        ~ hash={item.href.startsWith('#') ? item.href.slice(1) : undefined}
+        ~ data-tab=''
+        ~ aria-label={item.label}
+        ~ aria-current={activeId === item.id ? 'page' : undefined}
+        ~ data-tab-active={activeId === item.id ? '' : undefined}
+        ~ activeProps={{}}
+        ~ className={cn(itemClassName, items.length >= 5 && 'min-w-0 flex-1', activeId === item.id ? 'text-foreground' : 'text-muted-foreground')}
+        ~ )
+        if item.icon
+          Icon(name={item.icon} className='md:size-3 size-5 md:opacity-80')
+        span(className='hidden lg:inline font-sans font-[450] text-xs -tracking-[0.01em]') #{item.label}
+        span(className={`${items.length >= 3 ? 'hidden md:flex' : 'flex'}  scale-95 lg:hidden font-sans font-medium sm:text-base text-sm -tracking-[0.014em]`}) #{item.shortLabel ?? item.label}
+  div(
+    ~ // Line Indicator
+    ~ aria-hidden='true'
+    ~ className='pointer-events-none absolute -bottom-0.75 left-0 z-0 h-[2.5px] rounded-full bg-foreground/90 shadow-sm transition-[width,transform] duration-180 ease-out motion-reduce:transition-none'
+    ~ style={{ width: 'var(--active-tab-width, 0px)', transform: 'translateX(var(--active-tab-left, 0px)) translateY(-50%)' }}
+    ~ )

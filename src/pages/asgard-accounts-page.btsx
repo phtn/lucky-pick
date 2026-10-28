@@ -1,0 +1,53 @@
+import { useState } from 'octane'
+import Tabs from '@/components/ui/Tabs.btsx'
+import type { TabItem } from '@/components/ui/Tabs.btsx'
+import { Icon } from '@/lib/icons'
+
+module
+  /**
+   * Placeholder surface: the tab strip and its frame are real, the panels name
+   * what belongs in them rather than pretending to hold it.
+   */
+  const tabs: TabItem[] = [
+    { id: 'directory', label: 'Directory' },
+    { id: 'access', label: 'Access' },
+    { id: 'activity', label: 'Activity' }
+  ]
+
+  const panels: Record<string, { title: string; detail: string }> = {
+    directory: {
+      title: 'The account directory lands here.',
+      detail: 'Every Firebase account the console can see, searchable, with the claims each one holds.'
+    },
+    access: {
+      title: 'Granting and revoking lands here.',
+      detail: 'The god and admin claims, who may change them, and what each change costs the holder’s session.'
+    },
+    activity: {
+      title: 'Account activity lands here.',
+      detail: 'Sign-ins, claim changes and the account they were made against, most recent first.'
+    }
+  }
+
+setup
+  const [activeId, setActiveId] = useState('directory')
+  const panel = panels[activeId] ?? panels.directory
+
+section(className='flex min-h-0 flex-col')
+  header(className='asgard-topbar')
+    div(className='min-w-0')
+      div(className='flex items-center gap-2.5')
+      h1(className='mt-3 font-sans text-2xl font-medium leading-none tracking-tight text-foreground') Accounts
+    div(className='flex shrink-0 items-center gap-2 rounded-full border border-border/50 px-3 py-1.5')
+      span(aria-hidden={true} className='size-1.5 rounded-full bg-chart-idle')
+      span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') not wired up
+
+  div(className='asgard-topbar-tabs')
+    Tabs(activeId={activeId} items={tabs} onSelect={setActiveId} label='Accounts sections')
+
+  div(className='px-4 py-10 md:px-6')
+    div(className='mx-auto flex max-w-xl flex-col items-center gap-3 rounded-xl border border-dashed border-border/60 px-6 py-12 text-center')
+      div(className='grid size-9 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
+        Icon(name='account' size={16})
+      p(className='text-sm text-foreground') #{panel.title}
+      p(className='max-w-sm text-xs leading-relaxed text-muted-foreground') #{panel.detail}

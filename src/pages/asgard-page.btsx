@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'octane'
-import { Outlet } from '@octanejs/tanstack-router'
+import { Outlet, useRouterState } from '@octanejs/tanstack-router'
+import { Group, Panel, Separator, usePanelRef, type PanelSize } from '@octanejs/resizable-panels'
+import { Sidebar, ThemeToggle } from '@/components/asgard'
+import type { AsgardNavItem } from '@/components/asgard'
 import { Icon } from '@/lib/icons'
-import { cn } from '@/lib/utils'
 import { useFirebaseUser } from '@/lib/firebase/auth'
 import { useConsoleFirebaseSession } from '@/lib/firebase/console-session'
-import { buildAsgardHandoffUrl, isAsgardConsoleHostname } from '@/lib/routing/asgard-subdomain'
+import { asgardHandoffPath, buildAsgardHandoffUrl, isAsgardConsoleHostname, isAsgardSubdomainHostname } from '@/lib/routing/asgard-subdomain'
 import { buildAppUrl } from '@/lib/routing/app-url'
+import { isAsgardGateOpen } from '@/lib/asgard/dev-gate'
 
 module
   /**
@@ -18,7 +21,31 @@ module
 
   const SESSION_ENDPOINT = '/api/asgard/session'
 
-  const blockClass = 'grid min-h-screen place-items-center px-6 text-center'
+  const blockClass = 'grid min-h-[80vh] place-items-center px-6 text-center'
+
+  /**
+   * The console's pages, in nav order.
+   *
+   * Their paths are relative to wherever the console is mounted: its own
+   * subdomain roots them at `/`, while a stand-in origin roots them under the
+   * handoff path, so the links have to be built rather than written out.
+   */
+  const navPages = [
+    { to: '', label: 'Overview', icon: 'chart', exact: true },
+    { to: '/accounts', label: 'Accounts', icon: 'account' }
+  ] as AsgardNavItem[]
+
+  const toNavItems = (base: string): AsgardNavItem[] =>
+    navPages.map((page) => ({
+      to: `${base}${page.to}` || '/',
+      label: page.label,
+      icon: page.icon,
+      exact: page.exact
+    }))
+
+  // Below this the panel is a rail: icons only, labels gone.
+  const COMPACT_AT_PX = 90
+  const EXPANDED_SIZE = '238px'
 
   type Failure = { status: 'unauthorized' | 'unavailable' | 'error'; detail: string }
 
@@ -82,13 +109,33 @@ setup
   const [email, setEmail] = useState<string | null>(null)
   const [status, setStatus] = useState<Status>('loading')
   const [detail, setDetail] = useState<string | null>(null)
+  const [isSidebarCompact, setIsSidebarCompact] = useState(false)
+  const navItems =
+    typeof window !== 'undefined' && !isAsgardSubdomainHostname(window.location.hostname)
+      ? toNavItems(asgardHandoffPath)
+      : toNavItems('')
+  const pathname = useRouterState({ select: (state) => state.location.pathname.replace(/\/$/, '') || '/' })
+  const sidebarPanelRef = usePanelRef()
+
+  const handleSidebarResize = (size: PanelSize) => setIsSidebarCompact(size.inPixels <= COMPACT_AT_PX)
+
+  // Three states, one control: collapsed snaps back open, a rail-width panel
+  // goes to its full width, and a full-width panel collapses.
+  const toggleSidebar = () => {
+    const panel = sidebarPanelRef.current
+    if (!panel) return
+
+    if (panel.isCollapsed()) panel.expand()
+    else if (isSidebarCompact) panel.resize(EXPANDED_SIZE)
+    else panel.collapse()
+  }
   const homeUrl =
     typeof window === 'undefined' ? '/' : buildAppUrl(new URL(window.location.href), '/').toString()
 
   // Firebase auth state is per-origin, so a god who arrived through the handoff
   // holds only the session cookie. This trades it for the client session, which
   // is what gives the console a name and a photo.
-  useConsoleFirebaseSession('asgard', status === 'ready')
+  useConsoleFirebaseSession('asgard', status === 'ready' && !isAsgardGateOpen)
 
   useEffect(() => {
     let cancelled = false
@@ -100,6 +147,13 @@ setup
     }
 
     const openAsgard = async () => {
+      // A dev build with the gate open skips the session entirely: there is
+      // nothing to verify and nothing to hand off.
+      if (isAsgardGateOpen) {
+        if (!cancelled) setStatus('ready')
+        return
+      }
+
       if (!isAsgardHost) {
         // Firebase restores the session and its claims asynchronously; judging
         // before then flashes the unauthorized block for signed-in gods.
@@ -217,38 +271,59 @@ setup
     }
   }, [hasGodAccess, isAuthLoading, isAsgardHost, user])
 
-div(className='min-h-screen bg-sunken')
-  header(className='sticky top-0 z-20 flex h-14 items-center justify-between gap-4 border-b border-control-line bg-background px-4 md:px-6')
-    div(className='flex min-w-0 items-center gap-2.5')
-      span(aria-hidden={true} className='h-3 w-0.5 rounded-full bg-active')
-      h1(className='truncate font-sans text-base font-medium tracking-tight text-foreground') Asgard
-    div(className='flex shrink-0 items-center gap-3')
-      if status === 'ready'
-        span(className={cn('max-w-[46vw] truncate font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground')}) #{email ?? user?.email ?? 'signed in'}
-      a(href={homeUrl} aria-label='Return to Lucky Pick' className='inline-flex size-8 items-center justify-center rounded-full border border-control-line text-muted-foreground transition-colors hover:bg-accent hover:text-foreground')
-        Icon(name='arrow-right' size={13})
-  main
-    if status === 'loading'
-      div(className='flex min-h-screen items-center justify-center gap-2.5')
-        Icon(name='spinner' size={16} className='animate-spin text-muted-foreground')
-        p(className='text-sm text-muted-foreground') Verifying your administrator session
-    elseif status === 'ready'
-      Outlet
-    elseif status === 'unauthorized'
-      Blocked(
-        ~ title='You do not have an active administrator session.'
-        ~ detail={detail ?? 'Asgard is open to accounts holding the god claim.'}
+main(className='asgard-frame')
+  Group(id='asgard-layout' className='asgard-layout' style={{ height: '100dvh' }})
+    Panel(
+      ~ id='asgard-sidebar-panel'
+      ~ panelRef={sidebarPanelRef}
+      ~ defaultSize={EXPANDED_SIZE}
+      ~ minSize='180px'
+      ~ maxSize='320px'
+      ~ collapsedSize='76px'
+      ~ collapsible={true}
+      ~ onResize={handleSidebarResize}
+      ~ className='asgard-sidebar-panel'
+      ~ style={{ overflow: 'hidden' }}
+      ~ )
+      Sidebar(
+        ~ path={pathname}
+        ~ items={navItems}
+        ~ isCompact={isSidebarCompact}
+        ~ toggleSidebar={toggleSidebar}
+        ~ identity={status === 'ready' ? (email ?? user?.email ?? null) : null}
         ~ homeUrl={homeUrl}
         ~ )
-    elseif status === 'unavailable'
-      Blocked(
-        ~ title='Asgard is not answering on this deployment.'
-        ~ detail={detail ?? 'The console’s server is not available here.'}
-        ~ homeUrl={homeUrl}
-        ~ )
-    else
-      Blocked(
-        ~ title='We could not verify your administrator session.'
-        ~ detail={detail ?? 'Something went wrong on the way in. Please try again.'}
-        ~ homeUrl={homeUrl}
-        ~ )
+        ThemeToggle
+
+    Separator(id='asgard-sidebar-resize-separator' aria-label='Resize Asgard sidebar' className='asgard-resize-separator')
+
+    Panel(id='asgard-content-panel' minSize='0px' className='asgard-content-panel' style={{ overflow: 'auto' }})
+      section(className='asgard-content')
+        if isAsgardGateOpen
+          div(className='asgard-open-gate' role='status')
+            Icon(name='alert-triangle' size={13})
+            span Gate open — dev build only. The Worker still refuses every privileged call.
+        if status === 'loading'
+          div(className='flex min-h-[80vh] items-center justify-center gap-2.5')
+            Icon(name='spinner' size={16} className='animate-spin text-muted-foreground')
+            p(className='text-sm text-muted-foreground') Verifying your administrator session
+        elseif status === 'ready'
+          Outlet
+        elseif status === 'unauthorized'
+          Blocked(
+            ~ title='You do not have an active administrator session.'
+            ~ detail={detail ?? 'Asgard is open to accounts holding the god claim.'}
+            ~ homeUrl={homeUrl}
+            ~ )
+        elseif status === 'unavailable'
+          Blocked(
+            ~ title='Asgard is not answering on this deployment.'
+            ~ detail={detail ?? 'The console’s server is not available here.'}
+            ~ homeUrl={homeUrl}
+            ~ )
+        else
+          Blocked(
+            ~ title='We could not verify your administrator session.'
+            ~ detail={detail ?? 'Something went wrong on the way in. Please try again.'}
+            ~ homeUrl={homeUrl}
+            ~ )

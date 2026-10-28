@@ -11,6 +11,7 @@ const isAsgardHost = typeof window !== 'undefined' && isAsgardSubdomainHostname(
 
 const asgardShell = lazyRouteComponent(() => import('../pages/asgard-page.btsx'))
 const asgardOverview = lazyRouteComponent(() => import('../pages/asgard-overview-page.btsx'))
+const asgardAccounts = lazyRouteComponent(() => import('../pages/asgard-accounts-page.btsx'))
 
 function createAsgardRouteTree() {
   const rootRoute = createRootRoute({ component: asgardShell })
@@ -21,7 +22,13 @@ function createAsgardRouteTree() {
     component: asgardOverview
   })
 
-  return rootRoute.addChildren([overviewRoute])
+  const accountsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/accounts',
+    component: asgardAccounts
+  })
+
+  return rootRoute.addChildren([overviewRoute, accountsRoute])
 }
 
 function createAppRouteTree() {
@@ -57,7 +64,17 @@ function createAppRouteTree() {
     component: asgardOverview
   })
 
-  return rootRoute.addChildren([playRoute, analyticsRoute, asgardRoute.addChildren([asgardIndexRoute])])
+  const asgardAccountsRoute = createRoute({
+    getParentRoute: () => asgardRoute,
+    path: 'accounts',
+    component: asgardAccounts
+  })
+
+  return rootRoute.addChildren([
+    playRoute,
+    analyticsRoute,
+    asgardRoute.addChildren([asgardIndexRoute, asgardAccountsRoute])
+  ])
 }
 
 const routeTree = isAsgardHost ? createAsgardRouteTree() : createAppRouteTree()

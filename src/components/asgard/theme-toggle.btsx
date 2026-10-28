@@ -1,0 +1,34 @@
+import { useEffect, useState } from 'octane'
+import { Icon } from '@/lib/icons'
+import { applyTheme, readStoredTheme, storeTheme, type ThemeState } from '@/lib/theme'
+
+setup
+  // Asgard has no app header to inherit a theme control from, so it carries its
+  // own. It reads and writes the same stored state the app uses, which is what
+  // keeps the two surfaces on one theme.
+  const [state, setState] = useState<ThemeState | null>(null)
+
+  useEffect(() => {
+    const stored = readStoredTheme()
+    applyTheme(stored)
+    setState(stored)
+  }, [])
+
+  const toggleMode = () => {
+    setState((current) => {
+      if (!current) return current
+
+      const next: ThemeState = { ...current, mode: current.mode === 'dark' ? 'light' : 'dark' }
+      applyTheme(next)
+      storeTheme(next)
+      return next
+    })
+  }
+
+button(
+  ~ type='button'
+  ~ onClick={toggleMode}
+  ~ aria-label={state?.mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+  ~ className='relative z-10 flex items-center justify-center size-8 aspect-square rounded-full! text-muted-foreground transition-colors hover:text-foreground/80'
+  ~ )
+  Icon(name={'theme'} size={14})

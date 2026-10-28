@@ -3,12 +3,14 @@ import App from '../App.btsx'
 import { asgardHandoffPath } from '../lib/routing/asgard-subdomain'
 
 // The Asgard handoff is a full-page surface on the main origin: it mints the ID
-// token and leaves. Rendering it inside the app would stack a console shell on
-// top of the game, so the root hands the page over instead of wrapping it.
+// token and leaves. Where the host cannot carry a subdomain the console lives
+// under that path too, so the whole subtree is handed over — rendering any of
+// it inside the app would stack a console shell on top of the game.
 setup
   const pathname = useRouterState({ select: (state) => state.location.pathname.replace(/\/$/, '') || '/' })
+  const isAsgardSurface = pathname === asgardHandoffPath || pathname.startsWith(`${asgardHandoffPath}/`)
 
-if pathname === asgardHandoffPath
+if isAsgardSurface
   Outlet
 else
   App

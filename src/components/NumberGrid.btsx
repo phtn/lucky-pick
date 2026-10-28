@@ -13,11 +13,11 @@ props { pool, selected, onToggleNumber, onQuickPick, onEvenOddMix, onClear }: Nu
 
 fragment
   div(className="number-grid rounded-[18px] bg-sunken p-3")
-    div(className={`number-grid__matrix grid gap-1.5 ${pool > 49 ? 'grid-cols-8' : 'grid-cols-7'}`})
+    div(className={`number-grid__matrix grid select-none ${pool > 49 ? 'grid-cols-8' : 'grid-cols-7'}`})
       each n in Array.from({ length: pool }, (_, i) => i + 1) key n
         button(
           ~ onClick={() => onToggleNumber(n)}
-          ~ className={`aspect-square rounded-full shadow-sm text-lg font-bold transition-all relative flex items-center justify-center ${(selected.includes(n)) ? 'bg-[color-mix(in_oklab,var(--destructive)_20%,transparent)] text-destructive scale-[1.06] z-10' : 'hover:scale-[1.05]'}`}
+          ~ className={`aspect-square rounded-full shadow-sm text-lg font-bold transition-all relative flex items-center justify-center ${(selected.includes(n)) ? 'bg-[color-mix(in_oklab,var(--destructive)_69%,transparent)] text-foreground z-10 scale-[1.15]' : 'hover:scale-[1.25]'}`}
           ~ )
           | #{n}
   div(className="mt-2 grid grid-cols-3 gap-2 mt-4")
