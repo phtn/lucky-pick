@@ -1,6 +1,7 @@
 module "use client";
 import { Button as ButtonPrimitive } from '@octanejs/base-ui/button'
 import { cn } from '@/lib/utils'
+import type {OctaneNode, ClassValue} from 'octane'
 
 module
   export type ButtonVariant = 'default' | 'outline' | 'secondary' | 'ghost' | 'destructive' | 'link'
@@ -9,6 +10,11 @@ module
   export interface ButtonProps extends ButtonPrimitive.Props {
     variant?: ButtonVariant
     size?: ButtonSize
+    type?: 'button' | 'submit'
+    disabled?: boolean
+    onClick?: VoidFunction
+    children?: OctaneNode
+    className?: ClassValue
   }
 
   const base =

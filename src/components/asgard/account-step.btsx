@@ -1,0 +1,55 @@
+import { Icon, type IconName } from '@/lib/icons'
+import { STEP_FLOW_MS, STEP_TILE_CLASS, STEP_TITLE_CLASS, type StepState } from '@/lib/asgard/step-flow'
+import { cn } from '@/lib/utils'
+
+module
+  export interface AccountStepProps {
+    icon: IconName
+    title: string
+    meta?: string
+    state: StepState
+    /** Position in the pipeline, which is what staggers the flow downward. */
+    index?: number
+    /** Total tiles in the pipeline, used to stagger a rollback upward. */
+    stepCount: number
+    isLast?: boolean
+    children?: unknown
+  }
+
+props { icon, title, meta, state, index = 0, stepCount, isLast = false, children }: AccountStepProps
+
+setup
+  // One step of the pipeline: an icon tile on a connecting rail, a title row,
+  // and whatever the step itself renders underneath.
+  //
+  // The tile lights up first, then its rail drains into the next step, so a
+  // step's own delay is one beat behind the step above it.
+  const tileDelay = `${index * STEP_FLOW_MS}ms`
+  const forwardRailDelay = index * STEP_FLOW_MS + STEP_FLOW_MS / 2
+  // On rollback, the lowest rail moves first and the delay climbs upward.
+  const reverseRailDelay = Math.max(0, stepCount - index - 2) * STEP_FLOW_MS
+  const railDelay = `${state === 'done' ? forwardRailDelay : reverseRailDelay}ms`
+
+div(className='flex gap-3')
+  div(className='flex w-8 shrink-0 flex-col items-center')
+    span(
+      ~ style={{ transitionDelay: tileDelay }}
+      ~ className={cn('grid size-6 shrink-0 place-items-center rounded-sm transition-all duration-300 ease-out motion-reduce:transition-none', state === 'active' && 'scale-105', STEP_TILE_CLASS[state])}
+      ~ )
+      Icon(name={icon} size={14})
+    if !isLast
+      span(className='relative w-px flex-1 overflow-hidden bg-border/25')
+        span(
+          ~ style={{ transitionDelay: railDelay }}
+          ~ className={cn('absolute inset-x-0 top-0 h-full origin-top bg-gradient-to-b from-[#01bf7c]/45 to-[#01bf7c] transition-transform duration-400 ease-out motion-reduce:transition-none', state === 'done' ? 'scale-y-100' : 'scale-y-0')}
+          ~ )
+  div(className={cn('min-w-0 flex-1', isLast ? 'pb-1' : 'pb-6')})
+    div(className='flex items-baseline justify-between gap-3')
+      h3(
+        ~ style={{ transitionDelay: tileDelay }}
+        ~ className={cn('mb-2 font-sans font-[450] text-muted-foreground! text-sm leading-6 -tracking-[0.018em] transition-colors duration-300 ease-out motion-reduce:transition-none md:text-base', STEP_TITLE_CLASS[state])}
+        ~ )
+        | #{title}
+      if meta
+        span(className='shrink-0 font-mono text-xs text-muted-foreground') #{meta}
+    | #{children}

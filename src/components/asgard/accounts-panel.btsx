@@ -1,0 +1,660 @@
+import { useEffect, useState } from 'octane'
+import { Icon, type IconName } from '@/lib/icons'
+import Badge from '@/components/ui/badge.btsx'
+import Button from '@/components/ui/button.btsx'
+import Input from '@/components/ui/input.btsx'
+import Step from '@/components/asgard/account-step.btsx'
+import AccountsSkeleton from '@/components/asgard/accounts-skeleton.btsx'
+import { cn } from '@/lib/utils'
+import { debounce, parseAsBoolean, parseAsString, parseAsStringLiteral, throttle, useQueryStates } from '@octanejs/nuqs'
+import { useField, useSelector } from '@octanejs/tanstack-form'
+import { getGodUserLabel, searchUsers, type GodUser } from '@/lib/asgard/gods-users'
+import { ACCOUNT_PLAN_VALUES, isAccountEmailAddress, toAccountSlug, type AccountStatus } from '@/lib/accounts/accounts'
+import { ENTER_CLASS, errorTextClassName, fieldLabelClassName, type StepState } from '@/lib/asgard/step-flow'
+import { isAbortError, readErrorMessage } from '@/lib/asgard/errors'
+import { ACCOUNT_FORM_DEFAULTS, readValidationMessage, resolveAccountSlug, useAccountDraft, useAccountForm, validateAccountForm, validateAccountSlug, type AccountForm, type AccountTextField } from '@/lib/asgard/account-form'
+import { ACCOUNT_PLAN_LABEL, ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE, ACCOUNT_STATUS_FILTERS, checkAccountSlugAvailability, createAccount, fetchAccounts, formatContactName, getAccountInitials, matchesAccountQuery, type AccountRow } from '@/lib/asgard/accounts'
+
+module
+  type RosterStatus = 'loading' | 'ready' | 'error'
+
+  const CONTACT_SEARCH_DEBOUNCE_MS = 300
+  const SLUG_CHECK_DEBOUNCE_MS = 350
+  const MIN_CONTACT_SEARCH_LENGTH = 2
+  const ROSTER_URL_DEBOUNCE_MS = 200
+
+  // Discarding a draft has to reach the URL before the form unmounts, so those
+  // writes skip the debounce the editing path uses. Pushing through the
+  // throttle queue also cancels whatever the last keystroke left pending.
+  const IMMEDIATE_URL_UPDATE = { limitUrlUpdates: throttle(0) }
+
+  /**
+   * The roster's own query state: what is being searched, which statuses are
+   * shown, and whether the create form is open. Keeping it in the URL makes a
+   * filtered roster shareable and survives a reload.
+   */
+  const ROSTER_PARSERS = {
+    q: parseAsString.withDefault(''),
+    status: parseAsStringLiteral(ACCOUNT_STATUS_FILTERS).withDefault('all'),
+    create: parseAsBoolean.withDefault(false)
+  }
+
+  const chipClassName =
+    'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 font-mono text-2xs uppercase tracking-wider transition-colors'
+
+  const addButtonClassName = 'size-6 aspect-square flex items-center justify-center rounded-full bg-active text-white transition-colors duration-200 ease-out'
+  const actionButtonClassName =
+    'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-border/50 px-2.5 font-mono text-xs uppercase tracking-wide text-muted-foreground transition-colors hover:bg-accent'
+
+  const ACCOUNT_STATUS_ICON: Record<AccountStatus, IconName> = {
+    pending: 'clock',
+    confirmed: 'check-circle-fill',
+    active: 'check-circle-fill',
+    suspended: 'alert-triangle',
+    closed: 'close'
+  }
+
+  interface TextFieldProps {
+    form: AccountForm
+    name: AccountTextField
+    label: string
+    type?: 'text' | 'email' | 'tel' | 'url'
+    placeholder?: string
+    required?: boolean
+    className?: string
+    /** Called with every keystroke, for a caller that mirrors this field. */
+    onEdit?: (value: string) => void
+    feedback?: string | null
+    feedbackTone?: 'error' | 'muted' | 'pending' | 'success'
+  }
+
+  type SlugAvailabilityState =
+    | { status: 'idle'; slug: string; message: null }
+    | { status: 'checking'; slug: string; message: string }
+    | { status: 'available'; slug: string; message: string }
+    | { status: 'invalid' | 'taken' | 'error'; slug: string; message: string }
+
+  const FEEDBACK_TONE_CLASS = {
+    error: 'text-destructive',
+    muted: 'text-muted-foreground',
+    pending: 'text-active',
+    success: 'text-chart-positive'
+  } as const
+
+component StatusBadge
+  props { status }: { status: AccountStatus }
+  span(className={cn('inline-flex size-6 shrink-0 items-center justify-center rounded-xs border md:hidden', ACCOUNT_STATUS_TONE[status])} title={ACCOUNT_STATUS_LABEL[status]})
+    Icon(name={ACCOUNT_STATUS_ICON[status]} size={13})
+    span(className='sr-only') #{ACCOUNT_STATUS_LABEL[status]}
+  Badge(variant='plain' className={cn('hidden! rounded-xs border font-mono text-2xs uppercase tracking-wider md:inline-flex!', ACCOUNT_STATUS_TONE[status])}) #{ACCOUNT_STATUS_LABEL[status]}
+
+component TextField
+  props { form, name, label, type = 'text', placeholder, required = false, className, onEdit, feedback, feedbackTone = 'muted' }: TextFieldProps
+  setup
+    // One text control bound to one form field. Value, blur, and the error
+    // message all come from the field's own state rather than from a second
+    // copy kept here.
+    const field = useField({ form, name })
+    const controlId = `account-${name}`
+    const errorId = `${controlId}-error`
+    const message = field.state.meta.isTouched || field.state.meta.isDirty ? readValidationMessage(field.state.meta.errors) : null
+    const visibleMessage = message ?? feedback ?? null
+    const hasError = message !== null || (feedback !== null && feedback !== undefined && feedbackTone === 'error')
+
+    const handleInput = (event: Event) => {
+      const next = (event.currentTarget as HTMLInputElement).value
+      field.handleChange(next)
+      onEdit?.(next)
+    }
+
+  label(className={cn('flex flex-col gap-1.5', className)} htmlFor={controlId})
+    span(className={fieldLabelClassName}) #{label}
+    Input(
+      ~ id={controlId}
+      ~ type={type}
+      ~ value={field.state.value}
+      ~ required={required}
+      ~ autoComplete='off'
+      ~ placeholder={placeholder}
+      ~ aria-invalid={hasError}
+      ~ aria-describedby={visibleMessage === null ? undefined : errorId}
+      ~ onBlur={field.handleBlur}
+      ~ onInput={handleInput}
+      ~ )
+    if visibleMessage
+      p(id={errorId} className={cn('mt-1.5 flex items-center gap-1.5 font-mono text-2xs', message ? errorTextClassName : FEEDBACK_TONE_CLASS[feedbackTone])} aria-live='polite')
+        if feedbackTone === 'pending' && message === null
+          Icon(name='spinner' size={12} className='animate-spin')
+        span #{visibleMessage}
+
+component PlanField
+  props { form }: { form: AccountForm }
+  setup
+    const field = useField({ form, name: 'plan' })
+
+  div(className={cn('flex flex-wrap gap-1.5', ENTER_CLASS)})
+    each option in ACCOUNT_PLAN_VALUES key option
+      button(
+        ~ type='button'
+        ~ onClick={() => field.handleChange(option)}
+        ~ aria-pressed={field.state.value === option}
+        ~ className={cn(chipClassName, field.state.value === option ? 'border-active/40 bg-active/10 text-active' : 'border-border/60 text-muted-foreground hover:bg-accent')}
+        ~ )
+        | #{ACCOUNT_PLAN_LABEL[option]}
+
+component AccountIdentity
+  props { account }: { account: AccountRow }
+  div(className='flex min-w-0 items-center gap-1.5 md:gap-3')
+    span(className='grid size-6 shrink-0 place-items-center font-mono text-sm text-muted-foreground') #{getAccountInitials(account)}
+    div(className='min-w-0')
+      p(className='truncate text-sm text-foreground') #{account.name}
+    div(className='flex min-w-0 items-center gap-0')
+      Icon(name='account' size={13} className='opacity-70')
+      p(className='truncate font-mono text-xs text-muted-foreground') #{formatContactName(account.primaryContact.name)}
+
+component CreateAccountForm
+  props { onCreated, onCancel }: { onCreated: (accounts: AccountRow[]) => void; onCancel: () => void }
+  setup
+    const [draft, setDraft] = useAccountDraft()
+
+    // The query string seeds the form once. From there the form owns the
+    // values and pushes them back out through its own change listener, so the
+    // two never fight over who is authoritative.
+    const [initialValues] = useState(() => draft)
+
+    const accountForm = useAccountForm({
+      defaultValues: initialValues,
+      onDraftChange: (values) => {
+        void setDraft(values)
+      },
+      onSubmit: async (input) => {
+        const response = await createAccount(input)
+        await setDraft(null, IMMEDIATE_URL_UPDATE)
+        accountForm.reset(ACCOUNT_FORM_DEFAULTS)
+        onCreated(response.accounts)
+      }
+    })
+
+    const isSubmitting = useSelector(accountForm.store, (state) => state.isSubmitting)
+    // `canSubmit` alone stays true on a pristine form, before any validator
+    // has run, so the same whole-form check the validator uses is applied here.
+    const isFormValid = useSelector(
+      accountForm.store,
+      (state) => state.canSubmit && validateAccountForm(state.values) === undefined
+    )
+    const submitError = useSelector(accountForm.store, (state) =>
+      typeof state.errorMap.onSubmit === 'string' ? state.errorMap.onSubmit : null
+    )
+    const nameValue = useSelector(accountForm.store, (state) => state.values.name)
+    const slugValue = useSelector(accountForm.store, (state) => state.values.slug)
+    const contactName = useSelector(accountForm.store, (state) => state.values.contactName)
+    const contactEmail = useSelector(accountForm.store, (state) => state.values.contactEmail)
+    const contactUid = useSelector(accountForm.store, (state) => state.values.contactUid)
+    const identityHasErrors = useSelector(accountForm.store, (state) => {
+      const fields = validateAccountForm(state.values)?.fields
+      return fields?.name !== undefined || fields?.slug !== undefined
+    })
+    const contactHasErrors = useSelector(accountForm.store, (state) => {
+      const fields = validateAccountForm(state.values)?.fields
+      return fields?.contactName !== undefined || fields?.contactEmail !== undefined || fields?.contactPhone !== undefined
+    })
+    const organizationHasErrors = useSelector(accountForm.store, (state) => {
+      const fields = validateAccountForm(state.values)?.fields
+      return fields?.website !== undefined || fields?.billingEmail !== undefined || fields?.notes !== undefined
+    })
+    const slugCandidate = resolveAccountSlug({ name: nameValue, slug: slugValue })
+    const slugValidationMessage = validateAccountSlug(slugCandidate)
+    const [slugAvailability, setSlugAvailability] = useState<SlugAvailabilityState>({
+      status: 'idle',
+      slug: '',
+      message: null
+    })
+
+    useEffect(() => {
+      if (slugValidationMessage) {
+        setSlugAvailability({ status: 'invalid', slug: slugCandidate, message: slugValidationMessage })
+        return
+      }
+
+      const controller = new AbortController()
+      setSlugAvailability({ status: 'checking', slug: slugCandidate, message: `Checking “${slugCandidate}”…` })
+
+      const timer = setTimeout(() => {
+        checkAccountSlugAvailability(slugCandidate, controller.signal)
+          .then((response) => {
+            if (response.available) {
+              setSlugAvailability({ status: 'available', slug: response.slug, message: `“${response.slug}” is available.` })
+              return
+            }
+
+            const message =
+              response.reason === 'reserved'
+                ? `“${response.slug}” is reserved by the application. Choose another slug.`
+                : response.reason === 'taken'
+                  ? `“${response.slug}” is already taken.`
+                  : 'Use lowercase letters, numbers, and single dashes.'
+            setSlugAvailability({ status: response.reason === 'taken' ? 'taken' : 'invalid', slug: response.slug, message })
+          })
+          .catch((error: unknown) => {
+            if (isAbortError(error)) return
+            setSlugAvailability({
+              status: 'error',
+              slug: slugCandidate,
+              message: readErrorMessage(error, 'Could not validate this slug. Try again.')
+            })
+          })
+      }, SLUG_CHECK_DEBOUNCE_MS)
+
+      return () => {
+        clearTimeout(timer)
+        controller.abort()
+      }
+    }, [slugCandidate, slugValidationMessage])
+
+    const isSlugAvailable = slugAvailability.status === 'available' && slugAvailability.slug === slugCandidate
+    const canSubmit = isFormValid && isSlugAvailable
+    const slugFeedbackTone =
+      slugAvailability.status === 'available'
+        ? 'success'
+        : slugAvailability.status === 'checking'
+          ? 'pending'
+          : slugAvailability.status === 'idle'
+            ? 'muted'
+            : 'error'
+
+    // Billing defaults to the contact address rather than being left blank —
+    // a stored `null` is what the account is invoiced on. The mirror holds
+    // until someone types a different address into the billing field.
+    const [isBillingMirrored, setIsBillingMirrored] = useState(
+      () => initialValues.billingEmail.trim().length === 0 || initialValues.billingEmail === initialValues.contactEmail
+    )
+
+    useEffect(() => {
+      if (!isBillingMirrored) return
+      if (accountForm.state.values.billingEmail === contactEmail) return
+      accountForm.setFieldValue('billingEmail', contactEmail)
+    }, [accountForm, contactEmail, isBillingMirrored])
+
+    const [contactQuery, setContactQuery] = useState('')
+    const [contactResults, setContactResults] = useState<GodUser[]>([])
+    const [isSearching, setIsSearching] = useState(false)
+    const [searchError, setSearchError] = useState<string | null>(null)
+    // Only the uid is persisted, so a draft restored from the URL knows the
+    // contact is linked but not the directory flags. Those come back with the
+    // user record when the link is made in this session.
+    const [linkedUser, setLinkedUser] = useState<GodUser | null>(null)
+    const isLinked = contactUid.length > 0
+
+    useEffect(() => {
+      const trimmedQuery = contactQuery.trim()
+
+      if (trimmedQuery.length < MIN_CONTACT_SEARCH_LENGTH) {
+        setContactResults([])
+        setIsSearching(false)
+        setSearchError(null)
+        return
+      }
+
+      const controller = new AbortController()
+      setIsSearching(true)
+
+      const timer = setTimeout(() => {
+        searchUsers(trimmedQuery, controller.signal)
+          .then((response) => {
+            setContactResults(response.users)
+            setSearchError(null)
+            setIsSearching(false)
+          })
+          .catch((searchFailure: unknown) => {
+            if (isAbortError(searchFailure)) return
+            setSearchError(readErrorMessage(searchFailure, 'Could not search the user directory.'))
+            setIsSearching(false)
+          })
+      }, CONTACT_SEARCH_DEBOUNCE_MS)
+
+      return () => {
+        clearTimeout(timer)
+        controller.abort()
+      }
+    }, [contactQuery])
+
+    const linkUser = (user: GodUser) => {
+      setLinkedUser(user)
+      accountForm.setFieldValue('contactUid', user.uid)
+      accountForm.setFieldValue('contactName', getGodUserLabel(user))
+      accountForm.setFieldValue('contactEmail', user.email ?? '')
+      setContactQuery('')
+      setContactResults([])
+    }
+
+    // Rendered as a single line rather than an if/elseif chain: a chain whose
+    // last branch is an `elseif` was observed emitting that branch outside the
+    // conditional, so the search feedback is reduced to one value here.
+    const contactSearchHint =
+      searchError ??
+      (isSearching
+        ? 'Searching…'
+        : contactResults.length === 0 && contactQuery.trim().length >= MIN_CONTACT_SEARCH_LENGTH
+          ? 'No users match. Enter the contact details below instead.'
+          : null)
+
+    const unlinkUser = () => {
+      setLinkedUser(null)
+      accountForm.setFieldValue('contactUid', '')
+      accountForm.setFieldValue('contactName', '')
+      accountForm.setFieldValue('contactEmail', '')
+    }
+
+    const planValue = useSelector(accountForm.store, (state) => state.values.plan)
+    // The organization block is optional, so it is measured rather than
+    // validated: the step reports how much of it has been filled in.
+    const organizationFilled = useSelector(
+      accountForm.store,
+      (state) =>
+        [state.values.legalName, state.values.website, state.values.industry, state.values.billingEmail, state.values.notes].filter(
+          (value) => value.trim().length > 0
+        ).length
+    )
+
+    const isIdentityDone = nameValue.trim().length > 0 && !identityHasErrors && isSlugAvailable
+    const isContactDone =
+      contactName.trim().length > 0 && isAccountEmailAddress(contactEmail.trim()) && !contactHasErrors
+
+    // A step is `done` once it is settled, `active` while it is the one thing
+    // left to do, and `idle` while an earlier step still blocks it.
+    const identityState: StepState = isIdentityDone ? 'done' : 'active'
+    const contactState: StepState = !isIdentityDone ? 'idle' : isContactDone ? 'done' : 'active'
+    // A plan is always selected, so this step only waits on the ones above it.
+    const planState: StepState = isContactDone ? 'done' : 'idle'
+    const organizationState: StepState =
+      !isContactDone ? 'idle' : organizationFilled > 0 && !organizationHasErrors ? 'done' : 'active'
+    const createState: StepState = canSubmit && !isSubmitting ? 'active' : 'idle'
+
+    // The idle Create step shows how far the form has come rather than an inert
+    // bar, so the last step still moves while the earlier ones are settled.
+    const completedSteps = [isIdentityDone, isContactDone, organizationFilled > 0 && !organizationHasErrors].filter(Boolean).length
+    const progressWidth = `${Math.round((completedSteps / 3) * 100)}%`
+
+    // Reduced to one value rather than an if/elseif chain in the template: a
+    // chain whose last branch is an `elseif` was observed emitting that branch
+    // outside the conditional.
+    const statusLabel = isSubmitting
+      ? 'Creating account…'
+      : !isIdentityDone
+        ? slugAvailability.status === 'checking'
+          ? 'Validating the account slug'
+          : slugAvailability.status === 'taken'
+            ? 'Choose an available slug'
+            : slugAvailability.status === 'error'
+              ? 'Slug validation must succeed'
+              : nameValue.trim().length === 0
+                ? 'Needs an account name'
+                : 'Fix the account slug'
+        : !isContactDone
+          ? 'Needs a primary contact'
+          : canSubmit
+            ? 'Ready to create'
+            : 'Check the highlighted fields'
+
+    const statusToneClass = isSubmitting ? 'text-active' : canSubmit ? 'text-chart-positive' : 'text-muted-foreground'
+
+    const submit = (event: SubmitEvent) => {
+      event.preventDefault()
+      void accountForm.handleSubmit()
+    }
+
+    // Cancelling discards the draft; closing the panel from the header only
+    // hides it, so a half-filled form can be reopened from the same URL.
+    const cancel = () => {
+      void setDraft(null, IMMEDIATE_URL_UPDATE)
+      accountForm.reset(ACCOUNT_FORM_DEFAULTS)
+      onCancel()
+    }
+
+  form(className='mt-0' onSubmit={submit})
+
+    div(className='flex items-center justify-between gap-3 pb-3')
+      h3(className='font-sans leading-none opacity-0') Create account
+
+    div
+      Step(
+        ~ icon='box'
+        ~ title='Account'
+        ~ state={identityState}
+        ~ index={0}
+        ~ stepCount={5}
+        ~ meta={slugCandidate || undefined}
+        ~ )
+        div(className='grid gap-4 md:grid-cols-2')
+          TextField(form={accountForm} name='name' label='Account name' required={true} placeholder='Northwind Logistics')
+          TextField(
+            ~ form={accountForm}
+            ~ name='slug'
+            ~ label='Slug'
+            ~ placeholder={toAccountSlug(nameValue) || 'auto-generated from the name'}
+            ~ feedback={slugAvailability.message}
+            ~ feedbackTone={slugFeedbackTone}
+            ~ )
+
+      Step(
+        ~ icon='person'
+        ~ title='Primary contact'
+        ~ state={contactState}
+        ~ index={1}
+        ~ stepCount={5}
+        ~ meta={isLinked ? 'linked' : undefined}
+        ~ )
+        div(className='grid gap-3')
+          if isLinked
+            div(className={ENTER_CLASS})
+              div(className='flex flex-wrap items-center justify-between gap-3 rounded-lg border border-active/30 bg-active/5 px-3 py-2')
+                div(className='min-w-0')
+                  p(className='truncate text-sm text-foreground') #{contactName}
+                  p(className='truncate font-mono text-xs text-muted-foreground') #{contactEmail || contactUid}
+                div(className='flex shrink-0 items-center gap-2')
+                  if linkedUser?.admin
+                    span(className='rounded-xs bg-foreground/5 px-1.5 py-0.5 font-mono text-2xs uppercase tracking-wider text-muted-foreground') admin
+                  if linkedUser !== null && !linkedUser.admin && !linkedUser.emailVerified
+                    span(className='rounded-xs bg-amber-500/15 px-1.5 py-0.5 font-mono text-2xs uppercase tracking-wider text-amber-500') unverified
+                  button(type='button' onClick={unlinkUser} className={actionButtonClassName}) Change
+              p(className='mt-1.5 font-mono text-2xs text-muted-foreground') This user becomes the account owner once the account is confirmed.
+          else
+            div(className={cn('grid gap-2', ENTER_CLASS)})
+              Input(
+                ~ type='search'
+                ~ value={contactQuery}
+                ~ autoComplete='off'
+                ~ className='rounded-xs'
+                ~ placeholder='Search existing users by name or email'
+                ~ onInput={(event: Event) => setContactQuery((event.currentTarget as HTMLInputElement).value)}
+                ~ )
+              div(className={cn('flex h-5 items-center', {hidden: contactResults.length > 0})})
+                if contactSearchHint
+                  p(className={cn('font-mono text-xs', searchError ? 'text-destructive' : 'text-muted-foreground')}) #{contactSearchHint}
+              if contactResults.length > 0
+                ul(className='divide-y divide-dotted divide-border/60 overflow-hidden rounded-lg border border-border/60')
+                  each user in contactResults key user.uid
+                    li
+                      button(
+                        ~ type='button'
+                        ~ onClick={() => linkUser(user)}
+                        ~ className='flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-accent'
+                        ~ )
+                        div(className='min-w-0')
+                          p(className='truncate text-sm text-foreground') #{getGodUserLabel(user)}
+                          p(className='truncate font-mono text-xs text-muted-foreground') #{user.email ?? user.uid}
+                        if user.admin
+                          span(className='shrink-0 font-mono text-2xs uppercase tracking-wider text-muted-foreground') admin
+
+          div(className='grid gap-4 md:grid-cols-2')
+            TextField(form={accountForm} name='contactName' label='Contact name' required={true} placeholder='Ada Reyes')
+            TextField(form={accountForm} name='contactEmail' label='Contact email' type='email' required={true} placeholder='ada@northwind.com')
+            TextField(form={accountForm} name='contactPhone' label='Contact phone' type='tel' placeholder='Optional')
+            TextField(form={accountForm} name='contactTitle' label='Contact title' placeholder='Optional')
+
+      Step(icon='cash' title='Plan' state={planState} index={2} stepCount={5} meta={ACCOUNT_PLAN_LABEL[planValue]})
+        PlanField(form={accountForm})
+
+      Step(
+        ~ icon='globe'
+        ~ title='Organization'
+        ~ state={organizationState}
+        ~ index={3}
+        ~ stepCount={5}
+        ~ meta={`${organizationFilled} of 5 · optional`}
+        ~ )
+        div(className='grid gap-4')
+          div(className='grid gap-4 md:grid-cols-2')
+            TextField(form={accountForm} name='legalName' label='Legal name' placeholder='Optional')
+            TextField(form={accountForm} name='website' label='Website' placeholder='northwind.com')
+            TextField(form={accountForm} name='industry' label='Industry' placeholder='Optional')
+            TextField(
+              ~ form={accountForm}
+              ~ name='billingEmail'
+              ~ label='Billing email'
+              ~ type='email'
+              ~ placeholder='Defaults to the contact email'
+              ~ onEdit={(value: string) => setIsBillingMirrored(value.trim().length === 0)}
+              ~ )
+          TextField(form={accountForm} name='notes' label='Notes' placeholder='Optional')
+
+      Step(icon='sparkle' title='Create' state={createState} index={4} stepCount={5} isLast={true})
+        if canSubmit
+          p(className={cn('font-mono text-xs text-muted-foreground', ENTER_CLASS)}) Create the account and hand the contact the keys once they confirm.
+        else
+          div(className='h-2 w-full overflow-hidden rounded-full bg-muted/70')
+            div(className='h-full rounded-full bg-active/60 transition-[width] duration-500 ease-out' style={{ width: progressWidth }})
+
+      if submitError
+        p(className={cn('mt-4 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive', ENTER_CLASS)} role='alert') #{submitError}
+
+    div(className='mt-3 flex items-center justify-between gap-3 border-t border-border/50 pt-3')
+      div(className='flex min-w-0 items-center gap-2')
+        span(className={cn('size-1.5 shrink-0 rounded-full bg-current', statusToneClass, isSubmitting && 'animate-pulse')})
+        span(className={cn('truncate font-sans text-xs', statusToneClass)}) #{statusLabel}
+      div(className='flex shrink-0 items-center gap-3')
+        Button(type='button' size='sm' variant='secondary' disabled={isSubmitting} onClick={cancel}) Cancel
+        Button(type='submit' size='sm' disabled={!canSubmit || isSubmitting})
+          span #{isSubmitting ? 'Creating…' : 'Create account'}
+          Icon(name='check' size={14})
+
+setup
+  const [accounts, setAccounts] = useState<AccountRow[]>([])
+  const [rosterStatus, setRosterStatus] = useState<RosterStatus>('loading')
+  const [rosterError, setRosterError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [filters, setFilters] = useQueryStates(ROSTER_PARSERS, {
+    history: 'replace',
+    limitUrlUpdates: debounce(ROSTER_URL_DEBOUNCE_MS)
+  })
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    setRosterStatus('loading')
+    fetchAccounts(controller.signal)
+      .then((response) => {
+        setAccounts(response.accounts)
+        setRosterError(null)
+        setRosterStatus('ready')
+      })
+      .catch((error: unknown) => {
+        if (isAbortError(error)) return
+        setRosterError(readErrorMessage(error, 'Could not load the account roster.'))
+        setRosterStatus('error')
+      })
+
+    return () => controller.abort()
+  }, [reloadToken])
+
+  const visibleAccounts = accounts.filter(
+    (account) => (filters.status === 'all' || account.status === filters.status) && matchesAccountQuery(account, filters.q)
+  )
+
+  const onAccountCreated = (nextAccounts: AccountRow[]) => {
+    setAccounts(nextAccounts)
+    setRosterStatus('ready')
+    setRosterError(null)
+    void setFilters({ create: false })
+    setNotice('Account created. The primary contact becomes its owner once they confirm.')
+  }
+
+  const handleSearchInputChange = (event: Event) => {
+    event.preventDefault()
+    void setFilters({ q: (event.currentTarget as HTMLInputElement).value })
+  }
+
+div(className='w-full')
+  header(className='flex h-12 items-center justify-between gap-3')
+    div(className='flex items-center gap-3')
+      h2(className='font-sans font-[400] tracking-tight') Directory
+      h3(className='flex size-7 aspect-square items-center justify-center rounded-full bg-foreground/5 font-mono text-xs')
+        if rosterStatus === 'ready'
+          span #{accounts.length}
+        else
+          Icon(name='spinner' size={12} className='animate-spin')
+      button(
+        ~ type='button'
+        ~ onClick={() => void setFilters({ create: !filters.create })}
+        ~ aria-expanded={filters.create}
+        ~ aria-label={filters.create ? 'Close the create-account form' : 'Create an account'}
+        ~ className={cn(addButtonClassName, { 'bg-foreground! text-background': filters.create })}
+        ~ )
+        Icon(name='plus' size={14} className={cn('transition-transform duration-200 ease-out', {'rotate-135': filters.create})})
+    div(className='relative w-full max-w-xs')
+      Input(
+        ~ type='search'
+        ~ value={filters.q}
+        ~ autoComplete='off'
+        ~ className='rounded-sm pe-9 font-mono text-sm uppercase'
+        ~ placeholder='Search by name & slug'
+        ~ aria-label='Search accounts'
+        ~ onInput={handleSearchInputChange}
+        ~ )
+      if filters.q.length > 0
+        button(
+          ~ type='button'
+          ~ onClick={() => void setFilters({ q: '' })}
+          ~ aria-label='Clear search'
+          ~ className='absolute inset-y-0 end-0 flex w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground'
+          ~ )
+          Icon(name='close' size={14})
+      else
+        div(className='pointer-events-none absolute inset-y-0 end-0 flex w-9 items-center justify-center text-muted-foreground/80')
+          Icon(name='search' size={14})
+
+  if notice
+    div(className='mt-4 flex items-start justify-between gap-3 rounded-sm border border-active/60 bg-active/5 px-3 py-2')
+      p(className='text-sm text-active') #{notice}
+      button(type='button' onClick={() => setNotice(null)} aria-label='Dismiss' className='shrink-0 text-muted-foreground hover:text-foreground')
+        Icon(name='close' size={12})
+
+  if filters.create
+    CreateAccountForm(onCreated={onAccountCreated} onCancel={() => void setFilters({ create: false })})
+  else
+    fragment
+      if rosterError
+        p(className='mt-4 rounded-sm border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive') #{rosterError}
+
+      div(className='mt-4')
+        if rosterStatus === 'loading'
+          AccountsSkeleton
+        elseif rosterStatus === 'error'
+          button(type='button' onClick={() => setReloadToken((token) => token + 1)} className={actionButtonClassName}) Try again
+        elseif accounts.length === 0
+          div(className='rounded-sm border border-dashed border-border/60 px-4 py-10 text-center')
+            p(className='text-sm text-muted-foreground') No accounts yet.
+            p(className='mt-1 text-xs text-muted-foreground') Create the first one to start onboarding an organization.
+        elseif visibleAccounts.length === 0
+          p(className='px-1 py-6 text-sm text-muted-foreground') No accounts match this filter.
+        else
+          ul(className='divide-y divide-dashed divide-sidebar-border overflow-hidden rounded-lg border border-sidebar-border')
+            each account in visibleAccounts key account._id
+              li(className='flex flex-wrap items-center justify-between gap-3 bg-foreground/[0.015] px-1.5 py-4 transition-colors hover:bg-accent md:px-3')
+                AccountIdentity(account={account})
+                div(className='flex min-w-0 flex-1 items-center justify-end md:gap-4')
+                  span(className='hidden truncate font-mono text-xs text-muted-foreground') #{account.primaryContact.email}
+                  span(className='hidden shrink-0 font-mono text-xs text-muted-foreground lg:inline') #{ACCOUNT_PLAN_LABEL[account.plan]}
+                  StatusBadge(status={account.status})
+                  Icon(name='chevron-right' size={12} className='shrink-0 text-muted-foreground')

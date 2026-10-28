@@ -35,6 +35,7 @@
     "@octanejs/resizable-panels": "^0.0.26",
     "@octanejs/select": "0.1.9",
     "@octanejs/shadcn": "0.0.48",
+    "@octanejs/tanstack-form": "^0.0.64",
     "@octanejs/tanstack-router": "^0.2.3",
     "@octanejs/tanstack-table": "0.1.58",
     "beast-tsrx": "0.7.1",

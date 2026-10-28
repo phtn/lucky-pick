@@ -300,7 +300,7 @@ main(className='asgard-frame')
     Panel(id='asgard-content-panel' minSize='0px' className='asgard-content-panel' style={{ overflow: 'auto' }})
       section(className='asgard-content')
         if isAsgardGateOpen
-          div(className='asgard-open-gate' role='status')
+          div(className='hidden' role='status')
             Icon(name='alert-triangle' size={13})
             span Gate open — dev build only. The Worker still refuses every privileged call.
         if status === 'loading'

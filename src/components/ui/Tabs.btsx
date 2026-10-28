@@ -82,7 +82,7 @@ nav(
         ~ )
         if item.icon
           Icon(name={item.icon} className='md:size-3 size-5 md:opacity-80')
-        span(className='truncate font-sans font-[450] text-xs -tracking-[0.01em]') #{item.label}
+        span(className='truncate font-sans font-[450] text-sm -tracking-[0.018em]') #{item.label}
     else
       Link(
         ~ to={item.href.startsWith('#') ? '.' : item.href}
@@ -96,11 +96,11 @@ nav(
         ~ )
         if item.icon
           Icon(name={item.icon} className='md:size-3 size-5 md:opacity-80')
-        span(className='hidden lg:inline font-sans font-[450] text-xs -tracking-[0.01em]') #{item.label}
-        span(className={`${items.length >= 3 ? 'hidden md:flex' : 'flex'}  scale-95 lg:hidden font-sans font-medium sm:text-base text-sm -tracking-[0.014em]`}) #{item.shortLabel ?? item.label}
+        span(className='hidden lg:inline font-sans font-[450] text-base -tracking-[0.012em]') #{item.label}
+        span(className={`${items.length >= 3 ? 'hidden md:flex' : 'flex'}  scale-95 lg:hidden font-sans font-[450] sm:text-base text-base -tracking-[0.014em]`}) #{item.shortLabel ?? item.label}
   div(
     ~ // Line Indicator
     ~ aria-hidden='true'
-    ~ className='pointer-events-none absolute -bottom-0.75 left-0 z-0 h-[2.5px] rounded-full bg-foreground/90 shadow-sm transition-[width,transform] duration-180 ease-out motion-reduce:transition-none'
+    ~ className='pointer-events-none absolute -bottom-0.25 left-0 z-0 h-[2.5px] rounded-full bg-foreground/90 shadow-sm transition-[width,transform] duration-180 ease-out motion-reduce:transition-none'
     ~ style={{ width: 'var(--active-tab-width, 0px)', transform: 'translateX(var(--active-tab-left, 0px)) translateY(-50%)' }}
     ~ )

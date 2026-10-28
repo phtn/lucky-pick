@@ -132,6 +132,8 @@
   background: transparent;
   color: var(--muted-foreground);
   font-size: 14px;
+  font-weight: 450;
+  letter-spacing: -0.02em;
   text-decoration: none;
   transition:
     color 150ms ease,
@@ -268,11 +270,11 @@
 /* A page's own header inside the content panel, with its tab strip beneath. */
 .asgard-topbar {
   display: flex;
-  min-height: 84px;
+  min-height: 64px;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 20px 16px 16px;
+  padding: 10px 16px 10px;
 }
 
 .asgard-topbar-tabs {

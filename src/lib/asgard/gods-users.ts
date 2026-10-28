@@ -27,3 +27,13 @@ export async function fetchGodUsers(signal?: AbortSignal): Promise<GodUserList> 
 export function getGodUserLabel(user: GodUser) {
   return user.displayName ?? user.email ?? user.uid
 }
+
+/** Directory candidates for an account's primary contact. */
+export async function searchUsers(query: string, signal?: AbortSignal): Promise<GodUserList> {
+  const response = await fetch(`${ASGARD_USERS_ENDPOINT}?search=${encodeURIComponent(query)}`, {
+    credentials: 'same-origin',
+    signal
+  })
+  if (!response.ok) throw new Error(await readError(response, 'Could not search the user directory.'))
+  return (await response.json()) as GodUserList
+}

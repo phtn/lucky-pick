@@ -1,7 +1,7 @@
 import { getFirebaseAdminAuth } from '@/lib/firebase-admin/admin'
 import type { FirebaseAdminUserSummary } from '@/lib/firebase-admin/admin-users'
 import { canManageFirebaseAccessClaim } from '@/lib/firebase-admin/custom-claims'
-import { scanFirebaseUsers } from '@/lib/firebase-admin/god-directory'
+import { FIREBASE_USER_SEARCH_RESULT_LIMIT, matchesFirebaseUserSearch, normalizeUserSearchQuery, scanFirebaseUsers } from '@/lib/firebase-admin/god-directory'
 import { getVerifiedGodSession } from '@/lib/firebase-admin/server-auth'
 import { getHostnameFromHostHeader } from '@/lib/routing/admin-subdomain'
 import { isAsgardConsoleHostname } from '@/lib/routing/asgard-subdomain'
@@ -34,7 +34,11 @@ function isAsgardRequest(request: Request) {
   return isAsgardConsoleHostname(hostname)
 }
 
-/** `GET /api/asgard/users` — everyone currently holding the `god` claim. */
+/**
+ * `GET /api/asgard/users` — everyone currently holding the `god` claim.
+ * `GET /api/asgard/users?search=<query>` — anyone in the directory, so an
+ * account's primary contact can be linked to the identity they already have.
+ */
 export async function handleAsgardUsers(request: Request): Promise<Response> {
   if (!isAsgardRequest(request)) return json({ error: 'Not found.' }, 404)
   if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405)
@@ -45,13 +49,22 @@ export async function handleAsgardUsers(request: Request): Promise<Response> {
   if (!session) return json({ error: 'God access is required.' }, 401)
 
   const actorClaims = session.customClaims
+  const rawSearch = new URL(request.url).searchParams.get('search')
+  const search = normalizeUserSearchQuery(rawSearch ?? '')
 
   try {
-    const scan = await scanFirebaseUsers({
-      actorClaims,
-      limit: GOD_LIST_RESULT_LIMIT,
-      match: (user) => user.god
-    })
+    // No search term means "who currently holds god"; a search term means
+    // "who could be named on an account", so the whole directory is in scope.
+    const scan =
+      rawSearch === null
+        ? await scanFirebaseUsers({ actorClaims, limit: GOD_LIST_RESULT_LIMIT, match: (user) => user.god })
+        : search.length === 0
+          ? { scanned: 0, truncated: false, users: [] }
+          : await scanFirebaseUsers({
+              actorClaims,
+              limit: FIREBASE_USER_SEARCH_RESULT_LIMIT,
+              match: (user) => matchesFirebaseUserSearch(user, search)
+            })
 
     const body: AsgardUserListResponse = {
       actorUid: session.decodedToken.uid,

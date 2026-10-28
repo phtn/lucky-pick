@@ -1,0 +1,5 @@
+import type { ComponentProps } from 'octane'
+import { cn } from '@/lib/utils'
+
+props { className, ...props }: ComponentProps<'div'>
+div(data-slot='skeleton' className={cn('animate-pulse bg-sidebar', className)} {...props})
