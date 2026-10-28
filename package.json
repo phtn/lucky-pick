@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun run results:build && rsbuild dev",
+    "dev:api": "wrangler dev --port 8787 --ip 127.0.0.1",
     "build": "bun run results:build && rsbuild build",
     "preview": "rsbuild preview",
     "typecheck": "tsrx-tsc --noEmit",
@@ -17,7 +18,8 @@
     "results:build": "bun scripts/build-results.ts",
     "results:check": "bun scripts/build-results.ts --check --strict",
     "results:import": "bun scripts/import-results.ts",
-    "test": "bun test src && vitest run"
+    "test": "bun test src && vitest run",
+    "fb:claims": "bun run scripts/firebase/seed-claims.ts"
   },
   "dependencies": {
     "@beastjs/use-rng": "^0.1.25",
@@ -46,6 +48,7 @@
     "xlsx": "0.18.5"
   },
   "devDependencies": {
+    "@beastjs/devtools": "^0.1.23",
     "@edge-runtime/vm": "^5.0.0",
     "@octanejs/rsbuild-plugin": "0.1.58",
     "@rsbuild/core": "^2.2.11",

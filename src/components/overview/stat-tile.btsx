@@ -1,0 +1,59 @@
+import type { OctaneNode } from 'octane'
+import { cn } from '@/lib/utils'
+import Sparkline from './sparkline.btsx'
+import { formatSignedPercent } from '@/lib/overview/metrics'
+
+module
+  export interface StatTileProps {
+    /** Sentence case, no trailing colon. */
+    label: string
+    /** Pre-formatted: the tile presents, the page decides units. */
+    value: string
+    /** What the value counts, shown beneath it. */
+    caption?: string
+    /** Fraction, not percent. Null when the prior window was empty. */
+    delta?: number | null
+    /** Names the period the delta is against — a bare percentage means nothing. */
+    deltaLabel?: string
+    /** False where a rise is bad news, so the colour follows meaning not direction. */
+    upIsGood?: boolean
+    trend?: readonly number[]
+    color?: string
+    /** The one number the page leads with. Exactly one per view. */
+    hero?: boolean
+    children?: OctaneNode
+    className?: string
+  }
+
+  const RISING = 'text-emerald-700 dark:text-emerald-400'
+  const FALLING = 'text-destructive'
+  const FLAT = 'text-muted-foreground'
+
+props { label, value, caption, delta = null, deltaLabel, upIsGood = true, trend, color = 'var(--active)', hero = false, children, className }: StatTileProps
+
+setup
+  // A delta must never be colour alone, so the arrow rides along with the tone.
+  const direction = delta === null || Math.abs(delta) < 0.005 ? 'flat' : delta > 0 ? 'up' : 'down'
+  const isGoodNews = direction === 'flat' ? false : (direction === 'up') === upIsGood
+  const deltaTone = direction === 'flat' ? FLAT : isGoodNews ? RISING : FALLING
+  const arrow = direction === 'up' ? '↑' : direction === 'down' ? '↓' : '·'
+
+div(className={cn('overview-stat flex flex-col justify-between gap-5', className)})
+  div
+    p(className='font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground') #{label}
+    div(className='mt-3 flex items-end gap-3')
+      span(className={cn('font-sans font-medium leading-none tracking-tight text-foreground', hero ? 'text-5xl' : 'text-3xl')}) #{value}
+      if delta !== null
+        span(className={cn('mb-1 inline-flex items-center gap-1 font-mono text-xs', deltaTone)})
+          span(aria-hidden={true}) #{arrow}
+          span #{formatSignedPercent(delta)}
+    if caption
+      p(className='mt-2 text-xs text-muted-foreground') #{caption}
+
+  div(className='flex items-end justify-between gap-4')
+    div(className='min-w-0 flex-1')
+      | #{children}
+      if deltaLabel && delta !== null
+        p(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground/70') #{deltaLabel}
+    if trend
+      Sparkline(values={trend} color={color} aria-label={`${label} trend`})

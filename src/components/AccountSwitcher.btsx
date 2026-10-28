@@ -5,6 +5,9 @@ import { isFirebaseConfigured } from '@/lib/firebase'
 import { forgetAllAccounts, getAccountLabel } from '@/lib/firebase/accounts'
 import { signInWithGoogle, signOutUser, useFirebaseUser, useRememberedAccounts } from '@/lib/firebase/auth'
 import type { IconName } from '@/lib/icons'
+import { canOpenAsgard } from '@/lib/asgard/access'
+import { navigate } from '@/lib/navigation'
+import { asgardHandoffPath } from '@/lib/routing/asgard-subdomain'
 
 module
   interface AccountSwitcherProps {
@@ -49,7 +52,7 @@ module
 props { onNotify, children, footer }: AccountSwitcherProps
 
 setup
-  const { user, isLoading, authError } = useFirebaseUser()
+  const { user, isLoading, authError, customClaims } = useFirebaseUser()
   const accounts = useRememberedAccounts()
   const [isPending, setIsPending] = useState(false)
 
@@ -93,15 +96,21 @@ setup
     imageUrl: account.photoURL
   }))
 
+  // Asgard is only offered to the accounts that can open it; the handoff page
+  // mints the ID token this origin holds and leaves for the console's own host.
+  const asgardAction: AccountAction[] = canOpenAsgard(user !== null, customClaims)
+    ? [{ id: 'asgard', label: 'Asgard', icon: 'key', onSelect: () => navigate(asgardHandoffPath) }]
+    : []
+
   const actions: AccountAction[] = user
-    ? [{ id: 'sign-out', label: 'Sign out', icon: 'signout', onSelect: () => void handleSignOut(), variant: 'destructive' }]
+    ? [...asgardAction, { id: 'sign-out', label: 'Sign out', icon: 'signout', onSelect: () => void handleSignOut(), variant: 'destructive' }]
     : accounts.length > 0
       ? [{ id: 'forget', label: 'Forget saved accounts', icon: 'close', onSelect: forgetAllAccounts }]
       : []
 
   // An unconfigured deployment has no auth to offer, so the control says so
   // rather than opening a menu that cannot do anything.
-  const title = isFirebaseConfigured ? (user ? 'Authenticated' : 'Recent accounts') : 'Auth unavailable'
+  const title = isFirebaseConfigured ? (user ? '' : 'Recent accounts') : 'Auth unavailable'
   const emptyLabel = isFirebaseConfigured ? 'Sign in' : 'Auth off'
 
 if !isFirebaseConfigured

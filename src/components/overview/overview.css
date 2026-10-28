@@ -1,0 +1,251 @@
+/* Shared only by the two overview surfaces. Colors follow the app theme. */
+.overview-page {
+  isolation: isolate;
+}
+
+.overview-page::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 340px;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--foreground) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--foreground) 7%, transparent) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: linear-gradient(to bottom, black, transparent);
+}
+
+.overview-content {
+  max-width: 1040px;
+  margin-inline: auto;
+  padding-inline: clamp(0px, 2vw, 32px);
+}
+
+.overview-masthead {
+  position: relative;
+  padding-block: clamp(32px, 5vh, 64px) 32px;
+  animation: overview-enter 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.overview-title {
+  font-size: clamp(36px, 4vw, 52px);
+  letter-spacing: -0.055em;
+}
+
+.overview-cursor {
+  color: var(--active);
+  animation: overview-cursor 1s step-end 3;
+}
+
+/* Soft gradient rules gain a brighter leading edge on hover or keyboard focus. */
+.overview-rule,
+.overview-feed > li::after,
+.overview-stat::before {
+  position: absolute;
+  inset: auto 0 0;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--border) 18%, transparent);
+}
+
+.overview-rule::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--foreground) 60%, transparent) 22%,
+    transparent 96%
+  );
+  opacity: 0;
+  transition: opacity 160ms cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.overview-panel-heading:is(:hover, :focus-within) .overview-rule::after,
+.overview-masthead:is(:hover, :focus-within) .overview-rule::after {
+  opacity: 1;
+}
+
+.overview-sections {
+  display: grid;
+  gap: 48px;
+  padding-top: 40px;
+}
+
+.overview-sections > * {
+  min-width: 0;
+  animation: overview-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.overview-sections > :nth-child(2) {
+  animation-delay: 60ms;
+}
+.overview-sections > :nth-child(3) {
+  animation-delay: 110ms;
+}
+.overview-sections > :nth-child(n + 4) {
+  animation-delay: 160ms;
+}
+
+.overview-panel {
+  min-width: 0;
+}
+
+.overview-panel-heading {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding-bottom: 18px;
+}
+
+.overview-panel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  margin-block: -6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.overview-page :is(button, a):focus-visible {
+  outline: 2px solid var(--active);
+  outline-offset: 5px;
+  border-radius: 4px;
+}
+
+.overview-chevron {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  transition:
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 160ms ease-out;
+}
+
+.overview-panel-toggle[aria-expanded='true'] .overview-chevron {
+  transform: rotate(-180deg);
+}
+
+.overview-panel-toggle:is(:hover, :focus-visible) .overview-chevron {
+  color: var(--foreground);
+}
+
+.overview-disclosure {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease-out;
+}
+
+.overview-disclosure[data-open='false'] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+.overview-disclosure-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.overview-panel-body {
+  padding: 24px 6px 6px;
+}
+
+.overview-panel--bare .overview-rule {
+  display: none;
+}
+.overview-panel--bare .overview-panel-body {
+  padding-inline: 0;
+}
+
+.overview-stats {
+  gap: 28px;
+}
+
+.overview-stat {
+  position: relative;
+  min-width: 0;
+  padding: 24px 6px 6px;
+}
+
+.overview-stat::before {
+  content: '';
+  inset: 0 0 auto;
+}
+
+.overview-feed > li {
+  position: relative;
+  padding-block: 18px;
+}
+
+.overview-feed > li::after {
+  content: '';
+  transition: opacity 160ms ease-out;
+}
+
+.overview-feed > li:last-child::after {
+  display: none;
+}
+.overview-feed > li:is(:hover, :focus-within)::after {
+  opacity: 0.4;
+}
+
+.overview-feed > li > a {
+  margin-block: -12px;
+}
+
+@keyframes overview-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes overview-cursor {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 639px) {
+  .overview-content {
+    padding-inline: 0;
+  }
+  .overview-sections {
+    gap: 36px;
+    padding-top: 32px;
+  }
+  .overview-stats {
+    gap: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overview-page {
+    scroll-behavior: auto;
+  }
+  .overview-page *,
+  .overview-page *::before,
+  .overview-page *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: Reduced motion must override nested utility animations. */
+    animation: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Reduced motion must override nested utility transitions. */
+    transition: none !important;
+  }
+}

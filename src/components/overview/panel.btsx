@@ -1,0 +1,44 @@
+import { useId, useState, type OctaneNode } from 'octane'
+import { cn } from '@/lib/utils'
+import { Icon } from '@/lib/icons'
+
+module
+  export interface PanelProps {
+    title: string
+    description?: string
+    /** Right-aligned qualifier: the window, the source, the cap. */
+    meta?: string
+    children?: OctaneNode
+    className?: string
+    /** Drops the frame where the panel sits inside another one. */
+    bare?: boolean
+    /** Disclosure sections stay open until the reader chooses to fold them. */
+    collapsible?: boolean
+  }
+
+props { title, description, meta, children, className, bare = false, collapsible = true }: PanelProps
+
+setup
+  const contentId = useId()
+  const [expanded, setExpanded] = useState(true)
+  const isOpen = !collapsible || expanded
+
+section(className={cn('overview-panel', bare && 'overview-panel--bare', className)})
+  div(className='overview-panel-heading')
+    h2(className='min-w-0 font-sans text-xl font-medium tracking-tight text-foreground')
+      if collapsible
+        button(type='button' className='overview-panel-toggle' aria-expanded={isOpen} aria-controls={contentId} onClick={() => setExpanded((value) => !value)})
+          span #{title}
+          span(className='overview-chevron' aria-hidden={true})
+            Icon(name='chevron-right' size={16} className='rotate-90')
+      else
+        span #{title}
+    if meta
+      span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') #{meta}
+    span(className='overview-rule' aria-hidden={true})
+  div(id={contentId} className='overview-disclosure' data-open={isOpen} inert={!isOpen} aria-hidden={!isOpen})
+    div(className='overview-disclosure-clip')
+      div(className='overview-panel-body')
+        if description
+          p(className='mb-6 max-w-prose text-xs leading-relaxed text-muted-foreground') #{description}
+        | #{children}

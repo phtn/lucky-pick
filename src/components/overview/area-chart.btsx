@@ -1,0 +1,100 @@
+import { useState } from 'octane'
+import { cn } from '@/lib/utils'
+import { formatCount, formatDay, type DayBucket } from '@/lib/overview/metrics'
+
+module
+  export interface AreaChartProps {
+    /** Oldest first, one point per day. */
+    buckets: readonly DayBucket[]
+    /** Names what the line plots, for the tooltip and the screen-reader label. */
+    unit: string
+    color?: string
+    className?: string
+  }
+
+  // The plot is stretched to the container, so the geometry only has to be
+  // internally consistent; the stroke opts out of that stretch below.
+  const VIEW_WIDTH = 600
+  const VIEW_HEIGHT = 160
+
+props { buckets, unit, color = 'var(--active)', className }: AreaChartProps
+
+setup
+  const [hovered, setHovered] = useState<number | null>(null)
+
+  const values = buckets.map((bucket) => bucket.value)
+  const highest = values.length > 0 ? Math.max(...values) : 0
+  const lowest = values.length > 0 ? Math.min(...values) : 0
+  // Cumulative lines barely move day to day, so the floor sits a little under
+  // the lowest reading instead of at zero — otherwise the growth is invisible.
+  const floor = lowest === highest ? Math.max(highest - 1, 0) : lowest - (highest - lowest) * 0.25
+  const span = highest - floor || 1
+
+  const toX = (index: number) => (buckets.length < 2 ? 0 : (index * VIEW_WIDTH) / (buckets.length - 1))
+  const toY = (value: number) => VIEW_HEIGHT - ((value - floor) / span) * VIEW_HEIGHT
+
+  const coordinates = buckets.map((bucket, index) => `${toX(index).toFixed(2)},${toY(bucket.value).toFixed(2)}`)
+  // Nothing on the books yet is an empty state, not a line pinned to the top.
+  const linePath = coordinates.length > 1 && highest > 0 ? `M${coordinates.join('L')}` : ''
+  const areaPath = coordinates.length > 1 ? `${linePath}L${VIEW_WIDTH},${VIEW_HEIGHT}L0,${VIEW_HEIGHT}Z` : ''
+
+  const active = hovered === null ? null : buckets[hovered]
+  const hoveredPosition = hovered === null || buckets.length < 2 ? 0 : hovered / (buckets.length - 1)
+
+  // The pointer lands anywhere in the plot, so the nearest day is picked from
+  // the fraction across it rather than from a per-point hit target.
+  const trackPointer = (event: { currentTarget: HTMLElement; clientX: number }) => {
+    if (buckets.length === 0) return
+    const bounds = event.currentTarget.getBoundingClientRect()
+    if (bounds.width === 0) return
+
+    const fraction = Math.min(Math.max((event.clientX - bounds.left) / bounds.width, 0), 1)
+    setHovered(Math.round(fraction * (buckets.length - 1)))
+  }
+
+div(className={cn('relative', className)})
+  div(className='pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2')
+    span(className='font-mono text-2xs tabular-nums text-muted-foreground') #{formatCount(highest)}
+    span(className='h-px flex-1 bg-border/40')
+
+  div(
+    ~ className='relative mt-5 h-40 cursor-crosshair'
+    ~ onMouseMove={trackPointer}
+    ~ onMouseLeave={() => setHovered(null)}
+    ~ )
+    if linePath
+      svg(
+        ~ role='img'
+        ~ aria-label={`${unit} over time`}
+        ~ viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
+        ~ preserveAspectRatio='none'
+        ~ className='h-full w-full'
+        ~ fill='none'
+        ~ )
+        path(d={areaPath} fill={color} opacity='0.1')
+        path(d={linePath} stroke={color} strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' vectorEffect='non-scaling-stroke')
+    else
+      div(className='flex h-full items-center justify-center')
+        p(className='text-xs text-muted-foreground') Not enough history to draw a trend yet.
+
+    if active
+      div(className='pointer-events-none absolute inset-y-0 w-px bg-foreground/25' style={{ left: `${hoveredPosition * 100}%` }})
+    if active
+      div(
+        ~ className='pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background'
+        ~ style={{ backgroundColor: color, left: `${hoveredPosition * 100}%`, top: `${(toY(active.value) / VIEW_HEIGHT) * 100}%` }}
+        ~ )
+
+  div(className='mt-2 h-px w-full bg-border/70')
+
+  div(className='mt-2 flex items-center justify-between font-mono text-2xs tabular-nums text-muted-foreground')
+    span #{formatDay(buckets[0]?.start ?? Date.now())}
+    span #{formatDay(buckets[buckets.length - 1]?.start ?? Date.now())}
+
+  if active
+    div(
+      ~ className={cn('pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-sm border border-border/60 bg-popover px-2 py-1 shadow-sm', hoveredPosition < 0.12 && 'translate-x-0', hoveredPosition > 0.88 && '-translate-x-full')}
+      ~ style={{ left: `${hoveredPosition * 100}%` }}
+      ~ )
+      p(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') #{formatDay(active.start)}
+      p(className='mt-0.5 text-sm tabular-nums text-foreground') #{`${formatCount(active.value)} ${unit}`}

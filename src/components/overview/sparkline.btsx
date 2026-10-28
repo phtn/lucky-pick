@@ -1,0 +1,56 @@
+import { cn } from '@/lib/utils'
+
+module
+  export interface SparklineProps {
+    /** Oldest first. Fewer than two points renders nothing rather than a dot. */
+    values: readonly number[]
+    /** Any CSS colour; defaults to the accent. Marks carry colour, text never does. */
+    color?: string
+    className?: string
+    'aria-label'?: string
+  }
+
+  const WIDTH = 120
+  const HEIGHT = 32
+  // Leaves room for the end marker plus its 2px surface ring.
+  const PADDING = 4
+
+props { values, color = 'var(--active)', className, 'aria-label': ariaLabel }: SparklineProps
+
+setup
+  // A series that is zero the whole way is not a trend, and a flat rule pinned
+  // to the floor reads as a rendering artefact. The tile's own value already
+  // says nothing happened, so the trend simply stays out of it.
+  const points = values.length > 1 && values.some((value) => value !== 0) ? values : []
+  const highest = points.length > 0 ? Math.max(...points) : 0
+  const lowest = points.length > 0 ? Math.min(...points) : 0
+  // A genuinely flat, non-zero series would divide by zero; it is drawn down
+  // the middle rather than collapsed onto the floor.
+  const span = highest - lowest || 1
+
+  const toX = (index: number) => PADDING + (index * (WIDTH - PADDING * 2)) / (points.length - 1)
+  const toY = (value: number) =>
+    highest === lowest ? HEIGHT / 2 : HEIGHT - PADDING - ((value - lowest) / span) * (HEIGHT - PADDING * 2)
+
+  const coordinates = points.map((value, index) => `${toX(index).toFixed(2)},${toY(value).toFixed(2)}`)
+  const linePath = coordinates.length > 0 ? `M${coordinates.join('L')}` : ''
+  const areaPath = coordinates.length > 0 ? `${linePath}L${toX(points.length - 1).toFixed(2)},${HEIGHT}L${PADDING},${HEIGHT}Z` : ''
+
+  const lastX = points.length > 0 ? toX(points.length - 1) : 0
+  const lastY = points.length > 0 ? toY(points[points.length - 1]) : 0
+
+if points.length > 1
+  svg(
+    ~ role='img'
+    ~ aria-label={ariaLabel}
+    ~ viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+    ~ width={WIDTH}
+    ~ height={HEIGHT}
+    ~ fill='none'
+    ~ className={cn('shrink-0 overflow-visible', className)}
+    ~ )
+    path(d={areaPath} fill={color} opacity='0.1')
+    path(d={linePath} stroke={color} strokeWidth='2' strokeLinecap='round' strokeLinejoin='round')
+    circle(cx={lastX} cy={lastY} r='4' fill={color} stroke='var(--background)' strokeWidth='2')
+else
+  div(aria-hidden={true} className={cn('shrink-0', className)} style={{ height: `${HEIGHT}px`, width: `${WIDTH}px` }})
