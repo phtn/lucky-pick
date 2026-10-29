@@ -24,6 +24,7 @@ import type * as ledger_q from "../ledger/q.js";
 import type * as ledger_wallets from "../ledger/wallets.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_testIdentities from "../lib/testIdentities.js";
+import type * as migrations_creditsToWallets from "../migrations/creditsToWallets.js";
 import type * as money_d from "../money/d.js";
 import type * as money_topups from "../money/topups.js";
 import type * as resultValidators from "../resultValidators.js";
@@ -56,6 +57,7 @@ declare const fullApi: ApiFromModules<{
   "ledger/wallets": typeof ledger_wallets;
   "lib/auth": typeof lib_auth;
   "lib/testIdentities": typeof lib_testIdentities;
+  "migrations/creditsToWallets": typeof migrations_creditsToWallets;
   "money/d": typeof money_d;
   "money/topups": typeof money_topups;
   resultValidators: typeof resultValidators;
