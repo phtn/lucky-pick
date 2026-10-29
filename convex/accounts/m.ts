@@ -1,7 +1,9 @@
 import { ConvexError, v } from 'convex/values'
 import { DEFAULT_ACCOUNT_STATUS } from '../../src/lib/accounts/accounts'
 import { mutation } from '../_generated/server'
-import { listCreditsForAccount, openCredits } from '../credits/helpers'
+import { listCreditsForAccount } from '../credits/helpers'
+import { findPartnerWallets, getPartnerWallets } from '../ledger/wallets'
+import { createTopupRequest } from '../money/topups'
 import { accountDocumentSchema, createAccountSchema, updateAccountSchema } from './d'
 import {
   getAccountBySlug,
@@ -31,7 +33,7 @@ export const create = mutation({
     }
 
     const now = Date.now()
-    const { contact: primaryContact, userId } = await normalizePrimaryContact(ctx, args.primaryContact)
+    const { contact: primaryContact } = await normalizePrimaryContact(ctx, args.primaryContact)
     const initialCredits = normalizeInitialCredits(args.initialCredits)
 
     const accountId = await ctx.db.insert('accounts', {
@@ -55,19 +57,22 @@ export const create = mutation({
       updatedBy: identity.tokenIdentifier
     })
 
-    // Every account gets a wallet at birth, even a zero-credit one: that is
-    // what makes a later grant a balance change rather than a first appearance.
-    // It is keyed to the contact when they already have an identity, and to the
-    // account alone when they do not.
-    await openCredits(ctx, {
-      accountId,
-      accountSlug: slug,
-      userId,
-      userTokenIdentifier: primaryContact.tokenIdentifier,
-      amount: initialCredits,
-      reason: 'initial-grant',
-      actorTokenIdentifier: identity.tokenIdentifier
-    })
+    // Every account gets its float and earnings wallets at birth, even a
+    // zero-credit one, so a later top-up is a balance change rather than a
+    // first appearance. Wallets belong to the account alone: members get none.
+    // The opening grant is only promised here. It becomes a pending top-up so
+    // a second god has to approve it; nothing is minted by creating an account.
+    await getPartnerWallets(ctx, accountId)
+
+    if (initialCredits > 0) {
+      await createTopupRequest(ctx, {
+        accountId,
+        amount: initialCredits,
+        paymentReference: null,
+        note: 'Opening grant',
+        makerTokenIdentifier: identity.tokenIdentifier
+      })
+    }
 
     return accountId
   }
@@ -125,8 +130,44 @@ export const remove = mutation({
   handler: async (ctx, { id }) => {
     await requireTopgIdentity(ctx)
 
-    // The wallets go with the account. Leaving them would hold a balance for an
-    // account that no longer exists.
+    // Ledger entries are immutable, so an account that ever moved money (or
+    // holds a member wallet) can only be closed. Reads only: removal must not
+    // create the wallets it is about to delete.
+    const { float, earnings } = await findPartnerWallets(ctx, id)
+    const userWallet = await ctx.db
+      .query('wallets')
+      .withIndex('by_accountId_and_kind', (q) => q.eq('accountId', id).eq('kind', 'user'))
+      .first()
+    let hasHistory = userWallet !== null
+
+    for (const wallet of [float, earnings]) {
+      if (!wallet) continue
+      const entry = await ctx.db
+        .query('ledgerEntries')
+        .withIndex('by_walletId_and_createdAt', (q) => q.eq('walletId', wallet._id))
+        .first()
+      if (entry) hasHistory = true
+    }
+
+    if (hasHistory) {
+      throw new ConvexError('This account has ledger history and cannot be deleted. Close it instead.')
+    }
+
+    // What is left is unfunded: empty wallets and requests that never minted
+    // (an approved request would have left entries, so it was refused above).
+    for (const wallet of [float, earnings]) {
+      if (wallet) await ctx.db.delete(wallet._id)
+    }
+
+    const requests = await ctx.db
+      .query('topupRequests')
+      .withIndex('by_accountId_and_createdAt', (q) => q.eq('accountId', id))
+      .take(100)
+    for (const request of requests) {
+      await ctx.db.delete(request._id)
+    }
+
+    // Legacy credits rows go too until that table is retired.
     for (const wallet of await listCreditsForAccount(ctx, id)) {
       await ctx.db.delete(wallet._id)
     }

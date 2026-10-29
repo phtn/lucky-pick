@@ -156,7 +156,10 @@ test('cannot request or approve for a closed account', async () => {
 
   expect((await t.run((ctx) => ctx.db.get('topupRequests', id)))!.status).toBe('pending')
   expect(await counts(t)).toMatchObject({ txns: 0, entries: 0 })
-  expect(await t.run((ctx) => ctx.db.query('wallets').collect())).toHaveLength(0)
+  // Accounts open their two partner wallets at birth, so what matters is that they stayed empty.
+  const wallets = await t.run((ctx) => ctx.db.query('wallets').collect())
+  expect(wallets.map((w) => w.kind).sort()).toEqual(['partnerEarnings', 'partnerFloat'])
+  expect(wallets.every((w) => w.available === 0)).toBe(true)
 })
 
 test('only gods act; staff can list', async () => {

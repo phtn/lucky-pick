@@ -15,8 +15,6 @@ import type * as accounts_m from "../accounts/m.js";
 import type * as accounts_q from "../accounts/q.js";
 import type * as credits_d from "../credits/d.js";
 import type * as credits_helpers from "../credits/helpers.js";
-import type * as credits_m from "../credits/m.js";
-import type * as credits_q from "../credits/q.js";
 import type * as csvBaseline from "../csvBaseline.js";
 import type * as ledger_audit from "../ledger/audit.js";
 import type * as ledger_d from "../ledger/d.js";
@@ -49,8 +47,6 @@ declare const fullApi: ApiFromModules<{
   "accounts/q": typeof accounts_q;
   "credits/d": typeof credits_d;
   "credits/helpers": typeof credits_helpers;
-  "credits/m": typeof credits_m;
-  "credits/q": typeof credits_q;
   csvBaseline: typeof csvBaseline;
   "ledger/audit": typeof ledger_audit;
   "ledger/d": typeof ledger_d;

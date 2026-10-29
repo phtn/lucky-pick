@@ -104,7 +104,7 @@ export const createAccountSchema = v.object({
 /**
  * `initialCredits` is absent here on purpose: the opening grant is history once
  * the account exists, and changing it would leave the `credits` balance it
- * seeded unexplained. Later grants go through `credits.m.grant`.
+ * seeded unexplained. Later grants go through top-up requests.
  */
 export const updateAccountSchema = v.object({
   name: v.optional(v.string()),
