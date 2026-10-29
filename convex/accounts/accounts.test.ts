@@ -5,7 +5,8 @@ import type { AccountCreditOption } from '../../src/lib/accounts/accounts'
 import { api } from '../_generated/api'
 import type { Id } from '../_generated/dataModel'
 import { auditWallets } from '../ledger/audit'
-import { god, godB, member, topg } from '../lib/testIdentities'
+import { requireAccountManager } from './helpers'
+import { god, godB, member, staff, topg } from '../lib/testIdentities'
 import schema from '../schema'
 
 // A root-absolute glob: `../**/*.ts` keys this directory's own files as `./x.ts`, which convex-test cannot place.
@@ -143,26 +144,112 @@ test('remove deletes an unfunded account with its wallets and unapproved request
   expect(after.requests).toEqual([])
 })
 
-test('remove still deletes legacy credits rows of an unfunded account', async () => {
+const legacyCreditsRow = (accountId: Id<'accounts'>, balance: number) => ({
+  accountId,
+  accountSlug: 'ana-store',
+  userId: null,
+  userTokenIdentifier: null,
+  balance,
+  granted: balance,
+  spent: 0,
+  lastReason: 'initial-grant' as const,
+  createdAt: 0,
+  createdBy: 'x',
+  updatedAt: 0,
+  updatedBy: 'x'
+})
+
+test('remove refuses while a legacy credits row still holds a balance', async () => {
   const t = makeT()
   const accountId = await create(t)
-  await t.run((ctx) =>
-    ctx.db.insert('credits', {
-      accountId,
-      accountSlug: 'ana-store',
-      userId: null,
-      userTokenIdentifier: null,
-      balance: 0,
-      granted: 0,
-      spent: 0,
-      lastReason: 'initial-grant',
-      createdAt: 0,
-      createdBy: 'x',
-      updatedAt: 0,
-      updatedBy: 'x'
-    })
+  await t.run((ctx) => ctx.db.insert('credits', legacyCreditsRow(accountId, 300)))
+
+  await expect(t.withIdentity(topg).mutation(api.accounts.m.remove, { id: accountId })).rejects.toThrow(
+    'This account has ledger history and cannot be deleted. Close it instead.'
   )
 
+  const after = await snapshot(t, accountId)
+  expect(after.account).not.toBeNull()
+  expect(after.wallets).toHaveLength(2)
+  expect(after.credits).toHaveLength(1)
+  expect(after.credits[0].balance).toBe(300)
+})
+
+test('remove deletes zero-balance legacy credits rows with an unfunded account', async () => {
+  const t = makeT()
+  const accountId = await create(t)
+  await t.run((ctx) => ctx.db.insert('credits', legacyCreditsRow(accountId, 0)))
+
   await t.withIdentity(topg).mutation(api.accounts.m.remove, { id: accountId })
-  expect((await snapshot(t, accountId)).credits).toEqual([])
+  const after = await snapshot(t, accountId)
+  expect(after.account).toBeNull()
+  expect(after.credits).toEqual([])
+})
+
+const ana = () => member('ana', 'ana@example.com')
+
+// An active account whose contact (ana) has signed in and is linked.
+const linkedActive = async (t: T) => {
+  const accountId = await create(t, { initialCredits: 0 })
+  await t.withIdentity(ana()).mutation(api.users.m.ensureCurrent, {})
+  await t.withIdentity(god).mutation(api.accounts.m.update, { id: accountId, status: 'active' })
+  return accountId
+}
+
+test('staff cannot change the primary contact', async () => {
+  const t = makeT()
+  const accountId = await create(t)
+
+  await expect(
+    t.withIdentity(staff).mutation(api.accounts.m.update, {
+      id: accountId,
+      primaryContact: { name: 'Mallory', email: 'mallory@example.com' }
+    })
+  ).rejects.toThrow('This action requires a god account.')
+
+  const updated = await t.withIdentity(staff).mutation(api.accounts.m.update, { id: accountId, name: 'Renamed' })
+  expect(updated.name).toBe('Renamed')
+  expect(updated.primaryContact.email).toBe('ana@example.com')
+})
+
+test('changing the contact email unlinks the previous contact', async () => {
+  const t = makeT()
+  const accountId = await linkedActive(t)
+  await t.withIdentity(ana()).run((ctx) => requireAccountManager(ctx, accountId))
+
+  const updated = await t.withIdentity(god).mutation(api.accounts.m.update, {
+    id: accountId,
+    primaryContact: { name: 'Bea', email: 'bea@example.com' }
+  })
+
+  expect(updated.primaryContact).toMatchObject({
+    email: 'bea@example.com',
+    tokenIdentifier: null,
+    firebaseUid: null,
+    userId: null,
+    emailVerified: null
+  })
+  await expect(t.withIdentity(ana()).run((ctx) => requireAccountManager(ctx, accountId))).rejects.toThrow(
+    'Unauthorized.'
+  )
+})
+
+test('editing the contact name keeps the link', async () => {
+  const t = makeT()
+  const accountId = await linkedActive(t)
+  const before = (await snapshot(t, accountId)).account!.primaryContact
+
+  const updated = await t.withIdentity(god).mutation(api.accounts.m.update, {
+    id: accountId,
+    primaryContact: { name: 'Ana Reyes', email: 'Ana@Example.com' }
+  })
+
+  expect(updated.primaryContact.name).toBe('Ana Reyes')
+  expect(updated.primaryContact).toMatchObject({
+    tokenIdentifier: before.tokenIdentifier,
+    firebaseUid: before.firebaseUid,
+    userId: before.userId
+  })
+  expect(before.tokenIdentifier).not.toBeNull()
+  await t.withIdentity(ana()).run((ctx) => requireAccountManager(ctx, accountId))
 })

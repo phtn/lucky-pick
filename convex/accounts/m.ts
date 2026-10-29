@@ -83,6 +83,9 @@ export const update = mutation({
   returns: accountDocumentSchema,
   handler: async (ctx, { id, ...args }) => {
     const identity = await requireStaffIdentity(ctx)
+    // Choosing who manages an account decides who may move its money, so it is
+    // a god decision. Other fields stay editable by any staff member.
+    if (args.primaryContact !== undefined) await requireGodIdentity(ctx)
     const existing = await ctx.db.get(id)
 
     if (!existing) {
@@ -99,16 +102,23 @@ export const update = mutation({
     if (args.payoutDetails !== undefined) patch.payoutDetails = normalizePayoutDetails(args.payoutDetails)
     if (args.primaryContact !== undefined) {
       const { contact } = await normalizePrimaryContact(ctx, args.primaryContact)
-      // An edit that names no user must not drop a link the account already has.
+      // `primaryContact.tokenIdentifier` is an authorization credential: it is
+      // what lets a person act for the account. So an edit that names no user
+      // either keeps the link (same person, e.g. a corrected name) or, when the
+      // email changed, drops it. Keeping it would let a "replaced" contact keep
+      // partner powers; the new contact links by verified email on sign-in.
+      const sameContact = contact.email === existing.primaryContact.email
       patch.primaryContact =
-        args.primaryContact.firebaseUid === undefined
-          ? {
-              ...contact,
-              tokenIdentifier: existing.primaryContact.tokenIdentifier,
-              firebaseUid: existing.primaryContact.firebaseUid,
-              userId: existing.primaryContact.userId
-            }
-          : contact
+        args.primaryContact.firebaseUid !== undefined
+          ? contact
+          : sameContact
+            ? {
+                ...contact,
+                tokenIdentifier: existing.primaryContact.tokenIdentifier,
+                firebaseUid: existing.primaryContact.firebaseUid,
+                userId: existing.primaryContact.userId
+              }
+            : { ...contact, tokenIdentifier: null, firebaseUid: null, userId: null, emailVerified: null }
     }
     if (args.billingEmail !== undefined) {
       patch.billingEmail = normalizeOptionalAccountEmail(args.billingEmail, 'Billing email')
@@ -131,14 +141,18 @@ export const remove = mutation({
     await requireTopgIdentity(ctx)
 
     // Ledger entries are immutable, so an account that ever moved money (or
-    // holds a member wallet) can only be closed. Reads only: removal must not
-    // create the wallets it is about to delete.
+    // holds a member wallet) can only be closed. A positive legacy `credits`
+    // balance counts too: it is money the migration has yet to move into the
+    // ledger, and deleting it here would destroy it. Reads only: removal must
+    // not create the wallets it is about to delete.
     const { float, earnings } = await findPartnerWallets(ctx, id)
     const userWallet = await ctx.db
       .query('wallets')
       .withIndex('by_accountId_and_kind', (q) => q.eq('accountId', id).eq('kind', 'user'))
       .first()
     let hasHistory = userWallet !== null
+    const legacyCredits = await listCreditsForAccount(ctx, id)
+    if (legacyCredits.some((row) => row.balance > 0)) hasHistory = true
 
     for (const wallet of [float, earnings]) {
       if (!wallet) continue
@@ -167,9 +181,9 @@ export const remove = mutation({
       await ctx.db.delete(request._id)
     }
 
-    // Legacy credits rows go too until that table is retired.
-    for (const wallet of await listCreditsForAccount(ctx, id)) {
-      await ctx.db.delete(wallet._id)
+    // Zero-balance legacy credits rows go too until that table is retired.
+    for (const row of legacyCredits) {
+      await ctx.db.delete(row._id)
     }
 
     await ctx.db.delete(id)
