@@ -8,12 +8,14 @@ import {
   ACCOUNT_PHONE_MAX_LENGTH,
   ACCOUNT_TITLE_MAX_LENGTH,
   DEFAULT_ACCOUNT_CREDITS,
+  canUseAccount,
   isAccountCreditOption,
   isAccountEmailAddress,
   isPublicAccountSlug,
   toAccountSlug,
   type AccountCreditOption
 } from '../../src/lib/accounts/accounts'
+import type { Id } from '../_generated/dataModel'
 import type { MutationCtx, QueryCtx } from '../_generated/server'
 import { isGod, isPlatformStaff, isTopGod } from '../lib/auth'
 import { trimOrNull } from '../utils'
@@ -60,6 +62,32 @@ export const requireTopgIdentity = async (ctx: QueryCtx | MutationCtx) => {
   }
 
   return identity
+}
+
+/**
+ * Authorizes a partner acting for their own account. The manager is the
+ * account's primary contact, matched on the `tokenIdentifier` that sign-in
+ * linking stored on it. `ownerTokenIdentifier` is the god who created the
+ * account, so it deliberately never qualifies: provisioning an account is not
+ * the same as acting for it. An unlinked contact has a null `tokenIdentifier`,
+ * which can never equal a real identity's. Suspended and closed accounts fail
+ * the same check, so one refusal covers "not yours" and "not usable" without
+ * telling the caller which.
+ */
+export const requireAccountManager = async (ctx: QueryCtx | MutationCtx, accountId: Id<'accounts'>) => {
+  const identity = await ctx.auth.getUserIdentity()
+  const account = identity ? await ctx.db.get(accountId) : null
+
+  if (
+    !identity ||
+    !account ||
+    account.primaryContact.tokenIdentifier !== identity.tokenIdentifier ||
+    !canUseAccount(account.status)
+  ) {
+    throw new ConvexError('Unauthorized.')
+  }
+
+  return { identity, account }
 }
 
 export const normalizeAccountName = (name: string) => {
