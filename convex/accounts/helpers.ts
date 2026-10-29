@@ -37,14 +37,16 @@ export const requireStaffIdentity = async (ctx: QueryCtx | MutationCtx) => {
 }
 
 /**
- * Provisioning an account is an Asgard action, so it requires the `god` claim
- * specifically — not the broader platform-staff check the read paths use.
+ * Asgard actions (provisioning an account, top-ups, reversal, freeze, choosing
+ * an account's contact) require the `god` claim specifically, not the broader
+ * platform-staff check the read paths use. The message is shown to users as is,
+ * so it names the requirement rather than any one action.
  */
 export const requireGodIdentity = async (ctx: QueryCtx | MutationCtx) => {
   const identity = await ctx.auth.getUserIdentity()
 
   if (!identity || !isGod(identity)) {
-    throw new ConvexError('Creating an account requires a god account.')
+    throw new ConvexError('This action requires a god account.')
   }
 
   return identity
