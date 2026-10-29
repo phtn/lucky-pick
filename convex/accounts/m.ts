@@ -1,14 +1,16 @@
 import { ConvexError, v } from 'convex/values'
-import { DEFAULT_ACCOUNT_PLAN, DEFAULT_ACCOUNT_STATUS } from '../../src/lib/accounts/accounts'
+import { DEFAULT_ACCOUNT_STATUS } from '../../src/lib/accounts/accounts'
 import { mutation } from '../_generated/server'
+import { listCreditsForAccount, openCredits } from '../credits/helpers'
 import { accountDocumentSchema, createAccountSchema, updateAccountSchema } from './d'
 import {
   getAccountBySlug,
   normalizeAccountName,
   normalizeAccountNotes,
   normalizeAccountSlug,
+  normalizeInitialCredits,
   normalizeOptionalAccountEmail,
-  normalizeOrganization,
+  normalizePayoutDetails,
   normalizePrimaryContact,
   requireGodIdentity,
   requireStaffIdentity,
@@ -29,14 +31,15 @@ export const create = mutation({
     }
 
     const now = Date.now()
-    const { contact: primaryContact } = await normalizePrimaryContact(ctx, args.primaryContact)
+    const { contact: primaryContact, userId } = await normalizePrimaryContact(ctx, args.primaryContact)
+    const initialCredits = normalizeInitialCredits(args.initialCredits)
 
-    return await ctx.db.insert('accounts', {
+    const accountId = await ctx.db.insert('accounts', {
       slug,
       name,
       status: args.status ?? DEFAULT_ACCOUNT_STATUS,
-      plan: args.plan ?? DEFAULT_ACCOUNT_PLAN,
-      organization: normalizeOrganization(args.organization),
+      initialCredits,
+      payoutDetails: normalizePayoutDetails(args.payoutDetails),
       primaryContact,
       // An account is invoiced on the billing address when it has one and the
       // contact's own address otherwise, so this is never left blank.
@@ -51,6 +54,22 @@ export const create = mutation({
       updatedAt: now,
       updatedBy: identity.tokenIdentifier
     })
+
+    // Every account gets a wallet at birth, even a zero-credit one: that is
+    // what makes a later grant a balance change rather than a first appearance.
+    // It is keyed to the contact when they already have an identity, and to the
+    // account alone when they do not.
+    await openCredits(ctx, {
+      accountId,
+      accountSlug: slug,
+      userId,
+      userTokenIdentifier: primaryContact.tokenIdentifier,
+      amount: initialCredits,
+      reason: 'initial-grant',
+      actorTokenIdentifier: identity.tokenIdentifier
+    })
+
+    return accountId
   }
 })
 
@@ -72,8 +91,7 @@ export const update = mutation({
 
     if (args.name !== undefined) patch.name = normalizeAccountName(args.name)
     if (args.status !== undefined) patch.status = args.status
-    if (args.plan !== undefined) patch.plan = args.plan
-    if (args.organization !== undefined) patch.organization = normalizeOrganization(args.organization)
+    if (args.payoutDetails !== undefined) patch.payoutDetails = normalizePayoutDetails(args.payoutDetails)
     if (args.primaryContact !== undefined) {
       const { contact } = await normalizePrimaryContact(ctx, args.primaryContact)
       // An edit that names no user must not drop a link the account already has.
@@ -106,6 +124,13 @@ export const remove = mutation({
   returns: v.null(),
   handler: async (ctx, { id }) => {
     await requireTopgIdentity(ctx)
+
+    // The wallets go with the account. Leaving them would hold a balance for an
+    // account that no longer exists.
+    for (const wallet of await listCreditsForAccount(ctx, id)) {
+      await ctx.db.delete(wallet._id)
+    }
+
     await ctx.db.delete(id)
     return null
   }

@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from 'convex/server'
 import { v } from 'convex/values'
 import { accountSchema } from './accounts/d'
+import { creditsFields } from './credits/d'
 import { resultFields, resultGame } from './resultValidators'
 import { userDocumentValidator } from './users/v'
 
@@ -22,6 +23,11 @@ export default defineSchema({
     .index('by_ownerTokenIdentifier_and_createdAt', ['ownerTokenIdentifier', 'createdAt'])
     .index('by_primaryContact_tokenIdentifier', ['primaryContact.tokenIdentifier'])
     .index('by_primaryContact_email', ['primaryContact.email']),
+  credits: defineTable(creditsFields)
+    .index('by_accountId', ['accountId'])
+    .index('by_accountId_and_userId', ['accountId', 'userId'])
+    .index('by_userId', ['userId'])
+    .index('by_accountSlug_and_userTokenIdentifier', ['accountSlug', 'userTokenIdentifier']),
   users: defineTable(userDocumentValidator)
     .index('by_tokenIdentifier', ['tokenIdentifier'])
     .index('by_firebaseUid', ['firebaseUid'])

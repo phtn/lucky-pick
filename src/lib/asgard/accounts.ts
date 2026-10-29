@@ -1,4 +1,4 @@
-import { ACCOUNT_STATUS_VALUES, type AccountPlan, type AccountStatus } from '@/lib/accounts/accounts'
+import { ACCOUNT_STATUS_VALUES, formatAccountCredits, type AccountCreditOption, type AccountStatus } from '@/lib/accounts/accounts'
 import type {
   AsgardAccountCreateResponse,
   AsgardAccountListResponse,
@@ -12,11 +12,12 @@ export type AccountRow = AsgardAccountListResponse['accounts'][number]
 export type CreateAccountInput = {
   name: string
   slug?: string
-  plan?: AccountPlan
-  organization?: {
-    legalName?: string
-    website?: string
-    industry?: string
+  initialCredits?: AccountCreditOption
+  payoutDetails?: {
+    bankOrWallet?: string
+    accountName?: string
+    accountNumber?: string
+    notes?: string
   }
   primaryContact: {
     name: string
@@ -103,13 +104,6 @@ export const ACCOUNT_STATUS_TONE: Record<AccountStatus, string> = {
   closed: 'border-border/60 bg-foreground/5 text-muted-foreground'
 }
 
-export const ACCOUNT_PLAN_LABEL: Record<AccountPlan, string> = {
-  trial: 'Trial',
-  starter: 'Starter',
-  pro: 'Pro',
-  enterprise: 'Enterprise'
-}
-
 export function countAccountsByStatus(accounts: AccountRow[]) {
   const counts: Record<AccountStatusFilter, number> = {
     all: accounts.length,
@@ -134,12 +128,15 @@ export function matchesAccountQuery(account: AccountRow, query: string) {
     account.slug,
     account.primaryContact.name,
     account.primaryContact.email,
-    account.organization.legalName ?? '',
-    account.organization.industry ?? ''
+    account.payoutDetails.accountName ?? '',
+    account.payoutDetails.bankOrWallet ?? ''
   ].some((field) => field.toLowerCase().includes(needle))
 }
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+
+/** The account's opening grant, as the roster shows it. */
+export const formatAccountCreditGrant = (account: AccountRow) => `${formatAccountCredits(account.initialCredits)} CR`
 
 export const formatAccountDate = (value: number | null) => (value === null ? '—' : dateFormatter.format(value))
 

@@ -8,11 +8,26 @@ export type AccountStatus = (typeof ACCOUNT_STATUS_VALUES)[number]
 
 export const DEFAULT_ACCOUNT_STATUS: AccountStatus = 'pending'
 
-export const ACCOUNT_PLAN_VALUES = ['trial', 'starter', 'pro', 'enterprise'] as const
+/**
+ * The credit balance an account opens with. A fixed ladder rather than a free
+ * number: the grant is chosen from the console, so the options are the policy.
+ */
+export const ACCOUNT_CREDIT_OPTIONS = [0, 5_000, 50_000, 100_000, 250_000, 500_000, 1_000_000] as const
 
-export type AccountPlan = (typeof ACCOUNT_PLAN_VALUES)[number]
+export type AccountCreditOption = (typeof ACCOUNT_CREDIT_OPTIONS)[number]
 
-export const DEFAULT_ACCOUNT_PLAN: AccountPlan = 'trial'
+export const DEFAULT_ACCOUNT_CREDITS: AccountCreditOption = 0
+
+export const isAccountCreditOption = (value: number): value is AccountCreditOption =>
+  (ACCOUNT_CREDIT_OPTIONS as readonly number[]).includes(value)
+
+/** `0`, `5K`, `250K`, `1M` — the ladder's own shorthand, not a locale format. */
+export function formatAccountCredits(value: number) {
+  if (value === 0) return '0'
+  if (value % 1_000_000 === 0) return `${value / 1_000_000}M`
+  if (value % 1_000 === 0) return `${value / 1_000}K`
+  return value.toLocaleString()
+}
 
 export const ACCOUNT_NAME_MAX_LENGTH = 160
 export const ACCOUNT_SLUG_MAX_LENGTH = 63
@@ -20,8 +35,11 @@ export const ACCOUNT_EMAIL_MAX_LENGTH = 320
 export const ACCOUNT_PHONE_MAX_LENGTH = 32
 export const ACCOUNT_TITLE_MAX_LENGTH = 120
 export const ACCOUNT_NOTES_MAX_LENGTH = 2_000
-export const ACCOUNT_WEBSITE_MAX_LENGTH = 2_048
 export const ACCOUNT_CLOSE_REASON_MAX_LENGTH = 500
+
+export const ACCOUNT_PAYOUT_PROVIDER_MAX_LENGTH = 120
+export const ACCOUNT_PAYOUT_ACCOUNT_NAME_MAX_LENGTH = 160
+export const ACCOUNT_PAYOUT_ACCOUNT_NUMBER_MAX_LENGTH = 64
 
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -40,25 +58,6 @@ export const toAccountSlug = (value: string) =>
     .replace(/^-+|-+$/g, '')
     .slice(0, ACCOUNT_SLUG_MAX_LENGTH)
     .replace(/-+$/g, '')
-
-/**
- * Normalizes a human-entered website into an absolute HTTP(S) URL. Most people
- * type a hostname, so HTTPS is assumed when the scheme is omitted.
- */
-export const normalizeAccountWebsiteUrl = (value: string): string | null => {
-  const trimmed = value.trim()
-  if (!trimmed || trimmed.length > ACCOUNT_WEBSITE_MAX_LENGTH || /\s/.test(trimmed)) return null
-
-  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
-
-  try {
-    const url = new URL(candidate)
-    if ((url.protocol !== 'https:' && url.protocol !== 'http:') || !url.hostname) return null
-    return url.toString()
-  } catch {
-    return null
-  }
-}
 
 export const isClosedAccountStatus = (status: AccountStatus) => status === 'closed'
 

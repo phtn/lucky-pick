@@ -1,29 +1,27 @@
 import { v } from 'convex/values'
-import { ACCOUNT_PLAN_VALUES, ACCOUNT_STATUS_VALUES } from '../../src/lib/accounts/accounts'
+import { ACCOUNT_CREDIT_OPTIONS, ACCOUNT_STATUS_VALUES } from '../../src/lib/accounts/accounts'
 import { userFields } from '../users/v'
 
 export const accountStatusSchema = v.union(...ACCOUNT_STATUS_VALUES.map((status) => v.literal(status)))
 
-export const accountPlanSchema = v.union(...ACCOUNT_PLAN_VALUES.map((plan) => v.literal(plan)))
+/**
+ * The opening grant is one of the ladder's rungs, so the stored value is a
+ * union of literals rather than a free number: an account cannot be opened with
+ * an amount the console never offered.
+ */
+export const accountInitialCreditsSchema = v.union(...ACCOUNT_CREDIT_OPTIONS.map((amount) => v.literal(amount)))
 
-export const accountAddressSchema = v.object({
-  line1: v.optional(v.string()),
-  line2: v.optional(v.string()),
-  city: v.optional(v.string()),
-  region: v.optional(v.string()),
-  postalCode: v.optional(v.string()),
-  country: v.optional(v.string())
-})
-
-/** The business behind the account: who it is on paper, not who we talk to. */
-export const accountOrganizationSchema = v.object({
-  legalName: v.optional(v.string()),
-  website: v.optional(v.string()),
-  industry: v.optional(v.string()),
-  size: v.optional(v.string()),
-  taxId: v.optional(v.string()),
-  registrationNumber: v.optional(v.string()),
-  address: v.optional(accountAddressSchema)
+/**
+ * Where the account's money goes. Every field is optional because payout is
+ * arranged after the account exists, and `accountNumber` covers a bank account
+ * number or the phone number a wallet is registered to — the one identifier the
+ * chosen provider pays into.
+ */
+export const accountPayoutDetailsSchema = v.object({
+  bankOrWallet: v.optional(v.string()),
+  accountName: v.optional(v.string()),
+  accountNumber: v.optional(v.string()),
+  notes: v.optional(v.string())
 })
 
 /**
@@ -53,8 +51,12 @@ export const accountSchema = v.object({
   slug: v.string(),
   name: v.string(),
   status: accountStatusSchema,
-  plan: accountPlanSchema,
-  organization: accountOrganizationSchema,
+  /**
+   * The grant the account was opened with, kept as a record of what was
+   * promised. The spendable balance lives in `credits`, which this seeds.
+   */
+  initialCredits: accountInitialCreditsSchema,
+  payoutDetails: accountPayoutDetailsSchema,
   primaryContact: accountPrimaryContactSchema,
   billingEmail: v.union(v.string(), v.null()),
   ownerTokenIdentifier: v.string(),
@@ -91,19 +93,23 @@ export const createAccountSchema = v.object({
   name: v.string(),
   slug: v.optional(v.string()),
   status: v.optional(v.literal('pending')),
-  plan: v.optional(accountPlanSchema),
-  organization: v.optional(accountOrganizationSchema),
+  initialCredits: v.optional(accountInitialCreditsSchema),
+  payoutDetails: v.optional(accountPayoutDetailsSchema),
   primaryContact: accountPrimaryContactInputSchema,
   billingEmail: v.optional(v.union(v.string(), v.null())),
   notes: v.optional(v.union(v.string(), v.null())),
   ownerTokenIdentifier: v.optional(v.string())
 })
 
+/**
+ * `initialCredits` is absent here on purpose: the opening grant is history once
+ * the account exists, and changing it would leave the `credits` balance it
+ * seeded unexplained. Later grants go through `credits.m.grant`.
+ */
 export const updateAccountSchema = v.object({
   name: v.optional(v.string()),
   status: v.optional(accountStatusSchema),
-  plan: v.optional(accountPlanSchema),
-  organization: v.optional(accountOrganizationSchema),
+  payoutDetails: v.optional(accountPayoutDetailsSchema),
   primaryContact: v.optional(accountPrimaryContactInputSchema),
   billingEmail: v.optional(v.union(v.string(), v.null())),
   notes: v.optional(v.union(v.string(), v.null()))
@@ -111,7 +117,7 @@ export const updateAccountSchema = v.object({
 
 export type Account = typeof accountSchema.type
 export type AccountDocument = typeof accountDocumentSchema.type
-export type AccountOrganization = typeof accountOrganizationSchema.type
+export type AccountPayoutDetails = typeof accountPayoutDetailsSchema.type
 export type AccountPrimaryContact = typeof accountPrimaryContactSchema.type
 export type CreateAccountInput = typeof createAccountSchema.type
 export type UpdateAccountInput = typeof updateAccountSchema.type

@@ -2,12 +2,17 @@ import { ConvexError } from 'convex/values'
 import {
   ACCOUNT_NAME_MAX_LENGTH,
   ACCOUNT_NOTES_MAX_LENGTH,
+  ACCOUNT_PAYOUT_ACCOUNT_NAME_MAX_LENGTH,
+  ACCOUNT_PAYOUT_ACCOUNT_NUMBER_MAX_LENGTH,
+  ACCOUNT_PAYOUT_PROVIDER_MAX_LENGTH,
   ACCOUNT_PHONE_MAX_LENGTH,
   ACCOUNT_TITLE_MAX_LENGTH,
+  DEFAULT_ACCOUNT_CREDITS,
+  isAccountCreditOption,
   isAccountEmailAddress,
   isPublicAccountSlug,
-  normalizeAccountWebsiteUrl,
-  toAccountSlug
+  toAccountSlug,
+  type AccountCreditOption
 } from '../../src/lib/accounts/accounts'
 import type { MutationCtx, QueryCtx } from '../_generated/server'
 import { isGod, isPlatformStaff, isTopGod } from '../lib/auth'
@@ -177,48 +182,56 @@ export const normalizePrimaryContact = async (ctx: QueryCtx | MutationCtx, conta
   }
 }
 
-type OrganizationInput = {
-  legalName?: string
-  website?: string
-  industry?: string
-  size?: string
-  taxId?: string
-  registrationNumber?: string
-  address?: {
-    line1?: string
-    line2?: string
-    city?: string
-    region?: string
-    postalCode?: string
-    country?: string
-  }
+type PayoutDetailsInput = {
+  bankOrWallet?: string
+  accountName?: string
+  accountNumber?: string
+  notes?: string
 }
 
-const compact = <T extends Record<string, string | undefined>>(value: T) =>
-  Object.fromEntries(
-    Object.entries(value).flatMap(([key, entry]) => {
-      const trimmed = trimOrNull(entry)
-      return trimmed === null ? [] : [[key, trimmed] as const]
-    })
-  ) as { [K in keyof T]?: string }
-
-export const normalizeOrganization = (organization: OrganizationInput | undefined) => {
-  if (!organization) {
+/**
+ * Payout details are optional in full: an account can be provisioned before
+ * anyone has said where its money goes. Empty fields are dropped rather than
+ * stored blank, so a half-filled block reads as half-filled.
+ */
+export const normalizePayoutDetails = (payoutDetails: PayoutDetailsInput | undefined) => {
+  if (!payoutDetails) {
     return {}
   }
 
-  const { address, website, ...rest } = organization
-  const normalizedAddress = address ? compact(address) : undefined
-  const trimmedWebsite = trimOrNull(website)
-  const normalizedWebsite = trimmedWebsite ? normalizeAccountWebsiteUrl(trimmedWebsite) : null
-
-  if (trimmedWebsite && !normalizedWebsite) {
-    throw new ConvexError('Organization website must be a valid HTTP or HTTPS address.')
-  }
+  const bankOrWallet = normalizeBounded(payoutDetails.bankOrWallet, ACCOUNT_PAYOUT_PROVIDER_MAX_LENGTH, 'Bank or wallet')
+  const accountName = normalizeBounded(
+    payoutDetails.accountName,
+    ACCOUNT_PAYOUT_ACCOUNT_NAME_MAX_LENGTH,
+    'Payout account name'
+  )
+  const accountNumber = normalizeBounded(
+    payoutDetails.accountNumber,
+    ACCOUNT_PAYOUT_ACCOUNT_NUMBER_MAX_LENGTH,
+    'Payout account or phone number'
+  )
+  const notes = normalizeBounded(payoutDetails.notes, ACCOUNT_NOTES_MAX_LENGTH, 'Payout notes')
 
   return {
-    ...compact(rest),
-    ...(normalizedWebsite ? { website: normalizedWebsite } : {}),
-    ...(normalizedAddress && Object.keys(normalizedAddress).length > 0 ? { address: normalizedAddress } : {})
+    ...(bankOrWallet ? { bankOrWallet } : {}),
+    ...(accountName ? { accountName } : {}),
+    ...(accountNumber ? { accountNumber } : {}),
+    ...(notes ? { notes } : {})
   }
+}
+
+/**
+ * The opening grant must be one of the ladder's rungs. An amount the console
+ * never offered is a sign the request did not come from the console.
+ */
+export const normalizeInitialCredits = (amount: number | undefined): AccountCreditOption => {
+  if (amount === undefined) {
+    return DEFAULT_ACCOUNT_CREDITS
+  }
+
+  if (!isAccountCreditOption(amount)) {
+    throw new ConvexError(`${amount} is not an offered credit amount.`)
+  }
+
+  return amount
 }

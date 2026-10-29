@@ -9,11 +9,11 @@ import { cn } from '@/lib/utils'
 import { debounce, parseAsBoolean, parseAsString, parseAsStringLiteral, throttle, useQueryStates } from '@octanejs/nuqs'
 import { useField, useSelector } from '@octanejs/tanstack-form'
 import { getGodUserLabel, searchUsers, type GodUser } from '@/lib/asgard/gods-users'
-import { ACCOUNT_PLAN_VALUES, isAccountEmailAddress, toAccountSlug, type AccountStatus } from '@/lib/accounts/accounts'
+import { ACCOUNT_CREDIT_OPTIONS, formatAccountCredits, isAccountEmailAddress, toAccountSlug, type AccountStatus } from '@/lib/accounts/accounts'
 import { ENTER_CLASS, errorTextClassName, fieldLabelClassName, type StepState } from '@/lib/asgard/step-flow'
 import { isAbortError, readErrorMessage } from '@/lib/asgard/errors'
 import { ACCOUNT_FORM_DEFAULTS, readValidationMessage, resolveAccountSlug, useAccountDraft, useAccountForm, validateAccountForm, validateAccountSlug, type AccountForm, type AccountTextField } from '@/lib/asgard/account-form'
-import { ACCOUNT_PLAN_LABEL, ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE, ACCOUNT_STATUS_FILTERS, checkAccountSlugAvailability, createAccount, fetchAccounts, formatContactName, getAccountInitials, matchesAccountQuery, type AccountRow } from '@/lib/asgard/accounts'
+import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE, ACCOUNT_STATUS_FILTERS, checkAccountSlugAvailability, createAccount, fetchAccounts, formatAccountCreditGrant, formatContactName, getAccountInitials, matchesAccountQuery, type AccountRow } from '@/lib/asgard/accounts'
 
 module
   type RosterStatus = 'loading' | 'ready' | 'error'
@@ -127,20 +127,22 @@ component TextField
           Icon(name='spinner' size={12} className='animate-spin')
         span #{visibleMessage}
 
-component PlanField
+component CreditsField
   props { form }: { form: AccountForm }
   setup
-    const field = useField({ form, name: 'plan' })
+    // A ladder of fixed grants rather than a number input: the amount an
+    // account can open with is policy, so the control only offers the rungs.
+    const field = useField({ form, name: 'initialCredits' })
 
   div(className={cn('flex flex-wrap gap-1.5', ENTER_CLASS)})
-    each option in ACCOUNT_PLAN_VALUES key option
+    each option in ACCOUNT_CREDIT_OPTIONS key option
       button(
         ~ type='button'
         ~ onClick={() => field.handleChange(option)}
         ~ aria-pressed={field.state.value === option}
         ~ className={cn(chipClassName, field.state.value === option ? 'border-active/40 bg-active/10 text-active' : 'border-border/60 text-muted-foreground hover:bg-accent')}
         ~ )
-        | #{ACCOUNT_PLAN_LABEL[option]}
+        | #{formatAccountCredits(option)}
 
 component AccountIdentity
   props { account }: { account: AccountRow }
@@ -198,9 +200,14 @@ component CreateAccountForm
       const fields = validateAccountForm(state.values)?.fields
       return fields?.contactName !== undefined || fields?.contactEmail !== undefined || fields?.contactPhone !== undefined
     })
-    const organizationHasErrors = useSelector(accountForm.store, (state) => {
+    const payoutHasErrors = useSelector(accountForm.store, (state) => {
       const fields = validateAccountForm(state.values)?.fields
-      return fields?.website !== undefined || fields?.billingEmail !== undefined || fields?.notes !== undefined
+      return (
+        fields?.payoutBankOrWallet !== undefined ||
+        fields?.payoutAccountName !== undefined ||
+        fields?.payoutAccountNumber !== undefined ||
+        fields?.payoutNotes !== undefined
+      )
     })
     const slugCandidate = resolveAccountSlug({ name: nameValue, slug: slugValue })
     const slugValidationMessage = validateAccountSlug(slugCandidate)
@@ -261,19 +268,6 @@ component CreateAccountForm
           : slugAvailability.status === 'idle'
             ? 'muted'
             : 'error'
-
-    // Billing defaults to the contact address rather than being left blank —
-    // a stored `null` is what the account is invoiced on. The mirror holds
-    // until someone types a different address into the billing field.
-    const [isBillingMirrored, setIsBillingMirrored] = useState(
-      () => initialValues.billingEmail.trim().length === 0 || initialValues.billingEmail === initialValues.contactEmail
-    )
-
-    useEffect(() => {
-      if (!isBillingMirrored) return
-      if (accountForm.state.values.billingEmail === contactEmail) return
-      accountForm.setFieldValue('billingEmail', contactEmail)
-    }, [accountForm, contactEmail, isBillingMirrored])
 
     const [contactQuery, setContactQuery] = useState('')
     const [contactResults, setContactResults] = useState<GodUser[]>([])
@@ -345,15 +339,18 @@ component CreateAccountForm
       accountForm.setFieldValue('contactEmail', '')
     }
 
-    const planValue = useSelector(accountForm.store, (state) => state.values.plan)
-    // The organization block is optional, so it is measured rather than
-    // validated: the step reports how much of it has been filled in.
-    const organizationFilled = useSelector(
+    const creditsValue = useSelector(accountForm.store, (state) => state.values.initialCredits)
+    // The payout block is optional, so it is measured rather than validated:
+    // the step reports how much of it has been filled in.
+    const payoutFilled = useSelector(
       accountForm.store,
       (state) =>
-        [state.values.legalName, state.values.website, state.values.industry, state.values.billingEmail, state.values.notes].filter(
-          (value) => value.trim().length > 0
-        ).length
+        [
+          state.values.payoutBankOrWallet,
+          state.values.payoutAccountName,
+          state.values.payoutAccountNumber,
+          state.values.payoutNotes
+        ].filter((value) => value.trim().length > 0).length
     )
 
     const isIdentityDone = nameValue.trim().length > 0 && !identityHasErrors && isSlugAvailable
@@ -364,15 +361,15 @@ component CreateAccountForm
     // left to do, and `idle` while an earlier step still blocks it.
     const identityState: StepState = isIdentityDone ? 'done' : 'active'
     const contactState: StepState = !isIdentityDone ? 'idle' : isContactDone ? 'done' : 'active'
-    // A plan is always selected, so this step only waits on the ones above it.
-    const planState: StepState = isContactDone ? 'done' : 'idle'
-    const organizationState: StepState =
-      !isContactDone ? 'idle' : organizationFilled > 0 && !organizationHasErrors ? 'done' : 'active'
+    // A grant is always selected, even a zero one, so this step only waits on
+    // the ones above it.
+    const creditsState: StepState = isContactDone ? 'done' : 'idle'
+    const payoutState: StepState = !isContactDone ? 'idle' : payoutFilled > 0 && !payoutHasErrors ? 'done' : 'active'
     const createState: StepState = canSubmit && !isSubmitting ? 'active' : 'idle'
 
     // The idle Create step shows how far the form has come rather than an inert
     // bar, so the last step still moves while the earlier ones are settled.
-    const completedSteps = [isIdentityDone, isContactDone, organizationFilled > 0 && !organizationHasErrors].filter(Boolean).length
+    const completedSteps = [isIdentityDone, isContactDone, payoutFilled > 0 && !payoutHasErrors].filter(Boolean).length
     const progressWidth = `${Math.round((completedSteps / 3) * 100)}%`
 
     // Reduced to one value rather than an if/elseif chain in the template: a
@@ -492,31 +489,23 @@ component CreateAccountForm
             TextField(form={accountForm} name='contactPhone' label='Contact phone' type='tel' placeholder='Optional')
             TextField(form={accountForm} name='contactTitle' label='Contact title' placeholder='Optional')
 
-      Step(icon='cash' title='Plan' state={planState} index={2} stepCount={5} meta={ACCOUNT_PLAN_LABEL[planValue]})
-        PlanField(form={accountForm})
+      Step(icon='gift' title='Initial credits' state={creditsState} index={2} stepCount={5} meta={`${formatAccountCredits(creditsValue)} CR`})
+        CreditsField(form={accountForm})
 
       Step(
-        ~ icon='globe'
-        ~ title='Organization'
-        ~ state={organizationState}
+        ~ icon='cash'
+        ~ title='Payout details'
+        ~ state={payoutState}
         ~ index={3}
         ~ stepCount={5}
-        ~ meta={`${organizationFilled} of 5 · optional`}
+        ~ meta={`${payoutFilled} of 4 · optional`}
         ~ )
         div(className='grid gap-4')
           div(className='grid gap-4 md:grid-cols-2')
-            TextField(form={accountForm} name='legalName' label='Legal name' placeholder='Optional')
-            TextField(form={accountForm} name='website' label='Website' placeholder='northwind.com')
-            TextField(form={accountForm} name='industry' label='Industry' placeholder='Optional')
-            TextField(
-              ~ form={accountForm}
-              ~ name='billingEmail'
-              ~ label='Billing email'
-              ~ type='email'
-              ~ placeholder='Defaults to the contact email'
-              ~ onEdit={(value: string) => setIsBillingMirrored(value.trim().length === 0)}
-              ~ )
-          TextField(form={accountForm} name='notes' label='Notes' placeholder='Optional')
+            TextField(form={accountForm} name='payoutBankOrWallet' label='Bank / Wallet' placeholder='BPI, GCash, Maya')
+            TextField(form={accountForm} name='payoutAccountName' label='Account name' placeholder='Name on the account')
+            TextField(form={accountForm} name='payoutAccountNumber' label='Account # / Phone #' placeholder='Account or mobile number')
+          TextField(form={accountForm} name='payoutNotes' label='Notes' placeholder='Optional')
 
       Step(icon='sparkle' title='Create' state={createState} index={4} stepCount={5} isLast={true})
         if canSubmit
@@ -655,6 +644,6 @@ div(className='w-full')
                 AccountIdentity(account={account})
                 div(className='flex min-w-0 flex-1 items-center justify-end md:gap-4')
                   span(className='hidden truncate font-mono text-xs text-muted-foreground') #{account.primaryContact.email}
-                  span(className='hidden shrink-0 font-mono text-xs text-muted-foreground lg:inline') #{ACCOUNT_PLAN_LABEL[account.plan]}
+                  span(className='hidden shrink-0 font-mono text-xs text-muted-foreground lg:inline') #{formatAccountCreditGrant(account)}
                   StatusBadge(status={account.status})
                   Icon(name='chevron-right' size={12} className='shrink-0 text-muted-foreground')

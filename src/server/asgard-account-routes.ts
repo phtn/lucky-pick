@@ -1,3 +1,4 @@
+import { isAccountCreditOption } from '@/lib/accounts/accounts'
 import { AdminIdTokenError, mintAdminIdToken } from '@/lib/firebase-admin/admin-id-token'
 import { getFirebaseAdminAuth } from '@/lib/firebase-admin/admin'
 import { getVerifiedGodSession } from '@/lib/firebase-admin/server-auth'
@@ -76,7 +77,7 @@ const readObject = (value: unknown): Record<string, unknown> =>
 function readCreateAccountBody(body: unknown) {
   const payload = readObject(body)
   const contact = readObject(payload.primaryContact)
-  const organization = readObject(payload.organization)
+  const payoutDetails = readObject(payload.payoutDetails)
 
   const name = asTrimmedString(payload.name)
   const contactName = asTrimmedString(contact.name)
@@ -86,20 +87,23 @@ function readCreateAccountBody(body: unknown) {
   if (!contactName) return { error: 'A primary contact name is required.' as const }
   if (!contactEmail) return { error: 'A primary contact email is required.' as const }
 
-  const plan = asOptionalString(payload.plan)
+  // The credit amount is re-checked against the ladder by the mutation, which
+  // is what rejects an amount the console never offered.
+  const initialCredits = typeof payload.initialCredits === 'number' ? payload.initialCredits : undefined
+  if (initialCredits !== undefined && !isAccountCreditOption(initialCredits)) {
+    return { error: 'That credit amount is not one of the offered grants.' as const }
+  }
 
   return {
     input: {
       name,
       slug: asOptionalString(payload.slug),
-      plan: plan as 'trial' | 'starter' | 'pro' | 'enterprise' | undefined,
-      organization: {
-        legalName: asOptionalString(organization.legalName),
-        website: asOptionalString(organization.website),
-        industry: asOptionalString(organization.industry),
-        size: asOptionalString(organization.size),
-        taxId: asOptionalString(organization.taxId),
-        registrationNumber: asOptionalString(organization.registrationNumber)
+      initialCredits,
+      payoutDetails: {
+        bankOrWallet: asOptionalString(payoutDetails.bankOrWallet),
+        accountName: asOptionalString(payoutDetails.accountName),
+        accountNumber: asOptionalString(payoutDetails.accountNumber),
+        notes: asOptionalString(payoutDetails.notes)
       },
       primaryContact: {
         name: contactName,

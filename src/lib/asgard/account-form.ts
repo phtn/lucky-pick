@@ -1,6 +1,6 @@
-import { debounce, parseAsString, parseAsStringLiteral, type SetValues, useQueryStates } from '@octanejs/nuqs'
+import { debounce, parseAsNumberLiteral, parseAsString, type SetValues, useQueryStates } from '@octanejs/nuqs'
 import { useForm } from '@octanejs/tanstack-form'
-import { ACCOUNT_EMAIL_MAX_LENGTH, ACCOUNT_NAME_MAX_LENGTH, ACCOUNT_NOTES_MAX_LENGTH, ACCOUNT_PHONE_MAX_LENGTH, ACCOUNT_PLAN_VALUES, DEFAULT_ACCOUNT_PLAN, isAccountEmailAddress, isAccountSlug, isPublicAccountSlug, normalizeAccountWebsiteUrl, RESERVED_ACCOUNT_SLUGS, toAccountSlug, type AccountPlan } from '@/lib/accounts/accounts'
+import { ACCOUNT_CREDIT_OPTIONS, ACCOUNT_NAME_MAX_LENGTH, ACCOUNT_NOTES_MAX_LENGTH, ACCOUNT_PAYOUT_ACCOUNT_NAME_MAX_LENGTH, ACCOUNT_PAYOUT_ACCOUNT_NUMBER_MAX_LENGTH, ACCOUNT_PAYOUT_PROVIDER_MAX_LENGTH, ACCOUNT_PHONE_MAX_LENGTH, DEFAULT_ACCOUNT_CREDITS, isAccountEmailAddress, isAccountSlug, isPublicAccountSlug, RESERVED_ACCOUNT_SLUGS, toAccountSlug, type AccountCreditOption } from '@/lib/accounts/accounts'
 import type { CreateAccountInput } from '@/lib/asgard/accounts'
 import { readErrorMessage } from '@/lib/asgard/errors'
 
@@ -11,7 +11,8 @@ import { readErrorMessage } from '@/lib/asgard/errors'
 export interface AccountFormValues {
   name: string
   slug: string
-  plan: AccountPlan
+  /** The opening credit grant, one of `ACCOUNT_CREDIT_OPTIONS`. */
+  initialCredits: AccountCreditOption
   contactName: string
   contactEmail: string
   contactPhone: string
@@ -21,30 +22,28 @@ export interface AccountFormValues {
    * typed by hand rather than picked from the directory.
    */
   contactUid: string
-  legalName: string
-  website: string
-  industry: string
-  billingEmail: string
-  notes: string
+  payoutBankOrWallet: string
+  payoutAccountName: string
+  payoutAccountNumber: string
+  payoutNotes: string
 }
 
 /** The fields a plain text control can bind, so one component covers them all. */
-export type AccountTextField = Exclude<keyof AccountFormValues, 'plan' | 'contactUid'>
+export type AccountTextField = Exclude<keyof AccountFormValues, 'initialCredits' | 'contactUid'>
 
 export const ACCOUNT_FORM_DEFAULTS: AccountFormValues = {
   name: '',
   slug: '',
-  plan: DEFAULT_ACCOUNT_PLAN,
+  initialCredits: DEFAULT_ACCOUNT_CREDITS,
   contactName: '',
   contactEmail: '',
   contactPhone: '',
   contactTitle: '',
   contactUid: '',
-  legalName: '',
-  website: '',
-  industry: '',
-  billingEmail: '',
-  notes: ''
+  payoutBankOrWallet: '',
+  payoutAccountName: '',
+  payoutAccountNumber: '',
+  payoutNotes: ''
 }
 
 /**
@@ -55,17 +54,16 @@ export const ACCOUNT_FORM_DEFAULTS: AccountFormValues = {
 const ACCOUNT_DRAFT_PARSERS = {
   name: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.name),
   slug: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.slug),
-  plan: parseAsStringLiteral(ACCOUNT_PLAN_VALUES).withDefault(ACCOUNT_FORM_DEFAULTS.plan),
+  initialCredits: parseAsNumberLiteral(ACCOUNT_CREDIT_OPTIONS).withDefault(ACCOUNT_FORM_DEFAULTS.initialCredits),
   contactName: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.contactName),
   contactEmail: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.contactEmail),
   contactPhone: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.contactPhone),
   contactTitle: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.contactTitle),
   contactUid: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.contactUid),
-  legalName: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.legalName),
-  website: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.website),
-  industry: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.industry),
-  billingEmail: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.billingEmail),
-  notes: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.notes)
+  payoutBankOrWallet: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.payoutBankOrWallet),
+  payoutAccountName: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.payoutAccountName),
+  payoutAccountNumber: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.payoutAccountNumber),
+  payoutNotes: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.payoutNotes)
 }
 
 export type AccountDraftParsers = typeof ACCOUNT_DRAFT_PARSERS
@@ -110,17 +108,17 @@ export function validateAccountForm(values: AccountFormValues) {
   if (values.contactPhone.trim().length > ACCOUNT_PHONE_MAX_LENGTH)
     fields.contactPhone = `Keep this under ${ACCOUNT_PHONE_MAX_LENGTH} characters.`
 
-  if (values.website.trim().length > 0 && normalizeAccountWebsiteUrl(values.website) === null)
-    fields.website = 'Enter a valid website, such as northwind.com.'
+  if (values.payoutBankOrWallet.trim().length > ACCOUNT_PAYOUT_PROVIDER_MAX_LENGTH)
+    fields.payoutBankOrWallet = `Keep this under ${ACCOUNT_PAYOUT_PROVIDER_MAX_LENGTH} characters.`
 
-  const billingEmail = values.billingEmail.trim()
-  if (billingEmail.length > 0 && !isAccountEmailAddress(billingEmail))
-    fields.billingEmail = 'Enter a valid email address.'
-  else if (billingEmail.length > ACCOUNT_EMAIL_MAX_LENGTH)
-    fields.billingEmail = `Keep this under ${ACCOUNT_EMAIL_MAX_LENGTH} characters.`
+  if (values.payoutAccountName.trim().length > ACCOUNT_PAYOUT_ACCOUNT_NAME_MAX_LENGTH)
+    fields.payoutAccountName = `Keep this under ${ACCOUNT_PAYOUT_ACCOUNT_NAME_MAX_LENGTH} characters.`
 
-  if (values.notes.trim().length > ACCOUNT_NOTES_MAX_LENGTH)
-    fields.notes = `Keep this under ${ACCOUNT_NOTES_MAX_LENGTH} characters.`
+  if (values.payoutAccountNumber.trim().length > ACCOUNT_PAYOUT_ACCOUNT_NUMBER_MAX_LENGTH)
+    fields.payoutAccountNumber = `Keep this under ${ACCOUNT_PAYOUT_ACCOUNT_NUMBER_MAX_LENGTH} characters.`
+
+  if (values.payoutNotes.trim().length > ACCOUNT_NOTES_MAX_LENGTH)
+    fields.payoutNotes = `Keep this under ${ACCOUNT_NOTES_MAX_LENGTH} characters.`
 
   return Object.keys(fields).length > 0 ? { fields } : undefined
 }
@@ -147,11 +145,12 @@ export function toCreateAccountInput(values: AccountFormValues): CreateAccountIn
   return {
     name: values.name.trim(),
     slug: trimmed(values.slug),
-    plan: values.plan,
-    organization: {
-      legalName: trimmed(values.legalName),
-      website: trimmed(values.website) ? (normalizeAccountWebsiteUrl(values.website) ?? undefined) : undefined,
-      industry: trimmed(values.industry)
+    initialCredits: values.initialCredits,
+    payoutDetails: {
+      bankOrWallet: trimmed(values.payoutBankOrWallet),
+      accountName: trimmed(values.payoutAccountName),
+      accountNumber: trimmed(values.payoutAccountNumber),
+      notes: trimmed(values.payoutNotes)
     },
     primaryContact: {
       name: values.contactName.trim(),
@@ -159,9 +158,7 @@ export function toCreateAccountInput(values: AccountFormValues): CreateAccountIn
       phone: trimmed(values.contactPhone),
       title: trimmed(values.contactTitle),
       firebaseUid: trimmed(values.contactUid)
-    },
-    billingEmail: trimmed(values.billingEmail),
-    notes: trimmed(values.notes)
+    }
   }
 }
 
