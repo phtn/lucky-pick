@@ -1,6 +1,7 @@
 import { auth } from '@/lib/firebase'
 import { ConvexClient } from 'convex/browser'
 import { onAuthStateChanged } from 'firebase/auth'
+import { api } from '../../convex/_generated/api'
 
 const url = import.meta.env.PUBLIC_CONVEX_URL
 // Debug mode disables proof mutations at their call sites, but owner-scoped
@@ -48,6 +49,10 @@ export const subscribeToConvexAuthState = (onStoreChange: () => void) => {
   }
 }
 
+// Wallets key on `users` rows, so every signed-in user needs one. Tracking the
+// uid keeps token refreshes (which re-fire the callback) from re-running it.
+let ensuredUid: string | null = null
+
 if (convexClient && auth) {
   onAuthStateChanged(auth, (user) => {
     // Reconfigure only on sign-in and sign-out. Convex owns token rotation;
@@ -59,6 +64,20 @@ if (convexClient && auth) {
         isAuthenticated,
         isLoading: false,
         userId: isAuthenticated ? (user?.uid ?? null) : null
+      })
+
+      if (!isAuthenticated) {
+        ensuredUid = null
+        return
+      }
+      const uid = user?.uid
+      if (!uid || ensuredUid === uid) return
+      ensuredUid = uid
+      // A failed upsert must not block sign-in; clearing the marker lets the
+      // next auth callback retry it.
+      convexClient.mutation(api.users.m.ensureCurrent, {}).catch((error) => {
+        if (ensuredUid === uid) ensuredUid = null
+        console.error('Failed to ensure the current user row', error)
       })
     })
   })
