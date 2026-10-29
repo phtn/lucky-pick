@@ -1,0 +1,91 @@
+import { useState } from 'octane'
+import { Outlet, useRouterState } from '@octanejs/tanstack-router'
+import { Group, Panel, Separator, usePanelRef, type PanelSize } from '@octanejs/resizable-panels'
+import { Sidebar, ThemeToggle } from '@/components/admin'
+import type { AdminNavItem } from '@/components/admin'
+import { Icon } from '@/lib/icons'
+import { adminRoutePrefix, isAdminSubdomainHostname } from '@/lib/routing/admin-subdomain'
+import { buildAppUrl } from '@/lib/routing/app-url'
+
+module
+  /**
+   * The console's pages, in nav order.
+   *
+   * Their paths are relative to wherever the console is mounted: its own
+   * subdomain roots them at `/`, while the main origin roots them under
+   * `/admin`, so the links have to be built rather than written out.
+   */
+  const navPages = [{ to: '', label: 'Overview', icon: 'chart', exact: true }] as AdminNavItem[]
+
+  const toNavItems = (base: string): AdminNavItem[] =>
+    navPages.map((page) => ({
+      to: `${base}${page.to}` || '/',
+      label: page.label,
+      icon: page.icon,
+      exact: page.exact
+    }))
+
+  // Below this the panel is a rail: icons only, labels gone.
+  const COMPACT_AT_PX = 90
+  const EXPANDED_SIZE = '238px'
+
+setup
+  // Deliberately ungated: the console is open to anyone who reaches this host
+  // while its UI is being built, unlike Asgard, which verifies a god session
+  // before it renders anything. The session check belongs here, around the
+  // `Outlet` below, and nothing privileged should be wired into these pages
+  // until it exists.
+  const [isSidebarCompact, setIsSidebarCompact] = useState(false)
+  const navItems =
+    typeof window !== 'undefined' && !isAdminSubdomainHostname(window.location.hostname)
+      ? toNavItems(adminRoutePrefix)
+      : toNavItems('')
+  const pathname = useRouterState({ select: (state) => state.location.pathname.replace(/\/$/, '') || '/' })
+  const sidebarPanelRef = usePanelRef()
+
+  const handleSidebarResize = (size: PanelSize) => setIsSidebarCompact(size.inPixels <= COMPACT_AT_PX)
+
+  // Three states, one control: collapsed snaps back open, a rail-width panel
+  // goes to its full width, and a full-width panel collapses.
+  const toggleSidebar = () => {
+    const panel = sidebarPanelRef.current
+    if (!panel) return
+
+    if (panel.isCollapsed()) panel.expand()
+    else if (isSidebarCompact) panel.resize(EXPANDED_SIZE)
+    else panel.collapse()
+  }
+
+  const homeUrl = typeof window === 'undefined' ? '/' : buildAppUrl(new URL(window.location.href), '/').toString()
+
+main(className='admin-frame')
+  Group(id='admin-layout' className='admin-layout' style={{ height: '100dvh' }})
+    Panel(
+      ~ id='admin-sidebar-panel'
+      ~ panelRef={sidebarPanelRef}
+      ~ defaultSize={EXPANDED_SIZE}
+      ~ minSize='180px'
+      ~ maxSize='320px'
+      ~ collapsedSize='76px'
+      ~ collapsible={true}
+      ~ onResize={handleSidebarResize}
+      ~ className='admin-sidebar-panel'
+      ~ style={{ overflow: 'hidden' }}
+      ~ )
+      Sidebar(
+        ~ path={pathname}
+        ~ items={navItems}
+        ~ isCompact={isSidebarCompact}
+        ~ toggleSidebar={toggleSidebar}
+        ~ homeUrl={homeUrl}
+        ~ )
+        ThemeToggle
+
+    Separator(id='admin-sidebar-resize-separator' aria-label='Resize admin sidebar' className='admin-resize-separator')
+
+    Panel(id='admin-content-panel' minSize='0px' className='admin-content-panel' style={{ overflow: 'auto' }})
+      section(className='admin-content')
+        div(className='admin-open-gate' role='status')
+          Icon(name='alert-triangle' size={13})
+          span Open to everyone — no administrator session is checked on this console yet.
+        Outlet

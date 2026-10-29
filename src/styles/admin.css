@@ -1,0 +1,307 @@
+/* The admin console's shell: a resizable, collapsible sidebar beside a
+   scrolling page. It is Asgard's shell under its own class names rather than a
+   shared one, so the two consoles can be designed apart — a change here never
+   moves Asgard, and the tokens keep both on every theme. */
+
+.admin-frame {
+  width: 100%;
+  height: 100dvh;
+  margin: 0 auto;
+  background: var(--background);
+}
+
+.admin-layout {
+  gap: 0;
+}
+
+.admin-sidebar-panel,
+.admin-content-panel {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.admin-resize-separator {
+  position: relative;
+  width: 1px;
+  outline: none;
+  cursor: col-resize;
+}
+
+.admin-resize-separator::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--lp-divider);
+  content: '';
+  transform: translateX(-50%);
+  transition: background-color 150ms ease;
+}
+
+.admin-resize-separator:hover::before,
+.admin-resize-separator:focus-visible::before,
+.admin-resize-separator[data-separator='active']::before {
+  background: var(--active);
+}
+
+.admin-sidebar {
+  display: flex;
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  padding: 10px 3px 9px;
+  background: var(--lp-sunken);
+}
+
+.admin-sidebar-body {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.admin-sidebar-header {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+}
+
+.admin-brand {
+  display: flex;
+  width: 100%;
+  height: 52px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 11px 10px;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+}
+
+.admin-brand-link {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  /*gap: 4px;*/
+  color: inherit;
+  text-decoration: none;
+}
+
+.admin-nav {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  padding: 24px 8px 4px;
+}
+
+.admin-nav-label {
+  margin: 0 8px 10px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 450;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.admin-compact-nav {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  gap: 3px;
+  padding: 19px 6px 6px;
+}
+
+.admin-link {
+  display: flex;
+  position: relative;
+  z-index: 10;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 450;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+
+.admin-link:hover {
+  color: var(--foreground);
+}
+
+.admin-link--active,
+.admin-link--active:hover {
+  background: color-mix(in srgb, var(--mac-blue), transparent 20%);
+  color: #ffffff;
+}
+
+.admin-link--active:hover {
+  background: color-mix(in srgb, var(--mac-blue), transparent 35%);
+}
+
+.admin-link--active .admin-link-icon {
+  color: #ffffff;
+}
+
+.admin-link-icon {
+  flex-basis: 24px;
+  color: var(--muted-foreground);
+}
+
+.admin-compact-link {
+  justify-content: center;
+  min-height: 42px;
+  gap: 0;
+  padding: 0;
+}
+
+.admin-compact-link .admin-link-icon {
+  flex-basis: auto;
+  margin: 0;
+}
+
+/* Compact is the collapsed rail: labels go, icons centre, the second nav
+   takes over. */
+.admin-sidebar[data-compact] .admin-brand {
+  min-height: 60px;
+  height: auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.admin-sidebar[data-compact] .admin-brand-link {
+  flex: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
+}
+
+.admin-sidebar[data-compact] .admin-brand-link > span {
+  display: block;
+  font-size: 11px;
+}
+
+.admin-sidebar[data-compact] .admin-nav {
+  display: none;
+}
+
+.admin-sidebar[data-compact] .admin-compact-nav {
+  display: flex;
+}
+
+.admin-sidebar[data-compact] .admin-sidebar-bottom {
+  align-items: center;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.admin-sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 3px;
+  padding: 9px 7px 0;
+  border-top: 1px solid var(--lp-divider);
+}
+
+.admin-sidebar-identity {
+  min-width: 0;
+  padding: 6px 8px 2px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-sidebar[data-compact] .admin-sidebar-identity {
+  display: none;
+}
+
+.admin-content {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+}
+
+/* The hover plate that follows the pointer between nav rows. */
+.admin-hover-plate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  margin: 0;
+  border-radius: 10px;
+  background: var(--lp-raised);
+  pointer-events: none;
+  transition:
+    transform 200ms ease-out,
+    width 200ms ease-out,
+    height 200ms ease-out,
+    opacity 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-hover-plate {
+    transition: none;
+  }
+}
+
+/* A page's own header inside the content panel, with its tab strip beneath. */
+.admin-topbar {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 10px 16px 10px;
+}
+
+.admin-topbar-tabs {
+  padding: 0 16px;
+  border-bottom: 1px solid var(--lp-divider);
+}
+
+@media (min-width: 768px) {
+  .admin-topbar,
+  .admin-topbar-tabs {
+    padding-inline: 24px;
+  }
+}
+
+/* The console is open to everyone while its UI is being built. The strip
+   says so on every page, so an unguarded console is never mistaken for a
+   gated one. */
+.admin-open-gate {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  background: color-mix(in oklab, var(--chart-warn) 16%, transparent);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

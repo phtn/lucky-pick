@@ -1,0 +1,42 @@
+import { Masthead, Panel, StatTile } from '@/components/overview'
+import { Icon } from '@/lib/icons'
+
+module
+  /**
+   * The console reads nothing yet: it is open to everyone, so wiring a
+   * privileged query into it would hand the data to whoever loads the page.
+   * These tiles hold the shape the page will take — a label, a reading, a
+   * caption — with an em dash where the number goes, so the layout can be
+   * worked on before the first query lands.
+   */
+  const tiles = [
+    { label: 'Partner accounts', caption: 'Accounts holding a float wallet.' },
+    { label: 'Credits in circulation', caption: 'Allocated to users and not yet spent.' },
+    { label: 'Draws scheduled', caption: 'Shared draws waiting to be run.' }
+  ] as const
+
+section(className='relative overview-page px-4 pb-16 md:px-6')
+  div(className='overview-content')
+    Masthead(
+      ~ eyebrow='Admin · Console'
+      ~ title='Overview'
+      ~ description='Where a partner’s accounts, credits and draws are read and run from.'
+      ~ )
+      div(className='flex items-center gap-2 rounded-full border border-border/50 px-3 py-1.5')
+        span(aria-hidden={true} className='size-1.5 rounded-full bg-chart-warn')
+        span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') scaffold
+
+    div(className='overview-sections')
+      div(className='overview-stats grid md:grid-cols-3')
+        each tile in tiles key tile.label
+          StatTile(label={tile.label} value='—' caption={tile.caption})
+
+      Panel(title='Activity' description='What has moved through this console, newest first.' meta='Not wired')
+        div(className='flex items-start gap-2.5 rounded-lg border border-dashed border-border/60 px-4 py-3')
+          Icon(name='info' size={14} className='mt-0.5 shrink-0 text-muted-foreground')
+          p(className='text-xs leading-relaxed text-muted-foreground')
+            | This console has no server of its own yet. Until it is gated, nothing
+            | privileged should be read here — every ledger and roster call stays in
+            | Asgard, which verifies a god session before it answers.
+
+    div(aria-hidden={true} className='h-20 w-full')

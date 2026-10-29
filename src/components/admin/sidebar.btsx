@@ -1,0 +1,156 @@
+import { useLayoutEffect, useRef, type ClassValue } from 'octane'
+import { Link } from '@octanejs/tanstack-router'
+import { Icon, type IconName } from '@/lib/icons'
+import { cn } from '@/lib/utils'
+import '@/styles/admin.css'
+
+module
+  export interface AdminNavItem {
+    to: string
+    label: string
+    icon: IconName
+    /**
+     * The console's index matches by prefix like every other link, so it would
+     * stay lit on every page beneath it. Only that one needs an exact match.
+     */
+    exact?: boolean
+  }
+
+  export interface AdminSidebarProps {
+    /** The console's own path, which is what `to` is matched against. */
+    path: string
+    items: readonly AdminNavItem[]
+    isCompact: boolean
+    toggleSidebar: VoidFunction
+    /** Shown under the nav, where there is room for it. */
+    identity?: string | null
+    /** Back to the app, from the brand. */
+    homeUrl: string
+    children?: unknown
+  }
+
+  const isActive = (path: string, item: AdminNavItem) =>
+    item.exact ? path === item.to : path === item.to || path.startsWith(`${item.to}/`)
+
+  /**
+   * The collapse control: a pill whose inner block slides to the side the panel
+   * will move to, so the button shows the result rather than naming it.
+   */
+  export { ToggleSidebar }
+
+component ToggleSidebar
+  props { isCompact, toggleSidebar, className }: { isCompact: boolean; toggleSidebar: VoidFunction; className?: ClassValue }
+  div(className={cn('flex items-center justify-center size-16', className)})
+    button(
+      ~ type='button'
+      ~ aria-label={isCompact ? 'Expand sidebar' : 'Collapse sidebar'}
+      ~ aria-expanded={!isCompact}
+      ~ onClick={toggleSidebar}
+      ~ className={cn('h-[16px] w-[19px] rounded-[4px] bg-foreground/80 flex items-center px-0.75 py-0.75 relative transition-all duration-180 active:scale-97 active:bg-foreground group active:skew-2', isCompact && 'active:-skew-3')}
+      ~ )
+      div(className={cn('h-[10px] w-[6.25px] rounded-[2.5px] bg-background absolute transition-all duration-240 ease-out group-active:scale-102', !isCompact && 'translate-x-[6.5px] group-active:scale-85')})
+
+props { path, items, isCompact, toggleSidebar, identity, homeUrl, children }: AdminSidebarProps
+
+setup
+  const navRef = useRef<HTMLDivElement | null>(null)
+  const hoveredRef = useRef<HTMLElement | null>(null)
+
+  // The plate is positioned from the hovered row's own box, so it tracks rows
+  // of any height and survives the panel being resized under it.
+  const movePlate = () => {
+    const nav = navRef.current
+    const item = hoveredRef.current
+    if (!nav || !item) return
+
+    const container = nav.getBoundingClientRect()
+    const row = item.getBoundingClientRect()
+    nav.style.setProperty('--hovered-nav-top', `${row.top - container.top + nav.scrollTop}px`)
+    nav.style.setProperty('--hovered-nav-left', `${row.left - container.left + nav.scrollLeft}px`)
+    nav.style.setProperty('--hovered-nav-height', `${row.height}px`)
+    nav.style.setProperty('--hovered-nav-width', `${row.width}px`)
+  }
+
+  const handleMouseOver = (event: MouseEvent) => {
+    const nav = navRef.current
+    if (!nav) return
+
+    const target = event.target as HTMLElement
+    const row = target.closest<HTMLElement>('a, button')
+
+    if (!row || !nav.contains(row) || row.closest('[data-sidebar-hover-ignore]')) {
+      hoveredRef.current = null
+      nav.style.setProperty('--hovered-nav-opacity', '0')
+      return
+    }
+
+    if (hoveredRef.current === row) return
+    hoveredRef.current = row
+    movePlate()
+    nav.style.setProperty('--hovered-nav-opacity', '1')
+  }
+
+  const clearHover = () => {
+    hoveredRef.current = null
+    navRef.current?.style.setProperty('--hovered-nav-opacity', '0')
+  }
+
+  useLayoutEffect(() => {
+    const nav = navRef.current
+    if (!nav) return
+
+    const observer = new ResizeObserver(movePlate)
+    observer.observe(nav)
+    return () => observer.disconnect()
+  }, [isCompact])
+
+aside(className='admin-sidebar' data-compact={isCompact || undefined} aria-label='Admin navigation')
+  div(ref={navRef} className='admin-sidebar-body relative isolate' onMouseOver={handleMouseOver} onMouseLeave={clearHover})
+    div(className='admin-sidebar-header' data-sidebar-hover-ignore={true})
+      div(className='admin-brand')
+        Link(to='/' className='admin-brand-link' href={homeUrl} aria-label='Return to Lucky Pick')
+          div(className="brand-mark rounded-full! aspect-square! scale-50")
+            span(className="brand-mark__number")
+            span(className="brand-mark__orbit blur-xs" aria-hidden="true")
+            span(className="brand-mark__orbiter -rotate-5 scale-130 opacity-90" aria-hidden="true")
+            span(className="brand-mark__orbit" aria-hidden="true")
+          span Admin
+        if !isCompact
+          ToggleSidebar(isCompact={isCompact} toggleSidebar={toggleSidebar} className='justify-end')
+
+    nav(className='admin-nav' aria-label='Console')
+      div(className='space-y-3')
+        p(className='admin-nav-label') Console
+        each item in items key item.to
+          Link(
+            ~ to={item.to}
+            ~ className={cn('admin-link', isActive(path, item) && 'admin-link--active')}
+            ~ aria-current={isActive(path, item) ? 'page' : undefined}
+            ~ )
+            Icon(name={item.icon} size={16} className='admin-link-icon')
+            span #{item.label}
+
+    nav(className='admin-compact-nav' aria-label='Console')
+      each item in items key item.to
+        Link(
+          ~ to={item.to}
+          ~ className={cn('admin-link', 'admin-compact-link', isActive(path, item) && 'admin-link--active')}
+          ~ aria-current={isActive(path, item) ? 'page' : undefined}
+          ~ aria-label={item.label}
+          ~ title={item.label}
+          ~ )
+          Icon(name={item.icon} size={18} className='admin-link-icon')
+
+    div(className='admin-sidebar-bottom')
+      if identity
+        p(className='admin-sidebar-identity' title={identity}) #{identity}
+      div(className='flex items-center justify-center')
+        | #{children}
+      if isCompact
+        ToggleSidebar(isCompact={isCompact} toggleSidebar={toggleSidebar})
+
+    div(
+      ~ aria-hidden={true}
+      ~ className='admin-hover-plate'
+      ~ style={{ width: 'var(--hovered-nav-width, 0px)', height: 'var(--hovered-nav-height, 0px)', opacity: 'var(--hovered-nav-opacity, 0)', transform: 'translate3d(var(--hovered-nav-left, 0px), var(--hovered-nav-top, 0px), 0)' }}
+      ~ )

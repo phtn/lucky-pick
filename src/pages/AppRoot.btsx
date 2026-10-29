@@ -1,16 +1,19 @@
 import { Outlet, useRouterState } from '@octanejs/tanstack-router'
 import App from '../App.btsx'
+import { isAdminRoutePath } from '../lib/routing/admin-subdomain'
 import { asgardHandoffPath } from '../lib/routing/asgard-subdomain'
 
 // The Asgard handoff is a full-page surface on the main origin: it mints the ID
 // token and leaves. Where the host cannot carry a subdomain the console lives
 // under that path too, so the whole subtree is handed over — rendering any of
-// it inside the app would stack a console shell on top of the game.
+// it inside the app would stack a console shell on top of the game. `/admin` is
+// the same arrangement for the admin console, which has no subdomain here.
 setup
   const pathname = useRouterState({ select: (state) => state.location.pathname.replace(/\/$/, '') || '/' })
-  const isAsgardSurface = pathname === asgardHandoffPath || pathname.startsWith(`${asgardHandoffPath}/`)
+  const isConsoleSurface =
+    pathname === asgardHandoffPath || pathname.startsWith(`${asgardHandoffPath}/`) || isAdminRoutePath(pathname)
 
-if isAsgardSurface
+if isConsoleSurface
   Outlet
 else
   App

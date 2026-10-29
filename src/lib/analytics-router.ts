@@ -1,6 +1,7 @@
 import { createRootRoute, createRoute, createRouter, lazyRouteComponent } from '@octanejs/tanstack-router'
 import AnalyticsRoute from '../pages/AnalyticsRoute.btsx'
 import AppRoot from '../pages/AppRoot.btsx'
+import { adminRoutePrefix, isAdminSubdomainHostname } from './routing/admin-subdomain'
 import { asgardHandoffPath, isAsgardSubdomainHostname } from './routing/asgard-subdomain'
 
 // Asgard is a surface of its own, not a page of the app: on its subdomain the
@@ -9,9 +10,29 @@ import { asgardHandoffPath, isAsgardSubdomainHostname } from './routing/asgard-s
 // the console.
 const isAsgardHost = typeof window !== 'undefined' && isAsgardSubdomainHostname(window.location.hostname)
 
+// The admin console is the same arrangement on `admin.`: its own tree, chosen
+// once by the host. Asgard is checked first, since a host can only be one of
+// them and the two labels never overlap.
+const isAdminHost = typeof window !== 'undefined' && isAdminSubdomainHostname(window.location.hostname)
+
 const asgardShell = lazyRouteComponent(() => import('../pages/asgard-page.btsx'))
 const asgardOverview = lazyRouteComponent(() => import('../pages/asgard-overview-page.btsx'))
 const asgardAccounts = lazyRouteComponent(() => import('../pages/asgard-accounts-page.btsx'))
+
+const adminShell = lazyRouteComponent(() => import('../pages/admin-page.btsx'))
+const adminOverview = lazyRouteComponent(() => import('../pages/admin-overview-page.btsx'))
+
+function createAdminRouteTree() {
+  const rootRoute = createRootRoute({ component: adminShell })
+
+  const overviewRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    component: adminOverview
+  })
+
+  return rootRoute.addChildren([overviewRoute])
+}
 
 function createAsgardRouteTree() {
   const rootRoute = createRootRoute({ component: asgardShell })
@@ -70,14 +91,31 @@ function createAppRouteTree() {
     component: asgardAccounts
   })
 
+  // Where no `admin.` subdomain is in front of the app — the dev server, a
+  // workers.dev origin — `/admin` is the console rather than a doorway to it,
+  // so the whole surface hangs off this path. On a host that carries the
+  // subdomain the admin tree is chosen instead and this never renders.
+  const adminRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: adminRoutePrefix,
+    component: adminShell
+  })
+
+  const adminIndexRoute = createRoute({
+    getParentRoute: () => adminRoute,
+    path: '/',
+    component: adminOverview
+  })
+
   return rootRoute.addChildren([
     playRoute,
     analyticsRoute,
-    asgardRoute.addChildren([asgardIndexRoute, asgardAccountsRoute])
+    asgardRoute.addChildren([asgardIndexRoute, asgardAccountsRoute]),
+    adminRoute.addChildren([adminIndexRoute])
   ])
 }
 
-const routeTree = isAsgardHost ? createAsgardRouteTree() : createAppRouteTree()
+const routeTree = isAsgardHost ? createAsgardRouteTree() : isAdminHost ? createAdminRouteTree() : createAppRouteTree()
 
 export const analyticsRouter = createRouter({ routeTree, scrollRestoration: true })
 
