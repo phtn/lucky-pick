@@ -53,7 +53,9 @@ export const accountSchema = v.object({
   status: accountStatusSchema,
   /**
    * The grant the account was opened with, kept as a record of what was
-   * promised. The spendable balance lives in `credits`, which this seeds.
+   * promised. It does not hold a balance: at creation a positive amount becomes
+   * a pending top-up request, and a second god must approve it before it
+   * reaches the partner's float wallet.
    */
   initialCredits: accountInitialCreditsSchema,
   payoutDetails: accountPayoutDetailsSchema,
@@ -103,8 +105,9 @@ export const createAccountSchema = v.object({
 
 /**
  * `initialCredits` is absent here on purpose: the opening grant is history once
- * the account exists, and changing it would leave the `credits` balance it
- * seeded unexplained. Later grants go through top-up requests.
+ * the account exists, and changing it would leave the top-up request filed for
+ * it (and any float it already minted) unexplained. Later credits go through
+ * top-up requests.
  */
 export const updateAccountSchema = v.object({
   name: v.optional(v.string()),
