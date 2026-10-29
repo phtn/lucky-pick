@@ -22,7 +22,8 @@ export default defineSchema({
     .index('by_status_and_createdAt', ['status', 'createdAt'])
     .index('by_ownerTokenIdentifier_and_createdAt', ['ownerTokenIdentifier', 'createdAt'])
     .index('by_primaryContact_tokenIdentifier', ['primaryContact.tokenIdentifier'])
-    .index('by_primaryContact_email', ['primaryContact.email']),
+    .index('by_primaryContact_email', ['primaryContact.email'])
+    .index('by_primaryContact_firebaseUid', ['primaryContact.firebaseUid']),
   credits: defineTable(creditsFields)
     .index('by_accountId', ['accountId'])
     .index('by_accountId_and_userId', ['accountId', 'userId'])

@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as accounts_contacts from "../accounts/contacts.js";
 import type * as accounts_d from "../accounts/d.js";
 import type * as accounts_helpers from "../accounts/helpers.js";
 import type * as accounts_m from "../accounts/m.js";
@@ -18,6 +19,7 @@ import type * as credits_m from "../credits/m.js";
 import type * as credits_q from "../credits/q.js";
 import type * as csvBaseline from "../csvBaseline.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_testIdentities from "../lib/testIdentities.js";
 import type * as resultValidators from "../resultValidators.js";
 import type * as resultsImport from "../resultsImport.js";
 import type * as users_m from "../users/m.js";
@@ -32,6 +34,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "accounts/contacts": typeof accounts_contacts;
   "accounts/d": typeof accounts_d;
   "accounts/helpers": typeof accounts_helpers;
   "accounts/m": typeof accounts_m;
@@ -42,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   "credits/q": typeof credits_q;
   csvBaseline: typeof csvBaseline;
   "lib/auth": typeof lib_auth;
+  "lib/testIdentities": typeof lib_testIdentities;
   resultValidators: typeof resultValidators;
   resultsImport: typeof resultsImport;
   "users/m": typeof users_m;
