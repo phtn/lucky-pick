@@ -9,7 +9,8 @@ import { cn } from '@/lib/utils'
 import { debounce, parseAsBoolean, parseAsString, parseAsStringLiteral, throttle, useQueryStates } from '@octanejs/nuqs'
 import { useField, useSelector } from '@octanejs/tanstack-form'
 import { getGodUserLabel, searchUsers, type GodUser } from '@/lib/asgard/gods-users'
-import { ACCOUNT_CREDIT_OPTIONS, formatAccountCredits, isAccountEmailAddress, toAccountSlug, type AccountStatus } from '@/lib/accounts/accounts'
+import { ACCOUNT_CREDIT_OPTIONS, formatAccountCredits, isAccountCreditOption, isAccountEmailAddress, toAccountSlug, type AccountCreditOption, type AccountStatus } from '@/lib/accounts/accounts'
+import { MAX_TOPUP_CREDITS } from '@/lib/money/credits'
 import { ENTER_CLASS, errorTextClassName, fieldLabelClassName, type StepState } from '@/lib/asgard/step-flow'
 import { isAbortError, readErrorMessage } from '@/lib/asgard/errors'
 import { ACCOUNT_FORM_DEFAULTS, readValidationMessage, resolveAccountSlug, useAccountDraft, useAccountForm, validateAccountForm, validateAccountSlug, type AccountForm, type AccountTextField } from '@/lib/asgard/account-form'
@@ -81,6 +82,22 @@ module
     success: 'text-chart-positive'
   } as const
 
+  /**
+   * An amount field reports on the same terms a text field does: only once the
+   * operator has touched it, so a pristine form is not pre-scolded.
+   */
+  const creditsFieldMessage = (meta: { isTouched: boolean; isDirty: boolean; errors: ReadonlyArray<unknown> }) =>
+    meta.isTouched || meta.isDirty ? readValidationMessage(meta.errors) : null
+
+  /**
+   * An empty or half-typed box reads as 0 rather than NaN, so neither the step
+   * summary nor the submit guard ever sees a value the form cannot send.
+   */
+  const readCreditAmount = (event: Event) => {
+    const next = Number.parseInt((event.currentTarget as HTMLInputElement).value, 10)
+    return Number.isNaN(next) ? 0 : next
+  }
+
 component StatusBadge
   props { status }: { status: AccountStatus }
   span(className={cn('inline-flex size-6 shrink-0 items-center justify-center rounded-xs border md:hidden', ACCOUNT_STATUS_TONE[status])} title={ACCOUNT_STATUS_LABEL[status]})
@@ -130,19 +147,83 @@ component TextField
 component CreditsField
   props { form }: { form: AccountForm }
   setup
-    // A ladder of fixed grants rather than a number input: the amount an
-    // account can open with is policy, so the control only offers the rungs.
+    // The ladder is a row of shortcuts, not the whole policy: `Custom` opens a
+    // free amount for a grant the rungs do not cover. Which control is showing
+    // is local state rather than derived from the value, so a custom amount
+    // that happens to land on a rung does not snap back to the chips mid-edit.
     const field = useField({ form, name: 'initialCredits' })
+    const testField = useField({ form, name: 'testCredits' })
+    const [isCustom, setIsCustom] = useState(() => !isAccountCreditOption(field.state.value))
 
-  div(className={cn('flex flex-wrap gap-1.5', ENTER_CLASS)})
-    each option in ACCOUNT_CREDIT_OPTIONS key option
+    const creditsMessage = creditsFieldMessage(field.state.meta)
+    const testMessage = creditsFieldMessage(testField.state.meta)
+
+    const chooseOption = (option: AccountCreditOption) => {
+      setIsCustom(false)
+      field.handleChange(option)
+    }
+
+  div(className={cn('grid gap-3', ENTER_CLASS)})
+    div(className='flex flex-wrap gap-1.5')
+      each option in ACCOUNT_CREDIT_OPTIONS key option
+        button(
+          ~ type='button'
+          ~ onClick={() => chooseOption(option)}
+          ~ aria-pressed={!isCustom && field.state.value === option}
+          ~ className={cn(chipClassName, !isCustom && field.state.value === option ? 'border-active/40 bg-active/10 text-active' : 'border-border/60 text-muted-foreground hover:bg-accent')}
+          ~ )
+          | #{formatAccountCredits(option)}
       button(
         ~ type='button'
-        ~ onClick={() => field.handleChange(option)}
-        ~ aria-pressed={field.state.value === option}
-        ~ className={cn(chipClassName, field.state.value === option ? 'border-active/40 bg-active/10 text-active' : 'border-border/60 text-muted-foreground hover:bg-accent')}
+        ~ onClick={() => setIsCustom(true)}
+        ~ aria-pressed={isCustom}
+        ~ className={cn(chipClassName, isCustom ? 'border-active/40 bg-active/10 text-active' : 'border-border/60 text-muted-foreground hover:bg-accent')}
         ~ )
-        | #{formatAccountCredits(option)}
+        | Custom
+
+    if isCustom
+      label(className={cn('flex flex-col gap-1.5', ENTER_CLASS)} htmlFor='account-initialCredits')
+        span(className={fieldLabelClassName}) Custom amount
+        Input(
+          ~ id='account-initialCredits'
+          ~ type='number'
+          ~ min={0}
+          ~ max={MAX_TOPUP_CREDITS}
+          ~ step={1}
+          ~ inputMode='numeric'
+          ~ autoComplete='off'
+          ~ placeholder='0'
+          ~ value={String(field.state.value)}
+          ~ aria-invalid={creditsMessage !== null}
+          ~ aria-describedby={creditsMessage === null ? undefined : 'account-initialCredits-error'}
+          ~ onBlur={field.handleBlur}
+          ~ onInput={(event: Event) => field.handleChange(readCreditAmount(event))}
+          ~ )
+        if creditsMessage
+          p(id='account-initialCredits-error' className={cn('mt-1.5', errorTextClassName)} aria-live='polite') #{creditsMessage}
+
+    div(className='grid gap-1.5 border-t border-dotted border-border/60 pt-3')
+      label(className='flex flex-col gap-1.5' htmlFor='account-testCredits')
+        span(className={fieldLabelClassName}) Test credits
+        Input(
+          ~ id='account-testCredits'
+          ~ type='number'
+          ~ min={0}
+          ~ max={MAX_TOPUP_CREDITS}
+          ~ step={1}
+          ~ inputMode='numeric'
+          ~ autoComplete='off'
+          ~ placeholder='0'
+          ~ value={String(testField.state.value)}
+          ~ aria-invalid={testMessage !== null}
+          ~ aria-describedby={testMessage === null ? undefined : 'account-testCredits-error'}
+          ~ onBlur={testField.handleBlur}
+          ~ onInput={(event: Event) => testField.handleChange(readCreditAmount(event))}
+          ~ )
+      if testMessage
+        p(id='account-testCredits-error' className={cn('mt-0.5', errorTextClassName)} aria-live='polite') #{testMessage}
+      else
+        p(className='font-mono text-2xs text-muted-foreground') Minted into the float wallet on creation, with no approval behind it, so a transfer can be exercised right away.
 
 component AccountIdentity
   props { account }: { account: AccountRow }
@@ -340,6 +421,17 @@ component CreateAccountForm
     }
 
     const creditsValue = useSelector(accountForm.store, (state) => state.values.initialCredits)
+    const testCreditsValue = useSelector(accountForm.store, (state) => state.values.testCredits)
+    const creditsHasErrors = useSelector(accountForm.store, (state) => {
+      const fields = validateAccountForm(state.values)?.fields
+      return fields?.initialCredits !== undefined || fields?.testCredits !== undefined
+    })
+    // A test grant only shows in the summary once there is one, so an ordinary
+    // account still reads as a single number.
+    const creditsMeta =
+      testCreditsValue > 0
+        ? `${formatAccountCredits(creditsValue)} CR · ${formatAccountCredits(testCreditsValue)} test`
+        : `${formatAccountCredits(creditsValue)} CR`
     // The payout block is optional, so it is measured rather than validated:
     // the step reports how much of it has been filled in.
     const payoutFilled = useSelector(
@@ -362,8 +454,9 @@ component CreateAccountForm
     const identityState: StepState = isIdentityDone ? 'done' : 'active'
     const contactState: StepState = !isIdentityDone ? 'idle' : isContactDone ? 'done' : 'active'
     // A grant is always selected, even a zero one, so this step only waits on
-    // the ones above it.
-    const creditsState: StepState = isContactDone ? 'done' : 'idle'
+    // the ones above it — unless a hand-typed amount is out of range, which it
+    // then has to ask the operator to fix.
+    const creditsState: StepState = !isContactDone ? 'idle' : creditsHasErrors ? 'active' : 'done'
     const payoutState: StepState = !isContactDone ? 'idle' : payoutFilled > 0 && !payoutHasErrors ? 'done' : 'active'
     const createState: StepState = canSubmit && !isSubmitting ? 'active' : 'idle'
 
@@ -489,7 +582,7 @@ component CreateAccountForm
             TextField(form={accountForm} name='contactPhone' label='Contact phone' type='tel' placeholder='Optional')
             TextField(form={accountForm} name='contactTitle' label='Contact title' placeholder='Optional')
 
-      Step(icon='gift' title='Initial credits' state={creditsState} index={2} stepCount={5} meta={`${formatAccountCredits(creditsValue)} CR`})
+      Step(icon='gift' title='Initial credits' state={creditsState} index={2} stepCount={5} meta={creditsMeta})
         CreditsField(form={accountForm})
 
       Step(

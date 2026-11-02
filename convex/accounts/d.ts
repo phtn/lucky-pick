@@ -1,15 +1,16 @@
 import { v } from 'convex/values'
-import { ACCOUNT_CREDIT_OPTIONS, ACCOUNT_STATUS_VALUES } from '../../src/lib/accounts/accounts'
+import { ACCOUNT_STATUS_VALUES } from '../../src/lib/accounts/accounts'
 import { userFields } from '../users/v'
 
 export const accountStatusSchema = v.union(...ACCOUNT_STATUS_VALUES.map((status) => v.literal(status)))
 
 /**
- * The opening grant is one of the ladder's rungs, so the stored value is a
- * union of literals rather than a free number: an account cannot be opened with
- * an amount the console never offered.
+ * Any whole credit amount, not only a ladder rung: the console offers the rungs
+ * as shortcuts and lets an operator type a custom grant. The range is enforced
+ * by `normalizeInitialCredits` rather than by this validator, so an amount that
+ * is out of range reports why instead of failing as a malformed argument.
  */
-export const accountInitialCreditsSchema = v.union(...ACCOUNT_CREDIT_OPTIONS.map((amount) => v.literal(amount)))
+export const accountInitialCreditsSchema = v.number()
 
 /**
  * Where the account's money goes. Every field is optional because payout is
@@ -96,6 +97,13 @@ export const createAccountSchema = v.object({
   slug: v.optional(v.string()),
   status: v.optional(v.literal('pending')),
   initialCredits: v.optional(accountInitialCreditsSchema),
+  /**
+   * Credits minted into the account's float the moment it is created, so a
+   * transfer can be exercised without walking a top-up through maker-checker.
+   * It is the one path that moves a balance with no second god and no payment
+   * behind it, which is why it is named for what it is: a testing shortcut.
+   */
+  testCredits: v.optional(v.number()),
   payoutDetails: v.optional(accountPayoutDetailsSchema),
   primaryContact: accountPrimaryContactInputSchema,
   billingEmail: v.optional(v.union(v.string(), v.null())),

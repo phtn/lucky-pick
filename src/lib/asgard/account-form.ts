@@ -1,6 +1,7 @@
-import { debounce, parseAsNumberLiteral, parseAsString, type SetValues, useQueryStates } from '@octanejs/nuqs'
+import { debounce, parseAsInteger, parseAsString, type SetValues, useQueryStates } from '@octanejs/nuqs'
 import { useForm } from '@octanejs/tanstack-form'
-import { ACCOUNT_CREDIT_OPTIONS, ACCOUNT_NAME_MAX_LENGTH, ACCOUNT_NOTES_MAX_LENGTH, ACCOUNT_PAYOUT_ACCOUNT_NAME_MAX_LENGTH, ACCOUNT_PAYOUT_ACCOUNT_NUMBER_MAX_LENGTH, ACCOUNT_PAYOUT_PROVIDER_MAX_LENGTH, ACCOUNT_PHONE_MAX_LENGTH, DEFAULT_ACCOUNT_CREDITS, isAccountEmailAddress, isAccountSlug, isPublicAccountSlug, RESERVED_ACCOUNT_SLUGS, toAccountSlug, type AccountCreditOption } from '@/lib/accounts/accounts'
+import { ACCOUNT_NAME_MAX_LENGTH, ACCOUNT_NOTES_MAX_LENGTH, ACCOUNT_PAYOUT_ACCOUNT_NAME_MAX_LENGTH, ACCOUNT_PAYOUT_ACCOUNT_NUMBER_MAX_LENGTH, ACCOUNT_PAYOUT_PROVIDER_MAX_LENGTH, ACCOUNT_PHONE_MAX_LENGTH, DEFAULT_ACCOUNT_CREDITS, isAccountCreditAmount, isAccountEmailAddress, isAccountSlug, isPublicAccountSlug, RESERVED_ACCOUNT_SLUGS, toAccountSlug } from '@/lib/accounts/accounts'
+import { MAX_TOPUP_CREDITS } from '@/lib/money/credits'
 import type { CreateAccountInput } from '@/lib/asgard/accounts'
 import { readErrorMessage } from '@/lib/asgard/errors'
 
@@ -11,8 +12,13 @@ import { readErrorMessage } from '@/lib/asgard/errors'
 export interface AccountFormValues {
   name: string
   slug: string
-  /** The opening credit grant, one of `ACCOUNT_CREDIT_OPTIONS`. */
-  initialCredits: AccountCreditOption
+  /** The opening credit grant: a rung of `ACCOUNT_CREDIT_OPTIONS` or a custom amount. */
+  initialCredits: number
+  /**
+   * Credits minted into the account's float at creation, skipping the top-up
+   * approval, so a transfer can be exercised against a brand-new account.
+   */
+  testCredits: number
   contactName: string
   contactEmail: string
   contactPhone: string
@@ -29,12 +35,16 @@ export interface AccountFormValues {
 }
 
 /** The fields a plain text control can bind, so one component covers them all. */
-export type AccountTextField = Exclude<keyof AccountFormValues, 'initialCredits' | 'contactUid'>
+export type AccountTextField = Exclude<keyof AccountFormValues, AccountCreditField | 'contactUid'>
+
+/** The two amount fields, which bind a number control rather than a text one. */
+export type AccountCreditField = 'initialCredits' | 'testCredits'
 
 export const ACCOUNT_FORM_DEFAULTS: AccountFormValues = {
   name: '',
   slug: '',
   initialCredits: DEFAULT_ACCOUNT_CREDITS,
+  testCredits: DEFAULT_ACCOUNT_CREDITS,
   contactName: '',
   contactEmail: '',
   contactPhone: '',
@@ -54,7 +64,8 @@ export const ACCOUNT_FORM_DEFAULTS: AccountFormValues = {
 const ACCOUNT_DRAFT_PARSERS = {
   name: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.name),
   slug: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.slug),
-  initialCredits: parseAsNumberLiteral(ACCOUNT_CREDIT_OPTIONS).withDefault(ACCOUNT_FORM_DEFAULTS.initialCredits),
+  initialCredits: parseAsInteger.withDefault(ACCOUNT_FORM_DEFAULTS.initialCredits),
+  testCredits: parseAsInteger.withDefault(ACCOUNT_FORM_DEFAULTS.testCredits),
   contactName: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.contactName),
   contactEmail: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.contactEmail),
   contactPhone: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.contactPhone),
@@ -90,7 +101,13 @@ export function useAccountDraft(): [AccountFormValues, SetValues<AccountDraftPar
  * function drives both the per-field messages and the submit button.
  */
 export function validateAccountForm(values: AccountFormValues) {
-  const fields: Partial<Record<AccountTextField, string>> = {}
+  const fields: Partial<Record<AccountTextField | AccountCreditField, string>> = {}
+
+  // Both amounts are typed by hand now, so the form has to say what is wrong
+  // with one before the mutation refuses it.
+  const amountMessage = `Enter a whole number from 0 to ${MAX_TOPUP_CREDITS.toLocaleString('en-US')}.`
+  if (!isAccountCreditAmount(values.initialCredits)) fields.initialCredits = amountMessage
+  if (!isAccountCreditAmount(values.testCredits)) fields.testCredits = amountMessage
 
   const name = values.name.trim()
   if (name.length === 0) fields.name = 'An account name is required.'
@@ -146,6 +163,7 @@ export function toCreateAccountInput(values: AccountFormValues): CreateAccountIn
     name: values.name.trim(),
     slug: trimmed(values.slug),
     initialCredits: values.initialCredits,
+    testCredits: values.testCredits,
     payoutDetails: {
       bankOrWallet: trimmed(values.payoutBankOrWallet),
       accountName: trimmed(values.payoutAccountName),

@@ -70,6 +70,10 @@ test('moves positive balances into float and clears the credits table', async ()
     await ctx.db.insert('credits', legacyRow(accountId, slug, 0, { userTokenIdentifier: 'tok|zero' }))
     await ctx.db.insert('credits', legacyRow(orphanId, orphanSlug, 75))
     // Deleted directly: `accounts.m.remove` would take its credits rows with it.
+    // The empty row creation opened for it goes too, so exactly one is orphaned.
+    for (const row of await ctx.db.query('credits').collect()) {
+      if (row.accountId === orphanId && row.createdBy !== 'legacy') await ctx.db.delete(row._id)
+    }
     await ctx.db.delete(orphanId)
   })
 
@@ -130,6 +134,9 @@ test('continues in further batches until every row is migrated', async () => {
   const t = convexTest(schema, modules)
   const accounts = [await createAccount(t, 'One'), await createAccount(t, 'Two'), await createAccount(t, 'Three')]
   await t.run(async (ctx) => {
+    // Batching is what is under test, so the empty rows creation opened for the
+    // three accounts are cleared out and only the 101 legacy rows remain.
+    for (const row of await ctx.db.query('credits').collect()) await ctx.db.delete(row._id)
     for (let i = 0; i < 101; i++) {
       const { accountId, slug } = accounts[i % accounts.length]
       await ctx.db.insert('credits', legacyRow(accountId, slug, 1))

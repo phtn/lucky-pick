@@ -1,3 +1,5 @@
+import { MAX_TOPUP_CREDITS } from '../money/credits'
+
 /**
  * Accounts are never deleted. `closed` is the terminal state an account holder
  * can choose; `suspended` is ours to apply and is reversible from our side.
@@ -9,23 +11,36 @@ export type AccountStatus = (typeof ACCOUNT_STATUS_VALUES)[number]
 export const DEFAULT_ACCOUNT_STATUS: AccountStatus = 'pending'
 
 /**
- * The credit balance an account opens with. A fixed ladder rather than a free
- * number: the grant is chosen from the console, so the options are the policy.
+ * The rungs the console offers in one click. Shortcuts rather than the whole
+ * policy: an operator may also type any amount `isAccountCreditAmount` accepts.
  */
 export const ACCOUNT_CREDIT_OPTIONS = [0, 5_000, 50_000, 100_000, 250_000, 500_000, 1_000_000] as const
 
 export type AccountCreditOption = (typeof ACCOUNT_CREDIT_OPTIONS)[number]
 
-export const DEFAULT_ACCOUNT_CREDITS: AccountCreditOption = 0
+export const DEFAULT_ACCOUNT_CREDITS = 0
 
+/**
+ * Any credit amount the console may send, a rung or a hand-typed one. Capped at
+ * `MAX_TOPUP_CREDITS` because an opening grant becomes a top-up request: an
+ * amount that flow would refuse must not be accepted here either.
+ */
+export const isAccountCreditAmount = (value: number) =>
+  Number.isSafeInteger(value) && value >= 0 && value <= MAX_TOPUP_CREDITS
+
+/** Whether an amount is one of the rungs, which is what tells a custom amount apart. */
 export const isAccountCreditOption = (value: number): value is AccountCreditOption =>
   (ACCOUNT_CREDIT_OPTIONS as readonly number[]).includes(value)
 
-/** `0`, `5K`, `250K`, `1M` — the ladder's own shorthand, not a locale format. */
+/**
+ * `0`, `5K`, `250K`, `1M` — the ladder's own shorthand, not a locale format.
+ * A custom amount that lands between the rungs has no shorthand, so it reads as
+ * a plain grouped number rather than something like `1500K`.
+ */
 export function formatAccountCredits(value: number) {
   if (value === 0) return '0'
   if (value % 1_000_000 === 0) return `${value / 1_000_000}M`
-  if (value % 1_000 === 0) return `${value / 1_000}K`
+  if (value < 1_000_000 && value % 1_000 === 0) return `${value / 1_000}K`
   return value.toLocaleString()
 }
 

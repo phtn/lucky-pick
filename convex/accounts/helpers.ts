@@ -9,12 +9,12 @@ import {
   ACCOUNT_TITLE_MAX_LENGTH,
   DEFAULT_ACCOUNT_CREDITS,
   canUseAccount,
-  isAccountCreditOption,
+  isAccountCreditAmount,
   isAccountEmailAddress,
   isPublicAccountSlug,
-  toAccountSlug,
-  type AccountCreditOption
+  toAccountSlug
 } from '../../src/lib/accounts/accounts'
+import { MAX_TOPUP_CREDITS } from '../../src/lib/money/credits'
 import type { Id } from '../_generated/dataModel'
 import type { MutationCtx, QueryCtx } from '../_generated/server'
 import { isGod, isPlatformStaff, isTopGod } from '../lib/auth'
@@ -254,14 +254,20 @@ export const normalizePayoutDetails = (payoutDetails: PayoutDetailsInput | undef
  * The opening grant must be one of the ladder's rungs. An amount the console
  * never offered is a sign the request did not come from the console.
  */
-export const normalizeInitialCredits = (amount: number | undefined): AccountCreditOption => {
+const normalizeCreditAmount = (amount: number | undefined, label: string) => {
   if (amount === undefined) {
     return DEFAULT_ACCOUNT_CREDITS
   }
 
-  if (!isAccountCreditOption(amount)) {
-    throw new ConvexError(`${amount} is not an offered credit amount.`)
+  if (!isAccountCreditAmount(amount)) {
+    throw new ConvexError(
+      `${label} must be a whole number of credits from 0 to ${MAX_TOPUP_CREDITS.toLocaleString('en-US')}.`
+    )
   }
 
   return amount
 }
+
+export const normalizeInitialCredits = (amount: number | undefined) => normalizeCreditAmount(amount, 'An opening grant')
+
+export const normalizeTestCredits = (amount: number | undefined) => normalizeCreditAmount(amount, 'A test grant')

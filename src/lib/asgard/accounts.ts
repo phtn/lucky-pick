@@ -1,4 +1,4 @@
-import { ACCOUNT_STATUS_VALUES, formatAccountCredits, type AccountCreditOption, type AccountStatus } from '@/lib/accounts/accounts'
+import { ACCOUNT_STATUS_VALUES, formatAccountCredits, type AccountStatus } from '@/lib/accounts/accounts'
 import type {
   AsgardAccountCreateResponse,
   AsgardAccountListResponse,
@@ -12,7 +12,9 @@ export type AccountRow = AsgardAccountListResponse['accounts'][number]
 export type CreateAccountInput = {
   name: string
   slug?: string
-  initialCredits?: AccountCreditOption
+  initialCredits?: number
+  /** Minted into the float on creation, with no approval, so transfers can be tested. */
+  testCredits?: number
   payoutDetails?: {
     bankOrWallet?: string
     accountName?: string

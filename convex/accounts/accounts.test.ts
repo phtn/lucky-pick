@@ -1,7 +1,6 @@
 /// <reference types="vite/client" />
 import { convexTest } from 'convex-test'
 import { expect, test } from 'vitest'
-import type { AccountCreditOption } from '../../src/lib/accounts/accounts'
 import { api } from '../_generated/api'
 import type { Id } from '../_generated/dataModel'
 import { auditWallets } from '../ledger/audit'
@@ -15,7 +14,7 @@ const modules = import.meta.glob('/convex/**/*.ts')
 const makeT = () => convexTest(schema, modules)
 type T = ReturnType<typeof makeT>
 
-const create = (t: T, extra: { initialCredits?: AccountCreditOption; slug?: string } = {}) =>
+const create = (t: T, extra: { initialCredits?: number; testCredits?: number; slug?: string } = {}) =>
   t.withIdentity(god).mutation(api.accounts.m.create, {
     name: 'Ana Store',
     primaryContact: { name: 'Ana', email: 'ana@example.com' },
@@ -47,8 +46,50 @@ test('create opens float and earnings at zero', async () => {
   expect(wallets.map((w) => w.kind).sort()).toEqual(['partnerEarnings', 'partnerFloat'])
   expect(wallets.every((w) => w.available === 0 && w.held === 0)).toBe(true)
   expect(requests).toEqual([])
-  // The legacy wallet is no longer opened.
-  expect(credits).toEqual([])
+  // The account's credits row is opened too, empty and not yet linked to anyone.
+  expect(credits).toHaveLength(1)
+  expect(credits[0]).toMatchObject({
+    accountSlug: 'ana-store',
+    userId: null,
+    userTokenIdentifier: null,
+    balance: 0,
+    granted: 0,
+    spent: 0,
+    lastReason: 'initial-grant',
+    createdBy: god.tokenIdentifier
+  })
+})
+
+test('a test grant mints into float at creation, with no request to approve', async () => {
+  const t = makeT()
+  const accountId = await create(t, { testCredits: 25_000 })
+
+  const { requests, wallets } = await snapshot(t, accountId)
+  expect(requests).toEqual([])
+  expect(wallets.find((w) => w.kind === 'partnerFloat')!.available).toBe(25_000)
+  expect(wallets.find((w) => w.kind === 'partnerEarnings')!.available).toBe(0)
+  expect(await t.run((ctx) => auditWallets(ctx))).toEqual({ total: 0, mismatched: [] })
+})
+
+test('a custom opening grant off the ladder is accepted and filed as a request', async () => {
+  const t = makeT()
+  const accountId = await create(t, { initialCredits: 73_500 })
+
+  const { account, requests } = await snapshot(t, accountId)
+  expect(account!.initialCredits).toBe(73_500)
+  expect(requests).toHaveLength(1)
+  expect(requests[0]).toMatchObject({ status: 'pending', amount: 73_500 })
+})
+
+test('an opening grant past the top-up ceiling is refused', async () => {
+  const t = makeT()
+
+  await expect(create(t, { initialCredits: 10_000_001 })).rejects.toThrow(
+    'An opening grant must be a whole number of credits from 0 to 10,000,000.'
+  )
+  await expect(create(t, { testCredits: 2_500.5 })).rejects.toThrow(
+    'A test grant must be a whole number of credits from 0 to 10,000,000.'
+  )
 })
 
 test('opening grant is pending and creator cannot approve it', async () => {
@@ -144,25 +185,20 @@ test('remove deletes an unfunded account with its wallets and unapproved request
   expect(after.requests).toEqual([])
 })
 
-const legacyCreditsRow = (accountId: Id<'accounts'>, balance: number) => ({
-  accountId,
-  accountSlug: 'ana-store',
-  userId: null,
-  userTokenIdentifier: null,
-  balance,
-  granted: balance,
-  spent: 0,
-  lastReason: 'initial-grant' as const,
-  createdAt: 0,
-  createdBy: 'x',
-  updatedAt: 0,
-  updatedBy: 'x'
-})
+/** Puts a balance on the row `create` opened, as the retired table would have held it. */
+const fundLegacyCreditsRow = async (t: T, accountId: Id<'accounts'>, balance: number) =>
+  await t.run(async (ctx) => {
+    const [row] = await ctx.db
+      .query('credits')
+      .withIndex('by_accountId', (q) => q.eq('accountId', accountId))
+      .take(1)
+    await ctx.db.patch('credits', row._id, { balance, granted: balance })
+  })
 
 test('remove refuses while a legacy credits row still holds a balance', async () => {
   const t = makeT()
   const accountId = await create(t)
-  await t.run((ctx) => ctx.db.insert('credits', legacyCreditsRow(accountId, 300)))
+  await fundLegacyCreditsRow(t, accountId, 300)
 
   await expect(t.withIdentity(topg).mutation(api.accounts.m.remove, { id: accountId })).rejects.toThrow(
     'This account has ledger history and cannot be deleted. Close it instead.'
@@ -178,7 +214,7 @@ test('remove refuses while a legacy credits row still holds a balance', async ()
 test('remove deletes zero-balance legacy credits rows with an unfunded account', async () => {
   const t = makeT()
   const accountId = await create(t)
-  await t.run((ctx) => ctx.db.insert('credits', legacyCreditsRow(accountId, 0)))
+  expect((await snapshot(t, accountId)).credits).toHaveLength(1)
 
   await t.withIdentity(topg).mutation(api.accounts.m.remove, { id: accountId })
   const after = await snapshot(t, accountId)
