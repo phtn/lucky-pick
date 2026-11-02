@@ -18,6 +18,7 @@ const isAdminHost = typeof window !== 'undefined' && isAdminSubdomainHostname(wi
 const asgardShell = lazyRouteComponent(() => import('../pages/asgard-page.btsx'))
 const asgardOverview = lazyRouteComponent(() => import('../pages/asgard-overview-page.btsx'))
 const asgardAccounts = lazyRouteComponent(() => import('../pages/asgard-accounts-page.btsx'))
+const asgardAccount = lazyRouteComponent(() => import('../pages/asgard-account-page.btsx'))
 
 const adminShell = lazyRouteComponent(() => import('../pages/admin-page.btsx'))
 const adminOverview = lazyRouteComponent(() => import('../pages/admin-overview-page.btsx'))
@@ -49,7 +50,15 @@ function createAsgardRouteTree() {
     component: asgardAccounts
   })
 
-  return rootRoute.addChildren([overviewRoute, accountsRoute])
+  // One account's own page. Keyed by slug rather than id: it is already unique
+  // and reserved-checked, and it makes the address one an operator can read.
+  const accountRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/accounts/$slug',
+    component: asgardAccount
+  })
+
+  return rootRoute.addChildren([overviewRoute, accountsRoute, accountRoute])
 }
 
 function createAppRouteTree() {
@@ -91,6 +100,12 @@ function createAppRouteTree() {
     component: asgardAccounts
   })
 
+  const asgardAccountRoute = createRoute({
+    getParentRoute: () => asgardRoute,
+    path: 'accounts/$slug',
+    component: asgardAccount
+  })
+
   // Where no `admin.` subdomain is in front of the app — the dev server, a
   // workers.dev origin — `/admin` is the console rather than a doorway to it,
   // so the whole surface hangs off this path. On a host that carries the
@@ -110,7 +125,7 @@ function createAppRouteTree() {
   return rootRoute.addChildren([
     playRoute,
     analyticsRoute,
-    asgardRoute.addChildren([asgardIndexRoute, asgardAccountsRoute]),
+    asgardRoute.addChildren([asgardIndexRoute, asgardAccountsRoute, asgardAccountRoute]),
     adminRoute.addChildren([adminIndexRoute])
   ])
 }

@@ -17,8 +17,9 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// The whole Phase 0-1 path in order: provision, link, activate, approve the
-// opening grant, read as the partner, then fold a legacy balance into the float.
+// The whole Phase 0-1 path in order: provision with an opening grant, link,
+// activate, walk a later top-up through maker-checker, read as the partner,
+// then fold a legacy balance into the float.
 test('opening grant to partner reads to legacy migration', async () => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   const t = convexTest(schema, modules)
@@ -30,28 +31,28 @@ test('opening grant to partner reads to legacy migration', async () => {
     primaryContact: { name: 'Ana', email: 'ana@example.com' }
   })
 
-  await t.withIdentity(ana).mutation(api.users.m.ensureCurrent, {})
-  await t.withIdentity(staff).mutation(api.accounts.m.update, { id: accountId, status: 'active' })
-
-  const [request] = await t.run((ctx) =>
-    ctx.db
-      .query('topupRequests')
-      .withIndex('by_accountId_and_createdAt', (q) => q.eq('accountId', accountId))
-      .collect()
-  )
-  expect(request).toMatchObject({ status: 'pending', amount: 50_000 })
-  await t.withIdentity(godB).mutation(api.money.topups.approve, { id: request._id })
+  // The opening grant funds the account as it is created: nothing to approve.
+  expect(await t.run((ctx) => ctx.db.query('topupRequests').collect())).toEqual([])
 
   const asAna = t.withIdentity(ana)
+  await asAna.mutation(api.users.m.ensureCurrent, {})
+  await t.withIdentity(staff).mutation(api.accounts.m.update, { id: accountId, status: 'active' })
+
+  // Every credit after that one still goes through maker-checker.
+  const requestId = await t
+    .withIdentity(god)
+    .mutation(api.money.topups.request, { accountId, amount: 25_000, paymentReference: 'MPESA-1' })
+  await t.withIdentity(godB).mutation(api.money.topups.approve, { id: requestId })
+
   const { float } = await asAna.query(api.ledger.q.partnerWallets, { accountId })
-  expect(float).toMatchObject({ kind: 'partnerFloat', available: 50_000 })
+  expect(float).toMatchObject({ kind: 'partnerFloat', available: 75_000 })
 
   const entries = await asAna.query(api.ledger.q.walletEntries, {
     walletId: float!._id,
     paginationOpts: { numItems: 10, cursor: null }
   })
-  expect(entries.page).toHaveLength(1)
-  expect(entries.page[0]).toMatchObject({ walletId: float!._id, amount: 50_000 })
+  expect(entries.page.every((entry) => entry.walletId === float!._id)).toBe(true)
+  expect(entries.page.map((entry) => entry.amount).sort((a, b) => a - b)).toEqual([25_000, 50_000])
 
   const account = (await t.run((ctx) => ctx.db.get('accounts', accountId)))!
   await t.run((ctx) =>
@@ -74,6 +75,6 @@ test('opening grant to partner reads to legacy migration', async () => {
   await t.finishAllScheduledFunctions(vi.runAllTimers)
 
   const after = await asAna.query(api.ledger.q.partnerWallets, { accountId })
-  expect(after.float!.available).toBe(50_300)
+  expect(after.float!.available).toBe(75_300)
   expect(await t.run((ctx) => auditWallets(ctx))).toEqual({ total: 0, mismatched: [] })
 })

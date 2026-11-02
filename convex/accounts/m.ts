@@ -4,7 +4,6 @@ import { mutation } from '../_generated/server'
 import { listCreditsForAccount, openCredits } from '../credits/helpers'
 import { post } from '../ledger/post'
 import { findPartnerWallets, getPartnerWallets, getSystemWallet } from '../ledger/wallets'
-import { createTopupRequest } from '../money/topups'
 import { accountDocumentSchema, createAccountSchema, updateAccountSchema } from './d'
 import {
   getAccountBySlug,
@@ -63,9 +62,8 @@ export const create = mutation({
     // Every account gets its float and earnings wallets at birth, even a
     // zero-credit one, so a later top-up is a balance change rather than a
     // first appearance. Wallets belong to the account alone: members get none.
-    // The opening grant is only promised here. It becomes a pending top-up so
-    // a second god has to approve it; nothing is minted by creating an account,
-    // bar a test grant, which is the explicit exception handled further down.
+    // The opening grant lands in the float right here, which is what makes it
+    // the account's starting balance rather than a promise.
     const { float } = await getPartnerWallets(ctx, accountId)
 
     // The `credits` row is opened alongside the wallets, at zero and already
@@ -82,34 +80,34 @@ export const create = mutation({
       actorTokenIdentifier: identity.tokenIdentifier
     })
 
-    if (initialCredits > 0) {
-      await createTopupRequest(ctx, {
-        accountId,
-        amount: initialCredits,
-        paymentReference: null,
-        note: 'Opening grant',
-        makerTokenIdentifier: identity.tokenIdentifier
-      })
-    }
+    // Both grants mint on the spot: no second god, no payment behind them, so
+    // the account is funded the moment it exists. This is the one place outside
+    // an approved top-up where credits come into existence, and the memo is
+    // what tells the opening grant and test money apart when the books are
+    // audited. The key is derived from the account, so a replay cannot mint
+    // twice.
+    const grants = [
+      { amount: initialCredits, memo: 'Opening grant', idempotencyKey: `initial-grant:${accountId}` },
+      { amount: testCredits, memo: 'Test credits', idempotencyKey: `test-grant:${accountId}` }
+    ].filter((grant) => grant.amount > 0)
 
-    // Test credits mint on the spot: no second god, no payment behind them, so
-    // a transfer can be exercised the moment the account exists. This is the
-    // one place outside an approved top-up where credits come into existence,
-    // and the memo is what tells that money apart when the books are audited.
-    if (testCredits > 0) {
+    if (grants.length > 0) {
       const issuance = await getSystemWallet(ctx, 'issuance')
-      await post(ctx, {
-        kind: 'mint',
-        idempotencyKey: `test-grant:${accountId}`,
-        actorTokenIdentifier: identity.tokenIdentifier,
-        accountId,
-        ref: null,
-        memo: 'Test credits',
-        legs: [
-          { walletId: issuance._id, bucket: 'available', amount: -testCredits },
-          { walletId: float._id, bucket: 'available', amount: testCredits }
-        ]
-      })
+
+      for (const { amount, memo, idempotencyKey } of grants) {
+        await post(ctx, {
+          kind: 'mint',
+          idempotencyKey,
+          actorTokenIdentifier: identity.tokenIdentifier,
+          accountId,
+          ref: null,
+          memo,
+          legs: [
+            { walletId: issuance._id, bucket: 'available', amount: -amount },
+            { walletId: float._id, bucket: 'available', amount }
+          ]
+        })
+      }
     }
 
     return accountId

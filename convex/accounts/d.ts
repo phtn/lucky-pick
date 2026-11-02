@@ -53,10 +53,10 @@ export const accountSchema = v.object({
   name: v.string(),
   status: accountStatusSchema,
   /**
-   * The grant the account was opened with, kept as a record of what was
-   * promised. It does not hold a balance: at creation a positive amount becomes
-   * a pending top-up request, and a second god must approve it before it
-   * reaches the partner's float wallet.
+   * The grant the account was opened with, kept as a record of what it started
+   * from. It is not itself a balance — the ledger holds that — but it is the
+   * amount minted into the partner's float at creation, so a new account is
+   * funded as created rather than waiting on a top-up approval.
    */
   initialCredits: accountInitialCreditsSchema,
   payoutDetails: accountPayoutDetailsSchema,
@@ -98,10 +98,10 @@ export const createAccountSchema = v.object({
   status: v.optional(v.literal('pending')),
   initialCredits: v.optional(accountInitialCreditsSchema),
   /**
-   * Credits minted into the account's float the moment it is created, so a
-   * transfer can be exercised without walking a top-up through maker-checker.
-   * It is the one path that moves a balance with no second god and no payment
-   * behind it, which is why it is named for what it is: a testing shortcut.
+   * Credits minted into the account's float alongside the opening grant, memoed
+   * as test money so the books tell the two apart. It buys a brand-new account
+   * a balance that was never meant to stand for anything paid for, which is why
+   * it is named for what it is: a testing shortcut.
    */
   testCredits: v.optional(v.number()),
   payoutDetails: v.optional(accountPayoutDetailsSchema),
@@ -113,9 +113,8 @@ export const createAccountSchema = v.object({
 
 /**
  * `initialCredits` is absent here on purpose: the opening grant is history once
- * the account exists, and changing it would leave the top-up request filed for
- * it (and any float it already minted) unexplained. Later credits go through
- * top-up requests.
+ * the account exists, and changing it would leave the float it already minted
+ * unexplained. Later credits go through top-up requests.
  */
 export const updateAccountSchema = v.object({
   name: v.optional(v.string()),

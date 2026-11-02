@@ -1,6 +1,9 @@
 import { ACCOUNT_STATUS_VALUES, formatAccountCredits, type AccountStatus } from '@/lib/accounts/accounts'
+import type { IconName } from '@/lib/icons'
+import { ASGARD_ACCOUNTS_ENDPOINT, asgardAccountEndpoint } from '@/lib/asgard/account-api'
 import type {
   AsgardAccountCreateResponse,
+  AsgardAccountDetailResponse,
   AsgardAccountListResponse,
   AsgardAccountSlugAvailabilityResponse
 } from '@/server/asgard-account-routes'
@@ -8,6 +11,12 @@ import type {
 // Type-only import: the Convex and Firebase Admin modules behind this response
 // never reach the client bundle.
 export type AccountRow = AsgardAccountListResponse['accounts'][number]
+
+/** One account and everything its page shows. */
+export type AccountDetail = AsgardAccountDetailResponse
+export type AccountWallet = NonNullable<AccountDetail['wallets']['float']>
+export type AccountLedgerEntry = AccountDetail['entries'][number]
+export type AccountTopup = AccountDetail['topups'][number]
 
 export type CreateAccountInput = {
   name: string
@@ -33,8 +42,6 @@ export type CreateAccountInput = {
   notes?: string
 }
 
-const ASGARD_ACCOUNTS_ENDPOINT = '/api/asgard/accounts'
-
 async function readError(response: Response, fallback: string) {
   try {
     const body: unknown = await response.json()
@@ -57,6 +64,15 @@ export function fetchAccounts(signal?: AbortSignal) {
     { signal },
     'Could not load the account roster.'
   )
+}
+
+/** One account's page. A 404 is a real answer here, so it reads as `null`. */
+export async function fetchAccount(slug: string, signal?: AbortSignal): Promise<AccountDetail | null> {
+  const response = await fetch(asgardAccountEndpoint(slug), { credentials: 'same-origin', signal })
+  if (response.status === 404) return null
+  if (!response.ok) throw new Error(await readError(response, 'Could not load this account.'))
+
+  return (await response.json()) as AccountDetail
 }
 
 export function checkAccountSlugAvailability(slug: string, signal?: AbortSignal) {
@@ -94,6 +110,14 @@ export const ACCOUNT_STATUS_LABEL: Record<AccountStatus, string> = {
 export const ACCOUNT_STATUS_FILTER_LABEL: Record<AccountStatusFilter, string> = {
   all: 'All',
   ...ACCOUNT_STATUS_LABEL
+}
+
+export const ACCOUNT_STATUS_ICON: Record<AccountStatus, IconName> = {
+  pending: 'clock',
+  confirmed: 'check-circle-fill',
+  active: 'check-circle-fill',
+  suspended: 'alert-triangle',
+  closed: 'close'
 }
 
 // Used with `Badge`'s `plain` variant so the whole status palette lives here
@@ -142,7 +166,8 @@ export const formatAccountCreditGrant = (account: AccountRow) => `${formatAccoun
 
 export const formatAccountDate = (value: number | null) => (value === null ? '—' : dateFormatter.format(value))
 
-export const getAccountInitials = (account: AccountRow) =>
+/** Takes the name alone, so the roster row and the account page share it. */
+export const getAccountInitials = (account: { name: string }) =>
   account.name
     .split(/\s+/)
     .filter(Boolean)

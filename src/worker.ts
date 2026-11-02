@@ -29,7 +29,12 @@ export default {
     if (pathname === ASGARD_SESSION_TOKEN_PATH) return handleAsgardSessionToken(request)
     if (pathname === ASGARD_SESSION_PATH) return handleAsgardSession(request)
     if (pathname === ASGARD_USERS_PATH) return handleAsgardUsers(request)
-    if (pathname === ASGARD_ACCOUNTS_PATH) return handleAsgardAccounts(request, { convexUrl: env.CONVEX_URL })
+    // The accounts endpoint has pages beneath it (one per account), so the
+    // whole subtree goes to its handler, which refuses the paths it does not
+    // serve rather than letting them fall through to the client shell.
+    if (pathname === ASGARD_ACCOUNTS_PATH || pathname.startsWith(`${ASGARD_ACCOUNTS_PATH}/`)) {
+      return handleAsgardAccounts(request, { convexUrl: env.CONVEX_URL })
+    }
 
     // Anything that is not an API route is the built client. A client route has
     // no file of its own, so an unknown navigation falls back to the shell and

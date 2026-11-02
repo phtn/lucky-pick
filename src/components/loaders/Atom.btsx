@@ -1,0 +1,65 @@
+import { type EasingProps, rotationCss, spinClass } from "@/lib/loaders/easing";
+import Frame, { cssVars, spinnerRoot, step } from "./Frame.btsx";
+import { SIZE, stagger, type SpinnerProps } from "@/lib/loaders/motion";
+module
+  interface AtomProps extends SpinnerProps, EasingProps {}
+  const ORBITS = Array.from({ length: 3 }, (_, index) => index);
+  const TILT = 180 / ORBITS.length;
+  const STROKE = `calc(${SIZE} * 0.055)`;
+  const INNER_STROKE = `calc(${SIZE} * 0.045)`;
+  const css = `
+  .ld-atom {
+    position: relative;
+    width: ${SIZE};
+    height: ${SIZE};
+  }
+
+  .ld-atom-shell {
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    border: ${STROKE} solid currentColor;
+    border-radius: 9999px;
+  }
+
+  .ld-atom-orbit {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+    transform: rotate(var(--ld-atom-tilt)) rotateX(90deg);
+  }
+
+  .ld-atom-ring {
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    border: ${INNER_STROKE} solid currentColor;
+    border-radius: 9999px;
+    transform: rotateX(90deg);
+  }
+
+  ${rotationCss("atom")}
+
+  .ld-atom-spin {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+    animation-delay: ${stagger("atom", ORBITS.length)};
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ld-atom-spin {
+      transform: rotate(${TILT}deg);
+    }
+  }
+  `;
+
+props { easing, ...rest }: AtomProps
+fragment
+  Frame(name="atom") #{css}
+  div({...spinnerRoot("atom", rest)})
+    .ld-atom-shell
+    each index in ORBITS key index
+      .ld-atom-orbit(style={cssVars({ "--ld-atom-tilt": `${index * TILT}deg` })})
+        div(className={spinClass("atom", easing)} style={step(index)})
+          .ld-atom-ring

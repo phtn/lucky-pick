@@ -1,0 +1,210 @@
+import { useEffect, useState } from 'octane'
+import { Link, useParams } from '@octanejs/tanstack-router'
+import StatusBadge from '@/components/asgard/status-badge.btsx'
+import Tabs from '@/components/ui/Tabs.btsx'
+import type { TabItem } from '@/components/ui/Tabs.btsx'
+import { Icon } from '@/lib/icons'
+import { cn } from '@/lib/utils'
+import { formatAccountCredits } from '@/lib/accounts/accounts'
+import { LEDGER_KIND_LABEL, TOPUP_STATUS_LABEL, TOPUP_STATUS_TONE, formatLedgerAmount, formatLedgerLabel, formatWalletAvailable } from '@/lib/asgard/account-detail'
+import { fetchAccount, formatAccountDate, formatContactName, getAccountInitials, type AccountDetail } from '@/lib/asgard/accounts'
+import { asgardAccountsPath } from '@/lib/asgard/console-paths'
+import { isAbortError, readErrorMessage } from '@/lib/asgard/errors'
+
+module
+  type Status = 'loading' | 'ready' | 'missing' | 'error'
+
+  const tabs: TabItem[] = [
+    { id: 'record', label: 'Record' },
+    { id: 'ledger', label: 'Ledger' },
+    { id: 'topups', label: 'Top-ups' }
+  ]
+
+  const readingLabelClass = 'font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground'
+  const chipClass = 'rounded-xs border px-1.5 py-0.5 font-mono text-2xs uppercase tracking-wider'
+  const panelClass = 'rounded-lg border border-sidebar-border bg-foreground/[0.015]'
+  const blockClass = 'grid min-h-[50vh] place-items-center px-6 text-center'
+
+  /** A row of the record: a label and whatever the account has, or an em dash. */
+  export { Reading }
+
+  /**
+   * Whether the primary contact has signed in decides who may move this
+   * account's money, so the record states it rather than implying it from the
+   * fields around it.
+   *
+   * A ledger row shows its transaction's kind beside the memo that replaced
+   * it, so a labelled movement still says what sort of movement it was.
+   */
+
+component Reading
+  props { label, value }: { label: string; value: string | null }
+  div(className='flex flex-wrap items-baseline justify-between gap-2 px-3 py-2.5')
+    span(className={readingLabelClass}) #{label}
+    span(className='min-w-0 truncate text-right text-sm text-foreground') #{value || '—'}
+
+component WalletTile
+  props { label, value, detail }: { label: string; value: string; detail: string }
+  div(className={cn(panelClass, 'px-3.5 py-3')})
+    p(className={readingLabelClass}) #{label}
+    p(className='mt-1.5 font-mono text-xl leading-none text-foreground') #{value}
+    p(className='mt-1.5 font-mono text-2xs text-muted-foreground') #{detail}
+
+component RecordTab
+  props { detail }: { detail: AccountDetail }
+  setup
+    const { account } = detail
+    const { primaryContact: contact, payoutDetails: payout } = account
+
+  div(className='grid gap-4 lg:grid-cols-2')
+    section(className={panelClass})
+      h2(className={cn(readingLabelClass, 'border-b border-dashed border-sidebar-border px-3 py-2.5')}) Account
+      div(className='divide-y divide-dashed divide-sidebar-border')
+        Reading(label='Slug' value={account.slug})
+        Reading(label='Opening grant' value={`${formatAccountCredits(account.initialCredits)} CR`})
+        Reading(label='Billing email' value={account.billingEmail})
+        Reading(label='Created' value={formatAccountDate(account.createdAt)})
+        Reading(label='Updated' value={formatAccountDate(account.updatedAt)})
+        if account.closedAt
+          Reading(label='Closed' value={formatAccountDate(account.closedAt)})
+        if account.closedAt
+          Reading(label='Close reason' value={account.closeReason})
+
+    section(className={panelClass})
+      h2(className={cn(readingLabelClass, 'border-b border-dashed border-sidebar-border px-3 py-2.5')}) Primary contact
+      div(className='divide-y divide-dashed divide-sidebar-border')
+        Reading(label='Name' value={contact.name})
+        Reading(label='Email' value={contact.email})
+        Reading(label='Phone' value={contact.phone})
+        Reading(label='Title' value={contact.title})
+        Reading(label='Signed in' value={contact.tokenIdentifier ? 'Linked' : 'Not yet'})
+
+    section(className={cn(panelClass, 'lg:col-span-2')})
+      h2(className={cn(readingLabelClass, 'border-b border-dashed border-sidebar-border px-3 py-2.5')}) Payout
+      div(className='divide-y divide-dashed divide-sidebar-border')
+        Reading(label='Bank or wallet' value={payout.bankOrWallet ?? null})
+        Reading(label='Account name' value={payout.accountName ?? null})
+        Reading(label='Account number' value={payout.accountNumber ?? null})
+        Reading(label='Notes' value={payout.notes ?? null})
+        Reading(label='Account notes' value={account.notes})
+
+component LedgerTab
+  props { detail }: { detail: AccountDetail }
+  if detail.entries.length === 0
+    p(className='rounded-lg border border-dashed border-sidebar-border px-4 py-10 text-center text-sm text-muted-foreground') This account’s float has not moved yet.
+  else
+    ul(className={cn(panelClass, 'divide-y divide-dashed divide-sidebar-border overflow-hidden')})
+      each entry in detail.entries key entry._id
+        li(className='flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5')
+          span(className='w-24 shrink-0 font-mono text-2xs text-muted-foreground') #{formatAccountDate(entry.createdAt)}
+          span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{formatLedgerLabel(entry)}
+          if entry.memo?.trim()
+            span(className='hidden shrink-0 font-mono text-2xs text-muted-foreground md:inline') #{LEDGER_KIND_LABEL[entry.kind]}
+          if entry.bucket === 'held'
+            span(className={cn(chipClass, 'shrink-0 border-border/60 text-muted-foreground')}) Held
+          span(className={cn('w-24 shrink-0 text-right font-mono text-sm', entry.amount < 0 ? 'text-destructive' : 'text-chart-positive')}) #{formatLedgerAmount(entry.amount)}
+          span(className='hidden w-24 shrink-0 text-right font-mono text-2xs text-muted-foreground lg:inline') #{entry.balanceAfter.toLocaleString('en-US')}
+
+component TopupsTab
+  props { detail }: { detail: AccountDetail }
+  if detail.topups.length === 0
+    p(className='rounded-lg border border-dashed border-sidebar-border px-4 py-10 text-center text-sm text-muted-foreground') No top-up has been filed for this account.
+  else
+    ul(className={cn(panelClass, 'divide-y divide-dashed divide-sidebar-border overflow-hidden')})
+      each topup in detail.topups key topup._id
+        li(className='flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5')
+          span(className='w-24 shrink-0 font-mono text-2xs text-muted-foreground') #{formatAccountDate(topup.createdAt)}
+          span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{topup.paymentReference || topup.note || 'No reference'}
+          span(className={cn(chipClass, 'shrink-0', TOPUP_STATUS_TONE[topup.status])}) #{TOPUP_STATUS_LABEL[topup.status]}
+          span(className='w-24 shrink-0 text-right font-mono text-sm text-foreground') #{topup.amount.toLocaleString('en-US')}
+
+setup
+  // `strict: false` because this console builds its route tree by hand rather
+  // than from generated files, so the param is not statically known here.
+  const params = useParams({ strict: false }) as { slug?: string }
+  const slug = params.slug ?? ''
+  const rosterPath = asgardAccountsPath(typeof window === 'undefined' ? '' : window.location.hostname)
+
+  const [detail, setDetail] = useState<AccountDetail | null>(null)
+  const [status, setStatus] = useState<Status>('loading')
+  const [error, setError] = useState<string | null>(null)
+  const [activeId, setActiveId] = useState('record')
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    setStatus('loading')
+    fetchAccount(slug, controller.signal)
+      .then((response) => {
+        setDetail(response)
+        setError(null)
+        // A slug with no account behind it is an answer, not a failure: the
+        // page says so rather than offering a retry that cannot help.
+        setStatus(response === null ? 'missing' : 'ready')
+      })
+      .catch((caught: unknown) => {
+        if (isAbortError(caught)) return
+        setError(readErrorMessage(caught, 'Could not load this account.'))
+        setStatus('error')
+      })
+
+    return () => controller.abort()
+  }, [slug])
+
+section(className='flex min-h-0 flex-col')
+  header(className='asgard-topbar')
+    div(className='flex min-w-0 items-center gap-3')
+      Link(
+        ~ to={rosterPath}
+        ~ aria-label='Back to the account roster'
+        ~ className='grid size-7 shrink-0 place-items-center rounded-full border border-sidebar-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'
+        ~ )
+        Icon(name='chevron-right' size={13} className='rotate-180')
+      if detail
+        span(className='grid size-7 shrink-0 place-items-center font-mono text-sm text-muted-foreground') #{getAccountInitials(detail.account)}
+      div(className='min-w-0')
+        h1(className='truncate font-sans text-base font-[450] leading-none tracking-tight text-foreground') #{detail?.account.name ?? slug}
+        if detail
+          p(className='mt-1 truncate font-mono text-xs text-muted-foreground') #{detail.account.slug} · #{formatContactName(detail.account.primaryContact.name)}
+    if detail
+      StatusBadge(status={detail.account.status})
+
+  if status === 'ready' && detail
+    fragment
+      div(className='asgard-topbar-tabs')
+        Tabs(activeId={activeId} items={tabs} onSelect={setActiveId} label='Account sections')
+
+      div(className='grid gap-4 px-4 pt-4 pb-16 md:px-6')
+        div(className='grid gap-3 sm:grid-cols-2')
+          WalletTile(
+            ~ label='Float'
+            ~ value={formatWalletAvailable(detail.wallets.float)}
+            ~ detail={detail.wallets.float ? `${detail.wallets.float.held.toLocaleString('en-US')} held · ${detail.wallets.float.status}` : 'No float wallet'}
+            ~ )
+          WalletTile(
+            ~ label='Earnings'
+            ~ value={formatWalletAvailable(detail.wallets.earnings)}
+            ~ detail={detail.wallets.earnings ? `${detail.wallets.earnings.held.toLocaleString('en-US')} held · ${detail.wallets.earnings.status}` : 'No earnings wallet'}
+            ~ )
+
+        if activeId === 'record'
+          RecordTab(detail={detail})
+        elseif activeId === 'ledger'
+          LedgerTab(detail={detail})
+        else
+          TopupsTab(detail={detail})
+  elseif status === 'loading'
+    div(className={blockClass})
+      Icon(name='spinner' size={18} className='animate-spin text-muted-foreground')
+  elseif status === 'missing'
+    div(className={blockClass})
+      div(className='flex max-w-sm flex-col items-center gap-3')
+        div(className='grid size-9 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
+          Icon(name='account' size={16})
+        p(className='text-sm text-foreground') No account has the slug “#{slug}”.
+        Link(to={rosterPath} className='font-mono text-xs text-muted-foreground underline hover:text-foreground') Back to the roster
+  else
+    div(className={blockClass})
+      div(className='flex max-w-sm flex-col items-center gap-3')
+        p(className='text-sm text-destructive') #{error ?? 'Could not load this account.'}
+        Link(to={rosterPath} className='font-mono text-xs text-muted-foreground underline hover:text-foreground') Back to the roster

@@ -71,14 +71,14 @@ test('a test grant mints into float at creation, with no request to approve', as
   expect(await t.run((ctx) => auditWallets(ctx))).toEqual({ total: 0, mismatched: [] })
 })
 
-test('a custom opening grant off the ladder is accepted and filed as a request', async () => {
+test('a custom opening grant off the ladder is accepted and minted', async () => {
   const t = makeT()
   const accountId = await create(t, { initialCredits: 73_500 })
 
-  const { account, requests } = await snapshot(t, accountId)
+  const { account, requests, wallets } = await snapshot(t, accountId)
   expect(account!.initialCredits).toBe(73_500)
-  expect(requests).toHaveLength(1)
-  expect(requests[0]).toMatchObject({ status: 'pending', amount: 73_500 })
+  expect(requests).toEqual([])
+  expect(wallets.find((w) => w.kind === 'partnerFloat')!.available).toBe(73_500)
 })
 
 test('an opening grant past the top-up ceiling is refused', async () => {
@@ -92,44 +92,39 @@ test('an opening grant past the top-up ceiling is refused', async () => {
   )
 })
 
-test('opening grant is pending and creator cannot approve it', async () => {
+test('the opening grant is the float balance the account starts with', async () => {
   const t = makeT()
-  const accountId = await create(t, { initialCredits: 50_000 })
+  const accountId = await create(t, { initialCredits: 50_000, testCredits: 5_000 })
 
   const { account, requests, wallets } = await snapshot(t, accountId)
   expect(account!.initialCredits).toBe(50_000)
-  expect(requests).toHaveLength(1)
-  expect(requests[0]).toMatchObject({
-    status: 'pending',
-    amount: 50_000,
-    note: 'Opening grant',
-    paymentReference: null,
-    makerTokenIdentifier: god.tokenIdentifier
-  })
-  expect(wallets.find((w) => w.kind === 'partnerFloat')!.available).toBe(0)
+  // Nothing waits on a second god: the grant is minted, not promised.
+  expect(requests).toEqual([])
+  expect(wallets.find((w) => w.kind === 'partnerFloat')!.available).toBe(55_000)
+  expect(wallets.find((w) => w.kind === 'partnerEarnings')!.available).toBe(0)
 
-  await expect(t.withIdentity(god).mutation(api.money.topups.approve, { id: requests[0]._id })).rejects.toThrow(
-    'A top-up must be approved by someone other than the god who requested it.'
+  // Both grants land as their own transaction, so the memos keep the opening
+  // grant and the test money apart in the books.
+  const memos = await t.run(async (ctx) =>
+    (await ctx.db.query('ledgerTransactions').collect()).map((txn) => txn.memo).sort()
   )
-
-  await t.withIdentity(godB).mutation(api.money.topups.approve, { id: requests[0]._id })
-  const after = await snapshot(t, accountId)
-  expect(after.wallets.find((w) => w.kind === 'partnerFloat')!.available).toBe(50_000)
+  expect(memos).toEqual(['Opening grant', 'Test credits'])
   expect(await t.run((ctx) => auditWallets(ctx))).toEqual({ total: 0, mismatched: [] })
 })
 
-test('create with 0 credits files no request', async () => {
+test('create with 0 credits mints nothing', async () => {
   const t = makeT()
   const accountId = await create(t, { initialCredits: 0 })
 
-  expect((await snapshot(t, accountId)).requests).toEqual([])
+  const { requests, wallets } = await snapshot(t, accountId)
+  expect(requests).toEqual([])
+  expect(wallets.every((w) => w.available === 0)).toBe(true)
 })
 
 test('remove refuses with ledger history', async () => {
   const t = makeT()
+  // An opening grant is ledger history the moment the account exists.
   const accountId = await create(t, { initialCredits: 50_000 })
-  const [request] = (await snapshot(t, accountId)).requests
-  await t.withIdentity(godB).mutation(api.money.topups.approve, { id: request._id })
 
   await expect(t.withIdentity(topg).mutation(api.accounts.m.remove, { id: accountId })).rejects.toThrow(
     'This account has ledger history and cannot be deleted. Close it instead.'
@@ -165,7 +160,10 @@ test('remove refuses when the account has a user wallet', async () => {
 
 test('remove deletes an unfunded account with its wallets and unapproved requests', async () => {
   const t = makeT()
-  const accountId = await create(t, { initialCredits: 5_000 })
+  const accountId = await create(t)
+  await t
+    .withIdentity(god)
+    .mutation(api.money.topups.request, { accountId, amount: 5_000, paymentReference: 'ref-1' })
   expect((await snapshot(t, accountId)).requests).toHaveLength(1)
   // A cancelled one alongside the pending one.
   await t.run(async (ctx) => {

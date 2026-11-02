@@ -221,3 +221,46 @@ test('system wallets cannot be frozen', async () => {
     t.withIdentity(god).mutation(api.ledger.m.setWalletStatus, { walletId: issuance, status: 'frozen' })
   ).rejects.toThrow('System wallets cannot be frozen.')
 })
+
+test('partnerFloatHistory labels each movement with its transaction, newest first', async () => {
+  const { t, accountA, issuance, floatA } = await setup()
+
+  // A second, labelled mint on top of the unlabelled one `setup` posts.
+  await t.run((ctx) =>
+    post(ctx, {
+      kind: 'mint',
+      idempotencyKey: 'mint:2',
+      actorTokenIdentifier: god.tokenIdentifier,
+      accountId: accountA,
+      ref: null,
+      memo: 'Opening grant',
+      legs: [
+        { walletId: issuance, bucket: 'available', amount: -300 },
+        { walletId: floatA, bucket: 'available', amount: 300 }
+      ]
+    })
+  )
+
+  const history = await t.withIdentity(staff).query(api.ledger.q.partnerFloatHistory, { accountId: accountA })
+
+  expect(history.map((movement) => movement.amount)).toEqual([300, 500])
+  expect(history[0]).toMatchObject({ kind: 'mint', memo: 'Opening grant', balanceAfter: 800 })
+  // The memo is the transaction's, so an unlabelled one reads as null rather than blank.
+  expect(history[1]).toMatchObject({ kind: 'mint', memo: null, balanceAfter: 500 })
+})
+
+test('partnerFloatHistory is empty for an account whose float has never moved', async () => {
+  const { t, accountB } = await setup()
+
+  expect(await t.withIdentity(staff).query(api.ledger.q.partnerFloatHistory, { accountId: accountB })).toEqual([])
+})
+
+test('partnerFloatHistory: the manager and staff read, everyone else is refused', async () => {
+  const { t, accountA } = await setup()
+
+  expect(await t.withIdentity(ana).query(api.ledger.q.partnerFloatHistory, { accountId: accountA })).toHaveLength(1)
+  await expect(t.query(api.ledger.q.partnerFloatHistory, { accountId: accountA })).rejects.toThrow('Unauthorized.')
+  await expect(t.withIdentity(ben).query(api.ledger.q.partnerFloatHistory, { accountId: accountA })).rejects.toThrow(
+    'Unauthorized.'
+  )
+})

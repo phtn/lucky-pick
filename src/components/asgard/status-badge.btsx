@@ -1,0 +1,25 @@
+import Badge from '@/components/ui/badge.btsx'
+import { Icon } from '@/lib/icons'
+import { cn } from '@/lib/utils'
+import type { AccountStatus } from '@/lib/accounts/accounts'
+import { ACCOUNT_STATUS_ICON, ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE } from '@/lib/asgard/accounts'
+
+module
+  /**
+   * An account's status, as a word where there is room and an icon where there
+   * is not. Both are rendered and one is hidden by breakpoint rather than
+   * measured, so the roster's rows never reflow as the panel is resized.
+   */
+  export interface StatusBadgeProps {
+    status: AccountStatus
+  }
+
+props { status }: StatusBadgeProps
+
+span(
+  ~ className={cn('inline-flex size-6 shrink-0 items-center justify-center rounded-xs border md:hidden', ACCOUNT_STATUS_TONE[status])}
+  ~ title={ACCOUNT_STATUS_LABEL[status]}
+  ~ )
+  Icon(name={ACCOUNT_STATUS_ICON[status]} size={13})
+  span(className='sr-only') #{ACCOUNT_STATUS_LABEL[status]}
+Badge(variant='plain' className={cn('hidden! rounded-xs border font-mono text-2xs uppercase tracking-wider md:inline-flex!', ACCOUNT_STATUS_TONE[status])}) #{ACCOUNT_STATUS_LABEL[status]}

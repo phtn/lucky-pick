@@ -1,4 +1,5 @@
 import { isAccountCreditAmount } from '@/lib/accounts/accounts'
+import { readAsgardAccountRoute } from '@/lib/asgard/account-api'
 import { AdminIdTokenError, mintAdminIdToken } from '@/lib/firebase-admin/admin-id-token'
 import { getFirebaseAdminAuth } from '@/lib/firebase-admin/admin'
 import { getVerifiedGodSession } from '@/lib/firebase-admin/server-auth'
@@ -19,7 +20,17 @@ export type AsgardAccountCreateResponse = AsgardAccountListResponse
 
 export type AsgardAccountSlugAvailabilityResponse = Awaited<ReturnType<typeof checkAccountSlugAvailability>>
 
+export type AsgardAccountDetailResponse = NonNullable<Awaited<ReturnType<typeof loadAccountDetail>>>
+
 const ACCOUNT_LIST_LIMIT = 250
+
+/**
+ * How much history one account page carries. The console shows the recent life
+ * of an account, not its whole ledger: an operator who needs more goes to the
+ * ledger itself. All of it is read in one request, so none of it is paginated.
+ */
+const ACCOUNT_TOPUP_LIMIT = 50
+const ACCOUNT_ENTRY_LIMIT = 50
 
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { 'cache-control': 'no-store' } })
@@ -58,6 +69,29 @@ const listAccounts = (client: AsgardConvexClient) =>
 
 const checkAccountSlugAvailability = (client: AsgardConvexClient, slug: string) =>
   client.query(api.accounts.q.checkSlugAvailability, { slug })
+
+/**
+ * Everything one account page shows, in a single request: the record, the two
+ * partner wallets, the account's top-up history, and the float's recent
+ * movements. `null` means no such account, which the caller answers with a 404.
+ *
+ * `partnerWallets` is the read that does not create, so opening a console page
+ * never writes. Every account has held both wallets since it was created, so a
+ * `null` float means a record that predates them, not an empty one.
+ */
+async function loadAccountDetail(client: AsgardConvexClient, slug: string) {
+  const account = await client.query(api.accounts.q.getBySlug, { slug })
+  if (!account) return null
+
+  // All three take only the account id, and none waits on the others.
+  const [wallets, topups, entries] = await Promise.all([
+    client.query(api.ledger.q.partnerWallets, { accountId: account._id }),
+    client.query(api.money.topups.list, { accountId: account._id, limit: ACCOUNT_TOPUP_LIMIT }),
+    client.query(api.ledger.q.partnerFloatHistory, { accountId: account._id, limit: ACCOUNT_ENTRY_LIMIT })
+  ])
+
+  return { account, wallets, topups, entries }
+}
 
 const asTrimmedString = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 
@@ -152,6 +186,7 @@ function handleRouteError(error: unknown, fallback: string) {
 /**
  * `GET /api/asgard/accounts` — every account and its status.
  * `GET /api/asgard/accounts?slug=…` — validate one prospective slug.
+ * `GET /api/asgard/accounts/:slug` — one account, its wallets, top-ups and float history.
  * `POST /api/asgard/accounts` — provision a new account.
  */
 export async function handleAsgardAccounts(
@@ -159,7 +194,18 @@ export async function handleAsgardAccounts(
   environment: AsgardAccountRouteEnvironment = {}
 ): Promise<Response> {
   if (!isAsgardRequest(request)) return json({ error: 'Not found.' }, 404)
+
+  // A path this endpoint does not serve, or a segment that could not be a
+  // slug, is refused before the session is read: there is nothing here to
+  // authorize access to.
+  const route = readAsgardAccountRoute(new URL(request.url).pathname)
+  if (route.kind === 'unknown') return json({ error: 'Not found.' }, 404)
+
   if (request.method !== 'GET' && request.method !== 'POST') {
+    return json({ error: 'Method not allowed.' }, 405)
+  }
+  // Only the roster endpoint provisions accounts; one account's page is a read.
+  if (request.method === 'POST' && route.kind === 'account') {
     return json({ error: 'Method not allowed.' }, 405)
   }
   if (request.method === 'POST' && !isSameOriginRequest(request)) {
@@ -177,6 +223,11 @@ export async function handleAsgardAccounts(
     const client = await getAsgardConvexClient(session, environment)
 
     if (request.method === 'GET') {
+      if (route.kind === 'account') {
+        const detail = await loadAccountDetail(client, route.slug)
+        return detail ? json(detail) : json({ error: 'Account not found.' }, 404)
+      }
+
       const slug = new URL(request.url).searchParams.get('slug')
       if (slug !== null) return json(await checkAccountSlugAvailability(client, slug))
       return json({ accounts: await listAccounts(client) })
@@ -201,7 +252,11 @@ export async function handleAsgardAccounts(
   } catch (error) {
     return handleRouteError(
       error,
-      request.method === 'POST' ? 'Unable to create the account.' : 'Unable to load accounts.'
+      request.method === 'POST'
+        ? 'Unable to create the account.'
+        : route.kind === 'account'
+          ? 'Unable to load this account.'
+          : 'Unable to load accounts.'
     )
   }
 }

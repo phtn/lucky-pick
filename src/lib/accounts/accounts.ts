@@ -22,8 +22,8 @@ export const DEFAULT_ACCOUNT_CREDITS = 0
 
 /**
  * Any credit amount the console may send, a rung or a hand-typed one. Capped at
- * `MAX_TOPUP_CREDITS` because an opening grant becomes a top-up request: an
- * amount that flow would refuse must not be accepted here either.
+ * `MAX_TOPUP_CREDITS` so a grant made at creation cannot exceed what the
+ * top-up flow would ever mint in one go.
  */
 export const isAccountCreditAmount = (value: number) =>
   Number.isSafeInteger(value) && value >= 0 && value <= MAX_TOPUP_CREDITS

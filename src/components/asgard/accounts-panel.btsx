@@ -1,20 +1,22 @@
 import { useEffect, useState } from 'octane'
-import { Icon, type IconName } from '@/lib/icons'
-import Badge from '@/components/ui/badge.btsx'
+import { Icon } from '@/lib/icons'
 import Button from '@/components/ui/button.btsx'
 import Input from '@/components/ui/input.btsx'
 import Step from '@/components/asgard/account-step.btsx'
+import StatusBadge from '@/components/asgard/status-badge.btsx'
 import AccountsSkeleton from '@/components/asgard/accounts-skeleton.btsx'
 import { cn } from '@/lib/utils'
 import { debounce, parseAsBoolean, parseAsString, parseAsStringLiteral, throttle, useQueryStates } from '@octanejs/nuqs'
+import { Link } from '@octanejs/tanstack-router'
 import { useField, useSelector } from '@octanejs/tanstack-form'
 import { getGodUserLabel, searchUsers, type GodUser } from '@/lib/asgard/gods-users'
-import { ACCOUNT_CREDIT_OPTIONS, formatAccountCredits, isAccountCreditOption, isAccountEmailAddress, toAccountSlug, type AccountCreditOption, type AccountStatus } from '@/lib/accounts/accounts'
+import { ACCOUNT_CREDIT_OPTIONS, formatAccountCredits, isAccountCreditOption, isAccountEmailAddress, toAccountSlug, type AccountCreditOption } from '@/lib/accounts/accounts'
 import { MAX_TOPUP_CREDITS } from '@/lib/money/credits'
 import { ENTER_CLASS, errorTextClassName, fieldLabelClassName, type StepState } from '@/lib/asgard/step-flow'
 import { isAbortError, readErrorMessage } from '@/lib/asgard/errors'
-import { ACCOUNT_FORM_DEFAULTS, readValidationMessage, resolveAccountSlug, useAccountDraft, useAccountForm, validateAccountForm, validateAccountSlug, type AccountForm, type AccountTextField } from '@/lib/asgard/account-form'
-import { ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE, ACCOUNT_STATUS_FILTERS, checkAccountSlugAvailability, createAccount, fetchAccounts, formatAccountCreditGrant, formatContactName, getAccountInitials, matchesAccountQuery, type AccountRow } from '@/lib/asgard/accounts'
+import { ACCOUNT_FORM_DEFAULTS, readValidationMessage, resolveAccountSlug, useAccountDraft, useAccountForm, validateAccountForm, validateAccountSlug, type AccountCreditField, type AccountForm, type AccountTextField } from '@/lib/asgard/account-form'
+import { ACCOUNT_STATUS_FILTERS, checkAccountSlugAvailability, createAccount, fetchAccounts, formatAccountCreditGrant, formatContactName, getAccountInitials, matchesAccountQuery, type AccountRow } from '@/lib/asgard/accounts'
+import { asgardAccountPath } from '@/lib/asgard/console-paths'
 
 module
   type RosterStatus = 'loading' | 'ready' | 'error'
@@ -47,14 +49,6 @@ module
   const actionButtonClassName =
     'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border border-border/50 px-2.5 font-mono text-xs uppercase tracking-wide text-muted-foreground transition-colors hover:bg-accent'
 
-  const ACCOUNT_STATUS_ICON: Record<AccountStatus, IconName> = {
-    pending: 'clock',
-    confirmed: 'check-circle-fill',
-    active: 'check-circle-fill',
-    suspended: 'alert-triangle',
-    closed: 'close'
-  }
-
   interface TextFieldProps {
     form: AccountForm
     name: AccountTextField
@@ -68,6 +62,18 @@ module
     feedback?: string | null
     feedbackTone?: 'error' | 'muted' | 'pending' | 'success'
   }
+
+  interface CreditAmountFieldProps {
+    form: AccountForm
+    name: AccountCreditField
+    label: string
+    /** Shown under the chips until the field has an error of its own to report. */
+    hint?: string
+  }
+
+  const OPENING_GRANT_HINT = 'Minted into the float wallet the moment the account exists, so it opens with this balance.'
+  const TEST_CREDITS_HINT =
+    'Minted alongside the opening grant and memoed as test money, so a transfer can be exercised without anything paid for behind it.'
 
   type SlugAvailabilityState =
     | { status: 'idle'; slug: string; message: null }
@@ -97,13 +103,6 @@ module
     const next = Number.parseInt((event.currentTarget as HTMLInputElement).value, 10)
     return Number.isNaN(next) ? 0 : next
   }
-
-component StatusBadge
-  props { status }: { status: AccountStatus }
-  span(className={cn('inline-flex size-6 shrink-0 items-center justify-center rounded-xs border md:hidden', ACCOUNT_STATUS_TONE[status])} title={ACCOUNT_STATUS_LABEL[status]})
-    Icon(name={ACCOUNT_STATUS_ICON[status]} size={13})
-    span(className='sr-only') #{ACCOUNT_STATUS_LABEL[status]}
-  Badge(variant='plain' className={cn('hidden! rounded-xs border font-mono text-2xs uppercase tracking-wider md:inline-flex!', ACCOUNT_STATUS_TONE[status])}) #{ACCOUNT_STATUS_LABEL[status]}
 
 component TextField
   props { form, name, label, type = 'text', placeholder, required = false, className, onEdit, feedback, feedbackTone = 'muted' }: TextFieldProps
@@ -144,26 +143,30 @@ component TextField
           Icon(name='spinner' size={12} className='animate-spin')
         span #{visibleMessage}
 
-component CreditsField
-  props { form }: { form: AccountForm }
+component CreditAmountField
+  props { form, name, label, hint }: CreditAmountFieldProps
   setup
     // The ladder is a row of shortcuts, not the whole policy: `Custom` opens a
     // free amount for a grant the rungs do not cover. Which control is showing
     // is local state rather than derived from the value, so a custom amount
     // that happens to land on a rung does not snap back to the chips mid-edit.
-    const field = useField({ form, name: 'initialCredits' })
-    const testField = useField({ form, name: 'testCredits' })
+    const field = useField({ form, name })
     const [isCustom, setIsCustom] = useState(() => !isAccountCreditOption(field.state.value))
 
-    const creditsMessage = creditsFieldMessage(field.state.meta)
-    const testMessage = creditsFieldMessage(testField.state.meta)
+    const controlId = `account-${name}`
+    const errorId = `${controlId}-error`
+    const message = creditsFieldMessage(field.state.meta)
+    // One line under the field, so the hint gives way to the error rather than
+    // the two stacking up.
+    const visibleMessage = message ?? hint ?? null
 
     const chooseOption = (option: AccountCreditOption) => {
       setIsCustom(false)
       field.handleChange(option)
     }
 
-  div(className={cn('grid gap-3', ENTER_CLASS)})
+  div(className='grid gap-1.5')
+    span(className={fieldLabelClassName}) #{label}
     div(className='flex flex-wrap gap-1.5')
       each option in ACCOUNT_CREDIT_OPTIONS key option
         button(
@@ -182,10 +185,10 @@ component CreditsField
         | Custom
 
     if isCustom
-      label(className={cn('flex flex-col gap-1.5', ENTER_CLASS)} htmlFor='account-initialCredits')
+      label(className={cn('mt-1.5 flex flex-col gap-1.5', ENTER_CLASS)} htmlFor={controlId})
         span(className={fieldLabelClassName}) Custom amount
         Input(
-          ~ id='account-initialCredits'
+          ~ id={controlId}
           ~ type='number'
           ~ min={0}
           ~ max={MAX_TOPUP_CREDITS}
@@ -194,36 +197,21 @@ component CreditsField
           ~ autoComplete='off'
           ~ placeholder='0'
           ~ value={String(field.state.value)}
-          ~ aria-invalid={creditsMessage !== null}
-          ~ aria-describedby={creditsMessage === null ? undefined : 'account-initialCredits-error'}
+          ~ aria-invalid={message !== null}
+          ~ aria-describedby={visibleMessage === null ? undefined : errorId}
           ~ onBlur={field.handleBlur}
           ~ onInput={(event: Event) => field.handleChange(readCreditAmount(event))}
           ~ )
-        if creditsMessage
-          p(id='account-initialCredits-error' className={cn('mt-1.5', errorTextClassName)} aria-live='polite') #{creditsMessage}
 
-    div(className='grid gap-1.5 border-t border-dotted border-border/60 pt-3')
-      label(className='flex flex-col gap-1.5' htmlFor='account-testCredits')
-        span(className={fieldLabelClassName}) Test credits
-        Input(
-          ~ id='account-testCredits'
-          ~ type='number'
-          ~ min={0}
-          ~ max={MAX_TOPUP_CREDITS}
-          ~ step={1}
-          ~ inputMode='numeric'
-          ~ autoComplete='off'
-          ~ placeholder='0'
-          ~ value={String(testField.state.value)}
-          ~ aria-invalid={testMessage !== null}
-          ~ aria-describedby={testMessage === null ? undefined : 'account-testCredits-error'}
-          ~ onBlur={testField.handleBlur}
-          ~ onInput={(event: Event) => testField.handleChange(readCreditAmount(event))}
-          ~ )
-      if testMessage
-        p(id='account-testCredits-error' className={cn('mt-0.5', errorTextClassName)} aria-live='polite') #{testMessage}
-      else
-        p(className='font-mono text-2xs text-muted-foreground') Minted into the float wallet on creation, with no approval behind it, so a transfer can be exercised right away.
+    if visibleMessage
+      p(id={errorId} className={cn('font-mono text-2xs', message ? errorTextClassName : 'text-muted-foreground')} aria-live='polite') #{visibleMessage}
+
+component CreditsField
+  props { form }: { form: AccountForm }
+  div(className={cn('grid gap-3', ENTER_CLASS)})
+    CreditAmountField(form={form} name='initialCredits' label='Opening grant' hint={OPENING_GRANT_HINT})
+    div(className='border-t border-dotted border-border/60 pt-3')
+      CreditAmountField(form={form} name='testCredits' label='Test credits' hint={TEST_CREDITS_HINT})
 
 component AccountIdentity
   props { account }: { account: AccountRow }
@@ -621,6 +609,9 @@ component CreateAccountForm
           Icon(name='check' size={14})
 
 setup
+  // Which host the console is on decides where its pages live, so every row's
+  // link has to be built rather than written out.
+  const consoleHostname = typeof window === 'undefined' ? '' : window.location.hostname
   const [accounts, setAccounts] = useState<AccountRow[]>([])
   const [rosterStatus, setRosterStatus] = useState<RosterStatus>('loading')
   const [rosterError, setRosterError] = useState<string | null>(null)
@@ -733,10 +724,14 @@ div(className='w-full')
         else
           ul(className='divide-y divide-dashed divide-sidebar-border overflow-hidden rounded-lg border border-sidebar-border')
             each account in visibleAccounts key account._id
-              li(className='flex flex-wrap items-center justify-between gap-3 bg-foreground/[0.015] px-1.5 py-4 transition-colors hover:bg-accent md:px-3')
-                AccountIdentity(account={account})
-                div(className='flex min-w-0 flex-1 items-center justify-end md:gap-4')
-                  span(className='hidden truncate font-mono text-xs text-muted-foreground') #{account.primaryContact.email}
-                  span(className='hidden shrink-0 font-mono text-xs text-muted-foreground lg:inline') #{formatAccountCreditGrant(account)}
-                  StatusBadge(status={account.status})
-                  Icon(name='chevron-right' size={12} className='shrink-0 text-muted-foreground')
+              li(className='bg-foreground/[0.015] transition-colors hover:bg-accent')
+                Link(
+                  ~ to={asgardAccountPath(consoleHostname, account.slug)}
+                  ~ className='flex flex-wrap items-center justify-between gap-3 px-1.5 py-4 md:px-3'
+                  ~ )
+                  AccountIdentity(account={account})
+                  div(className='flex min-w-0 flex-1 items-center justify-end md:gap-4')
+                    span(className='hidden truncate font-mono text-xs text-muted-foreground') #{account.primaryContact.email}
+                    span(className='hidden shrink-0 font-mono text-xs text-muted-foreground lg:inline') #{formatAccountCreditGrant(account)}
+                    StatusBadge(status={account.status})
+                    Icon(name='chevron-right' size={12} className='shrink-0 text-muted-foreground')
