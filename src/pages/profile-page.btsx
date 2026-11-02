@@ -4,7 +4,7 @@ import { Distribution, Masthead, Panel, StatTile } from '@/components/overview'
 import { useConvexQuery } from '@/hooks/use-convex-query'
 import { formatLedgerAmount, formatLedgerLabel } from '@/lib/asgard/account-detail'
 import { isFirebaseConfigured } from '@/lib/firebase'
-import { signInWithGoogle, useFirebaseUser } from '@/lib/firebase/auth'
+import { describeAuthError, signInWithGoogle, useFirebaseUser } from '@/lib/firebase/auth'
 import { formatPeso } from '@/lib/format'
 import { GAMES } from '@/lib/games'
 import { Icon } from '@/lib/icons'
@@ -13,6 +13,7 @@ import type { PracticePlayRow } from '@/lib/profile/record'
 import { readPracticeStats } from '@/lib/profile/stats'
 import { cn } from '@/lib/utils'
 import { api } from '../../convex/_generated/api'
+import { DEFAULT_PLAY_PAGE, TICKET_DETAIL_LIMIT } from '../../convex/plays/d'
 
 module
   type Movement = FunctionReturnType<typeof api.ledger.q.myLedgerHistory>[number]
@@ -23,9 +24,12 @@ module
   const EMPTY_PLAYS: PracticePlayRow[] = []
 
   // Both panels are fixed-height, so both reads are capped rather than paged.
-  // The stats cover every play read; the feed shows the newest few of them.
+  // The plays read takes the backend's own default page: a row carries up to
+  // TICKET_DETAIL_LIMIT ticket details, so a live subscription over the full
+  // PLAY_HISTORY_LIMIT would be a large payload for a panel that leads with a
+  // summary. The statistics therefore describe this window, and say so.
   const MOVEMENT_ARGS = { limit: 20 }
-  const PLAYS_ARGS = { limit: 50 }
+  const PLAYS_ARGS = { limit: DEFAULT_PLAY_PAGE }
   const PLAY_FEED_LIMIT = 10
 
   const readingLabelClass = 'font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground'
@@ -68,6 +72,7 @@ setup
   const { user, isLoading: isAuthLoading } = useFirebaseUser()
   const [isSigningIn, setIsSigningIn] = useState(false)
   const [signInError, setSignInError] = useState<string | null>(null)
+  const [brokenPhotoUrl, setBrokenPhotoUrl] = useState<string | null>(null)
 
   const isSignedIn = user !== null
 
@@ -103,11 +108,21 @@ setup
         ? 'No credits have been allocated to you yet.'
         : `${formatCredits(wallet.held)} CR held against open plays.`
 
+  // `null` is an answer — the identity is known and carries no `users` row yet.
+  // `undefined` is no answer at all, which says nothing about the account, so it
+  // reads as an em dash rather than as a record that is missing.
+  const accountRecordLabel = profile === undefined ? '—' : profile === null ? 'Not linked yet' : 'Linked'
+
   // Identity comes from Firebase first: it is there on a deployment with no
   // Convex client, and before `ensureCurrent` has written the `users` row.
   const name = user?.displayName ?? profile?.name ?? null
   const email = user?.email ?? profile?.email ?? null
-  const avatarUrl = user?.photoURL ?? profile?.imageUrl ?? null
+  // A Google avatar is served from `lh3.googleusercontent.com`, which refuses
+  // some requests outright; the refused URL is dropped so the fallback circle
+  // takes over instead of the browser's broken-image glyph. The URL is kept
+  // rather than a flag, so another account's photo is still tried.
+  const photoUrl = user?.photoURL ?? profile?.imageUrl ?? null
+  const avatarUrl = photoUrl !== null && photoUrl !== brokenPhotoUrl ? photoUrl : null
   const isVerified = user?.emailVerified === true || profile?.emailVerified === true
   const memberSince = profile?.createdAt ?? null
 
@@ -116,10 +131,11 @@ setup
     setSignInError(null)
     try {
       await signInWithGoogle()
-    } catch {
-      // Closing the Google window is a decision, not a failure, and the two are
-      // indistinguishable from here, so the line says only that nothing happened.
-      setSignInError('Sign-in did not complete. Try again.')
+    } catch (error) {
+      // `null` is a cancellation — the window was closed, which needs no notice.
+      // Anything else is actionable, and this button is the only control on the
+      // page, so the remedy (allow popups, check the connection) has to be said.
+      setSignInError(describeAuthError(error))
     } finally {
       setIsSigningIn(false)
     }
@@ -132,7 +148,7 @@ section(className='relative overview-page pb-16')
     Masthead(
       ~ eyebrow='Lucky Pick · Account'
       ~ title='Your profile'
-      ~ description='Who you are signed in as, the credits on your account, and every practice draw you have resolved.'
+      ~ description='Who you are signed in as, the credits on your account, and the practice draws on your record.'
       ~ )
       // States the one fact the whole page depends on, so empty panels are read
       // as an empty account rather than as a page that failed.
@@ -168,7 +184,13 @@ section(className='relative overview-page pb-16')
         Panel(title='Identity' description='The account this browser is signed in as.' meta={isVerified ? 'Email verified' : 'Email unverified'})
           div(className='flex flex-wrap items-start gap-5')
             if avatarUrl
-              img(src={avatarUrl} alt='' className='size-14 shrink-0 rounded-full object-cover')
+              img(
+                ~ src={avatarUrl}
+                ~ alt=''
+                ~ referrerPolicy='no-referrer'
+                ~ onError={() => setBrokenPhotoUrl(photoUrl)}
+                ~ className='size-14 shrink-0 rounded-full object-cover'
+                ~ )
             else
               div(className='grid size-14 shrink-0 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
                 Icon(name='account' size={20})
@@ -182,7 +204,7 @@ section(className='relative overview-page pb-16')
                   span(className={cn(chipClass, 'bg-amber-500/15 text-amber-700 dark:text-amber-400')}) unverified
           div(className='mt-7 divide-y divide-dashed divide-border/60 border-t border-dashed border-border/60')
             Reading(label='Member since' value={formatMemberSince(memberSince)})
-            Reading(label='Account record' value={profile ? 'Linked' : 'Not linked yet'})
+            Reading(label='Account record' value={accountRecordLabel})
 
         Panel(title='Credits' description='What you hold, and how it has moved.' meta={entries.length === 0 ? 'No movements' : `Newest ${formatCount(entries.length)}`})
           div(className='grid gap-10 lg:grid-cols-5 lg:gap-8')
@@ -207,7 +229,11 @@ section(className='relative overview-page pb-16')
                       span(className={cn('w-20 shrink-0 text-right font-mono text-sm tabular-nums', entry.amount < 0 ? 'text-destructive' : POSITIVE_TONE)}) #{formatLedgerAmount(entry.amount)}
                       span(className='hidden w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 lg:inline') #{formatCredits(entry.balanceAfter)}
 
-        Panel(title='Practice' description='Every draw you have resolved while signed in, counted at PCSO ticket prices.' meta={`${formatCount(stats.plays)} draws`})
+        Panel(
+          ~ title='Practice'
+          ~ description={`Your last ${formatCount(DEFAULT_PLAY_PAGE)} resolved draws, counted at PCSO ticket prices. Older draws are kept but are not counted here.`}
+          ~ meta={`${formatCount(stats.plays)} draws read`}
+          ~ )
           if stats.plays === 0
             Blank(message='No practice draw has been recorded on your account yet.')
           else
@@ -223,9 +249,9 @@ section(className='relative overview-page pb-16')
                 StatTile(
                   ~ label='Net'
                   ~ value={formatNet(stats.net)}
-                  ~ caption={stats.net < 0 ? 'Down across every draw on record.' : 'Up across every draw on record.'}
+                  ~ caption={stats.net < 0 ? 'Down across the draws counted here.' : 'Up across the draws counted here.'}
                   ~ )
-                StatTile(label='Win rate' value={formatPercent(stats.winRate, 1)} caption='Winning tickets over every ticket played.')
+                StatTile(label='Win rate' value={formatPercent(stats.winRate, 1)} caption='Winning tickets over the tickets of those draws.')
                 if bestDraw
                   StatTile(
                     ~ label='Best draw'
@@ -237,7 +263,7 @@ section(className='relative overview-page pb-16')
               div(className='mt-10')
                 Distribution(
                   ~ segments={stats.hitDistribution}
-                  ~ caption='Tickets by numbers matched. Counted from the ticket detail each draw stores — at most 50 tickets of a draw — so a larger draw is represented by those 50 rather than by every ticket it held.'
+                  ~ caption={`Tickets by numbers matched. Counted from the ticket detail each draw stores — at most ${formatCount(TICKET_DETAIL_LIMIT)} tickets of a draw — so a larger draw is represented by those rather than by every ticket it held.`}
                   ~ )
 
         Panel(title='Recent plays' description='One row per resolved draw, newest first.' meta={rows.length === 0 ? 'No draws' : `${formatCount(playFeed.length)} of ${formatCount(rows.length)}`})

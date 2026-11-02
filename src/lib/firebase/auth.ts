@@ -37,6 +37,28 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   }) as Promise<T>
 }
 
+// Closing the Google window is a decision, not a failure, so it stays silent.
+const silentAuthCodes = new Set([
+  'auth/popup-closed-by-user',
+  'auth/cancelled-popup-request',
+  'auth/user-cancelled'
+])
+
+/**
+ * What to tell someone whose sign-in did not land, or `null` to say nothing.
+ *
+ * Shared by every surface that offers sign-in: a blocked popup and a closed one
+ * are different events with different remedies, and a caller that cannot tell
+ * them apart either nags about a cancellation or hides an actionable failure.
+ */
+export function describeAuthError(error: unknown): string | null {
+  const code = typeof error === 'object' && error !== null ? (error as { code?: string }).code : undefined
+  if (code && silentAuthCodes.has(code)) return null
+  if (code === 'auth/popup-blocked') return 'Your browser blocked the sign-in window. Allow popups and try again.'
+  if (code === 'auth/network-request-failed') return 'Network error during sign-in. Check your connection.'
+  return error instanceof Error ? error.message : 'Sign-in failed. Please try again.'
+}
+
 export const isMessengerInAppBrowser = (): boolean => {
   if (typeof navigator === 'undefined') return false
   const ua = navigator.userAgent || (navigator as { vendor?: string }).vendor || ''

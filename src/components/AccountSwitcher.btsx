@@ -3,7 +3,7 @@ import { useCallback, useState } from 'octane'
 import Switcher from '@/components/ui/switcher.btsx'
 import { isFirebaseConfigured } from '@/lib/firebase'
 import { forgetAllAccounts, getAccountLabel } from '@/lib/firebase/accounts'
-import { signInWithGoogle, signOutUser, useFirebaseUser, useRememberedAccounts } from '@/lib/firebase/auth'
+import { describeAuthError, signInWithGoogle, signOutUser, useFirebaseUser, useRememberedAccounts } from '@/lib/firebase/auth'
 import type { IconName } from '@/lib/icons'
 import { canOpenAsgard } from '@/lib/asgard/access'
 import { navigate } from '@/lib/navigation'
@@ -32,21 +32,6 @@ module
     icon: IconName
     onSelect: () => void
     variant?: 'default' | 'destructive'
-  }
-
-  // Closing the Google window is a decision, not a failure, so it stays silent.
-  const silentAuthCodes = new Set([
-    'auth/popup-closed-by-user',
-    'auth/cancelled-popup-request',
-    'auth/user-cancelled'
-  ])
-
-  const describeAuthError = (error: unknown): string | null => {
-    const code = typeof error === 'object' && error !== null ? (error as { code?: string }).code : undefined
-    if (code && silentAuthCodes.has(code)) return null
-    if (code === 'auth/popup-blocked') return 'Your browser blocked the sign-in window. Allow popups and try again.'
-    if (code === 'auth/network-request-failed') return 'Network error during sign-in. Check your connection.'
-    return error instanceof Error ? error.message : 'Sign-in failed. Please try again.'
   }
 
 props { onNotify, children, footer }: AccountSwitcherProps
