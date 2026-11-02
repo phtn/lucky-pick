@@ -18,7 +18,7 @@ const ben = member('ben', 'ben@example.com')
 const ticket = (n: number) => ({
   numbers: [1, 2, 3, 4, 5, n],
   betType: 6 as const,
-  cost: 20,
+  cost: 20 as const,
   hits: 0,
   prize: 0,
   playerName: 'Ana'
@@ -69,6 +69,13 @@ test('record owns the row by identity, not by any client-supplied id', async () 
   const rows = await t.run((ctx) => ctx.db.query('practicePlays').collect())
   expect(rows).toHaveLength(1)
   expect(rows[0].userId).toBe(anaUser?._id)
+})
+
+test('record rejects a ticket whose cost is not one of the game\'s bet costs', async () => {
+  const { t, asAna } = await setup()
+  const bad = { ...ticket(7), cost: 21 }
+  await expect(asAna.mutation(api.plays.m.record, play({ tickets: [bad as never] }))).rejects.toThrow()
+  expect(await t.run((ctx) => ctx.db.query('practicePlays').collect())).toEqual([])
 })
 
 test('record truncates a ticket detail array longer than the cap', async () => {

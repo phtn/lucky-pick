@@ -48,10 +48,13 @@ export const practiceSeedSchema = v.object({
   rolls: v.number()
 })
 
+/** The game's fixed ticket prices (`BetCost` in `src/lib/lotto.ts`); anything else is not a real stake. */
+export const practiceBetCostSchema = v.union(v.literal(20), v.literal(24), v.literal(25))
+
 export const practiceTicketSchema = v.object({
   numbers: v.array(v.number()),
   betType: practiceBetTypeSchema,
-  cost: v.number(),
+  cost: practiceBetCostSchema,
   hits: v.number(),
   prize: v.number(),
   playerName: v.string()
