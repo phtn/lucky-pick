@@ -1,0 +1,261 @@
+import { useCallback, useState } from 'octane'
+import type { FunctionReturnType } from 'convex/server'
+import { Distribution, Masthead, Panel, StatTile } from '@/components/overview'
+import { useConvexQuery } from '@/hooks/use-convex-query'
+import { formatLedgerAmount, formatLedgerLabel } from '@/lib/asgard/account-detail'
+import { isFirebaseConfigured } from '@/lib/firebase'
+import { signInWithGoogle, useFirebaseUser } from '@/lib/firebase/auth'
+import { formatPeso } from '@/lib/format'
+import { GAMES } from '@/lib/games'
+import { Icon } from '@/lib/icons'
+import { formatCount, formatPercent, formatRelativeTime } from '@/lib/overview/metrics'
+import type { PracticePlayRow } from '@/lib/profile/record'
+import { readPracticeStats } from '@/lib/profile/stats'
+import { cn } from '@/lib/utils'
+import { api } from '../../convex/_generated/api'
+
+module
+  type Movement = FunctionReturnType<typeof api.ledger.q.myLedgerHistory>[number]
+
+  // A read that has not answered yet, or one that failed, is `undefined`. Each
+  // panel falls back to its own empty list, so no panel can empty another.
+  const EMPTY_MOVEMENTS: Movement[] = []
+  const EMPTY_PLAYS: PracticePlayRow[] = []
+
+  // Both panels are fixed-height, so both reads are capped rather than paged.
+  // The stats cover every play read; the feed shows the newest few of them.
+  const MOVEMENT_ARGS = { limit: 20 }
+  const PLAYS_ARGS = { limit: 50 }
+  const PLAY_FEED_LIMIT = 10
+
+  const readingLabelClass = 'font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground'
+  const chipClass = 'rounded-xs px-1.5 py-0.5 font-mono text-2xs uppercase tracking-wider'
+  const blankClass = 'rounded-lg border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground'
+
+  // A credit that came in, or a draw that paid: never colour alone, since each
+  // one sits beside a figure that carries its own sign.
+  const POSITIVE_TONE = 'text-emerald-700 dark:text-emerald-400'
+
+  const memberSinceFormatter = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+
+  /** Credits are counted, not measured: a balance is shown whole, never compacted. */
+  const formatCredits = (value: number) => value.toLocaleString('en-US')
+
+  const formatMemberSince = (timestamp: number | null) =>
+    timestamp === null ? '—' : memberSinceFormatter.format(timestamp)
+
+  /**
+   * A net result is a direction as much as an amount, so the minus sits outside
+   * the peso sign rather than inside the figure.
+   */
+  const formatNet = (net: number) => (net < 0 ? `−${formatPeso(-net)}` : formatPeso(net))
+
+  const formatHits = (hits: number) => (hits === 1 ? '1 hit' : `${hits} hits`)
+
+// A labelled line of the record: whatever the account has, or an em dash.
+component Reading
+  props { label, value }: { label: string; value: string }
+  div(className='flex flex-wrap items-baseline justify-between gap-2 py-2.5')
+    span(className={readingLabelClass}) #{label}
+    span(className='min-w-0 truncate text-right text-sm text-foreground') #{value || '—'}
+
+// What a panel says when it has nothing to show, which is never an error here.
+component Blank
+  props { message }: { message: string }
+  p(className={blankClass}) #{message}
+
+setup
+  const { user, isLoading: isAuthLoading } = useFirebaseUser()
+  const [isSigningIn, setIsSigningIn] = useState(false)
+  const [signInError, setSignInError] = useState<string | null>(null)
+
+  const isSignedIn = user !== null
+
+  // Every read is the caller's own, derived from the Convex identity. The hook
+  // answers `undefined` until a value arrives — and leaves it `undefined` where
+  // there is no client or the query failed — so a panel that cannot read stays
+  // on its empty state while the rest of the page works.
+  const profile = useConvexQuery(api.users.q.current, {}, { enabled: isSignedIn })
+  const wallet = useConvexQuery(api.ledger.q.myWallet, {}, { enabled: isSignedIn })
+  const movements = useConvexQuery(api.ledger.q.myLedgerHistory, MOVEMENT_ARGS, { enabled: isSignedIn })
+  const plays = useConvexQuery(api.plays.q.mine, PLAYS_ARGS, { enabled: isSignedIn })
+
+  const now = Date.now()
+  const entries = movements ?? EMPTY_MOVEMENTS
+  const rows = plays ?? EMPTY_PLAYS
+  const playFeed = rows.slice(0, PLAY_FEED_LIMIT)
+  const stats = readPracticeStats(rows)
+  // Read out of `stats` so the template can narrow them; `bestDraw` is already
+  // null when nothing was won, so the tile is simply absent then.
+  const bestDraw = stats.bestDraw
+  const favouriteGame = stats.favouriteGame
+
+  // A user who has never been allocated credits has no wallet row at all. That
+  // is a zero balance, not a failure, so it reads as one.
+  const balance = wallet?.available ?? 0
+  // `null` is an answer — there is no wallet, so nothing was ever allocated.
+  // `undefined` is no answer yet, which must not be reported as an allocation
+  // that never happened.
+  const balanceCaption =
+    wallet === undefined
+      ? 'Your credit account has not been read on this load.'
+      : wallet === null
+        ? 'No credits have been allocated to you yet.'
+        : `${formatCredits(wallet.held)} CR held against open plays.`
+
+  // Identity comes from Firebase first: it is there on a deployment with no
+  // Convex client, and before `ensureCurrent` has written the `users` row.
+  const name = user?.displayName ?? profile?.name ?? null
+  const email = user?.email ?? profile?.email ?? null
+  const avatarUrl = user?.photoURL ?? profile?.imageUrl ?? null
+  const isVerified = user?.emailVerified === true || profile?.emailVerified === true
+  const memberSince = profile?.createdAt ?? null
+
+  const startSignIn = useCallback(async () => {
+    setIsSigningIn(true)
+    setSignInError(null)
+    try {
+      await signInWithGoogle()
+    } catch {
+      // Closing the Google window is a decision, not a failure, and the two are
+      // indistinguishable from here, so the line says only that nothing happened.
+      setSignInError('Sign-in did not complete. Try again.')
+    } finally {
+      setIsSigningIn(false)
+    }
+  }, [])
+
+// A shared `/me` link must not look broken, so a signed-out viewer is shown the
+// prompt in place of the panels rather than being sent somewhere else.
+section(className='relative overview-page pb-16')
+  div(className='overview-content')
+    Masthead(
+      ~ eyebrow='Lucky Pick · Account'
+      ~ title='Your profile'
+      ~ description='Who you are signed in as, the credits on your account, and every practice draw you have resolved.'
+      ~ )
+      // States the one fact the whole page depends on, so empty panels are read
+      // as an empty account rather than as a page that failed.
+      div(className='flex items-center gap-2 rounded-full border border-border/50 px-3 py-1.5')
+        span(aria-hidden={true} className={cn('size-1.5 rounded-full', isSignedIn ? 'bg-chart-good' : 'bg-chart-idle')})
+        span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') #{isSignedIn ? 'signed in' : 'signed out'}
+
+    if isAuthLoading && !isSignedIn
+      div(className='mt-16 flex items-center gap-3')
+        Icon(name='spinner' size={16} className='animate-spin text-muted-foreground')
+        p(className='text-sm text-muted-foreground') Checking your session…
+    elseif !isSignedIn
+      div(className='mt-12 rounded-xl border border-dashed border-border/60 px-6 py-14 text-center')
+        div(className='mx-auto grid size-10 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
+          Icon(name='person' size={18})
+        p(className='mt-5 text-sm text-foreground') Sign in to see your profile.
+        p(className='mx-auto mt-2 max-w-sm text-xs leading-relaxed text-muted-foreground') Your credits, your practice plays, and your account details are on this page once you are signed in.
+        if isFirebaseConfigured
+          button(
+            ~ type='button'
+            ~ onClick={() => void startSignIn()}
+            ~ disabled={isSigningIn}
+            ~ className='mt-7 inline-flex h-10 items-center gap-2 rounded-full bg-foreground px-5 text-sm font-medium text-background transition-opacity disabled:opacity-60'
+            ~ )
+            Icon(name='goog' size={14})
+            span #{isSigningIn ? 'Opening Google…' : 'Sign in with Google'}
+        else
+          p(className='mt-7 font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') Sign-in is unavailable on this deployment
+        if signInError
+          p(className='mt-4 text-xs text-destructive') #{signInError}
+    else
+      div(className='overview-sections')
+        Panel(title='Identity' description='The account this browser is signed in as.' meta={isVerified ? 'Email verified' : 'Email unverified'})
+          div(className='flex flex-wrap items-start gap-5')
+            if avatarUrl
+              img(src={avatarUrl} alt='' className='size-14 shrink-0 rounded-full object-cover')
+            else
+              div(className='grid size-14 shrink-0 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
+                Icon(name='account' size={20})
+            div(className='min-w-0 flex-1')
+              p(className='truncate font-sans text-xl font-medium tracking-tight text-foreground') #{name ?? 'No name on this account'}
+              p(className='mt-1 truncate font-mono text-xs text-muted-foreground') #{email ?? 'No email on this account'}
+              div(className='mt-3 flex flex-wrap gap-2')
+                if isVerified
+                  span(className={cn(chipClass, 'bg-chart-good/15 text-emerald-700 dark:text-emerald-400')}) verified
+                else
+                  span(className={cn(chipClass, 'bg-amber-500/15 text-amber-700 dark:text-amber-400')}) unverified
+          div(className='mt-7 divide-y divide-dashed divide-border/60 border-t border-dashed border-border/60')
+            Reading(label='Member since' value={formatMemberSince(memberSince)})
+            Reading(label='Account record' value={profile ? 'Linked' : 'Not linked yet'})
+
+        Panel(title='Credits' description='What you hold, and how it has moved.' meta={entries.length === 0 ? 'No movements' : `Newest ${formatCount(entries.length)}`})
+          div(className='grid gap-10 lg:grid-cols-5 lg:gap-8')
+            div(className='lg:col-span-2')
+              StatTile(
+                ~ hero={true}
+                ~ label='Balance'
+                ~ value={`${formatCredits(balance)} CR`}
+                ~ caption={balanceCaption}
+                ~ )
+            div(className='lg:col-span-3')
+              if entries.length === 0
+                Blank(message='No credit has moved on your account yet.')
+              else
+                ul(className='overview-feed')
+                  each entry in entries key entry._id
+                    li(className='flex flex-wrap items-center gap-x-3 gap-y-1')
+                      span(className='w-20 shrink-0 font-mono text-2xs text-muted-foreground') #{formatRelativeTime(entry.createdAt, now)}
+                      span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{formatLedgerLabel(entry)}
+                      if entry.bucket === 'held'
+                        span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) held
+                      span(className={cn('w-20 shrink-0 text-right font-mono text-sm tabular-nums', entry.amount < 0 ? 'text-destructive' : POSITIVE_TONE)}) #{formatLedgerAmount(entry.amount)}
+                      span(className='hidden w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 lg:inline') #{formatCredits(entry.balanceAfter)}
+
+        Panel(title='Practice' description='Every draw you have resolved while signed in, counted at PCSO ticket prices.' meta={`${formatCount(stats.plays)} draws`})
+          if stats.plays === 0
+            Blank(message='No practice draw has been recorded on your account yet.')
+          else
+            fragment
+              div(className='overview-stats grid md:grid-cols-3')
+                StatTile(
+                  ~ label='Draws played'
+                  ~ value={formatCount(stats.plays)}
+                  ~ caption={`${formatCount(stats.officialPlays)} checked against an official draw · ${formatCount(stats.simulatedPlays)} simulated.`}
+                  ~ )
+                StatTile(label='Stake' value={formatPeso(stats.spent)} caption='What those tickets would have cost.')
+                StatTile(label='Winnings' value={formatPeso(stats.won)} caption='What the same tickets would have paid.')
+                StatTile(
+                  ~ label='Net'
+                  ~ value={formatNet(stats.net)}
+                  ~ caption={stats.net < 0 ? 'Down across every draw on record.' : 'Up across every draw on record.'}
+                  ~ )
+                StatTile(label='Win rate' value={formatPercent(stats.winRate, 1)} caption='Winning tickets over every ticket played.')
+                if bestDraw
+                  StatTile(
+                    ~ label='Best draw'
+                    ~ value={formatPeso(bestDraw.won)}
+                    ~ caption={`${GAMES[bestDraw.game].name} · ${formatRelativeTime(bestDraw.drawnAt, now)}.`}
+                    ~ )
+              if favouriteGame
+                p(className='mt-8 text-xs text-muted-foreground') #{`Most played: ${GAMES[favouriteGame].name}.`}
+              div(className='mt-10')
+                Distribution(
+                  ~ segments={stats.hitDistribution}
+                  ~ caption='Tickets by numbers matched. Counted from the ticket detail each draw stores — at most 50 tickets of a draw — so a larger draw is represented by those 50 rather than by every ticket it held.'
+                  ~ )
+
+        Panel(title='Recent plays' description='One row per resolved draw, newest first.' meta={rows.length === 0 ? 'No draws' : `${formatCount(playFeed.length)} of ${formatCount(rows.length)}`})
+          if playFeed.length === 0
+            Blank(message='Resolve a draw while signed in and it is listed here.')
+          else
+            ul(className='overview-feed')
+              each play in playFeed key play._id
+                li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
+                  div(className='min-w-0 flex-1')
+                    p(className='truncate text-sm text-foreground') #{GAMES[play.game].name}
+                    p(className='truncate font-mono text-xs text-muted-foreground') #{play.drawnBalls.join(' · ')}
+                  if play.isOfficial
+                    span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) official
+                  span(className='w-24 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{`${formatCount(play.ticketCount)} tickets`}
+                  span(className='w-16 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{formatHits(play.bestHits)}
+                  span(className={cn('w-24 shrink-0 text-right font-mono text-sm tabular-nums', play.won > 0 ? POSITIVE_TONE : 'text-muted-foreground/70')}) #{formatPeso(play.won)}
+                  span(className='w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70') #{formatRelativeTime(play.drawnAt, now)}
+
+        Panel(title='Real plays' description='Tickets bought with credits, once they can be bought.' meta='Not yet playable')
+          Blank(message='Credit-backed tickets are still being built. When they ship, every ticket you buy with credits is listed here with the draw it was entered in and what it settled for.')

@@ -20,6 +20,8 @@ const asgardOverview = lazyRouteComponent(() => import('../pages/asgard-overview
 const asgardAccounts = lazyRouteComponent(() => import('../pages/asgard-accounts-page.btsx'))
 const asgardAccount = lazyRouteComponent(() => import('../pages/asgard-account-page.btsx'))
 
+const profilePage = lazyRouteComponent(() => import('../pages/profile-page.btsx'))
+
 const adminShell = lazyRouteComponent(() => import('../pages/admin-page.btsx'))
 const adminOverview = lazyRouteComponent(() => import('../pages/admin-overview-page.btsx'))
 
@@ -75,6 +77,14 @@ function createAppRouteTree() {
     component: AnalyticsRoute
   })
 
+  // A page of the app rather than a console: it renders inside the game shell's
+  // `Outlet`, which is why it is lazy like the asgard pages and not a tree.
+  const profileRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/me',
+    component: profilePage
+  })
+
   // The handoff mints an ID token on the origin the client SDK is signed in on
   // and sends the god to Asgard's root with it. It renders the console's own
   // shell rather than a page inside the app, since the app is not where it ends.
@@ -125,6 +135,7 @@ function createAppRouteTree() {
   return rootRoute.addChildren([
     playRoute,
     analyticsRoute,
+    profileRoute,
     asgardRoute.addChildren([asgardIndexRoute, asgardAccountsRoute, asgardAccountRoute]),
     adminRoute.addChildren([adminIndexRoute])
   ])

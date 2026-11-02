@@ -3,6 +3,7 @@ import AppHeader from './components/AppHeader.btsx';
 import { Outlet } from '@octanejs/tanstack-router';
 import { AnalyticsSessionContext } from './lib/analytics-session';
 import { usePathname } from './lib/navigation';
+import { isAppPagePath } from './lib/routing/app-pages';
 import BetPanel from './components/BetPanel.btsx';
 import DrawHistory from './components/DrawHistory.btsx';
 import DrawStage from './components/DrawStage.btsx';
@@ -578,7 +579,7 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
         ~ onNotify={showToast}
         ~ )
       Outlet
-    if pathname !== "/analytics"
+    if !isAppPagePath(pathname)
       fragment
         LiveBoard(
           ~ game={game}

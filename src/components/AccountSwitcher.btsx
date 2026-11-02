@@ -102,8 +102,14 @@ setup
     ? [{ id: 'asgard', label: 'Asgard', icon: 'key', onSelect: () => navigate(asgardHandoffPath) }]
     : []
 
+  // Every signed-in user has a profile page. It is a page of the app, not a
+  // console, so it is reached with the in-app navigation rather than a handoff.
   const actions: AccountAction[] = user
-    ? [...asgardAction, { id: 'sign-out', label: 'Sign out', icon: 'signout', onSelect: () => void handleSignOut(), variant: 'destructive' }]
+    ? [
+        { id: 'profile', label: 'Profile', icon: 'account', onSelect: () => navigate('/me') },
+        ...asgardAction,
+        { id: 'sign-out', label: 'Sign out', icon: 'signout', onSelect: () => void handleSignOut(), variant: 'destructive' }
+      ]
     : accounts.length > 0
       ? [{ id: 'forget', label: 'Forget saved accounts', icon: 'close', onSelect: forgetAllAccounts }]
       : []
