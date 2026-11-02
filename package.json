@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run results:build && rsbuild dev",
+    "dev": "bun run results:build && sh -c 'wrangler dev --port 8787 --ip 127.0.0.1 & worker=$!; trap \"kill $worker 2>/dev/null\" EXIT INT TERM; rsbuild dev'",
+    "dev:web": "bun run results:build && rsbuild dev",
     "dev:api": "wrangler dev --port 8787 --ip 127.0.0.1",
     "build": "bun run results:build && rsbuild build",
     "preview": "rsbuild preview",

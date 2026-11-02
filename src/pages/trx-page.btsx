@@ -1,0 +1,130 @@
+import { useCallback, useState } from 'octane'
+import { Masthead, Panel, StatTile } from '@/components/overview'
+import { useConvexQuery } from '@/hooks/use-convex-query'
+import { useTrxBalance } from '@/hooks/use-trx-balance'
+import { useFirebaseUser } from '@/lib/firebase/auth'
+import { Icon } from '@/lib/icons'
+import { formatTrx, formatUsd } from '@/lib/tronweb/balance'
+import { TRON_NETWORK_LABELS } from '@/lib/tronweb/network'
+import { cn } from '@/lib/utils'
+import { api } from '../../convex/_generated/api'
+
+module
+  const readingLabelClass = 'font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground'
+  const chipClass = 'rounded-xs px-1.5 py-0.5 font-mono text-2xs uppercase tracking-wider'
+  const blankClass = 'rounded-xl border border-dashed border-border/60 px-6 py-14 text-center'
+
+setup
+  const { user, isLoading: isAuthLoading } = useFirebaseUser()
+  const [copied, setCopied] = useState(false)
+
+  const isSignedIn = user !== null
+
+  const profile = useConvexQuery(api.users.q.current, {}, { enabled: isSignedIn })
+  const balance = useTrxBalance(profile?.trxAddress)
+
+  // Three states the page must not conflate: `undefined` is no answer yet, the
+  // row answering with no `trxAddress` is an account not provisioned, and an
+  // address with no balance read is an account whose node did not answer.
+  const address = profile?.trxAddress ?? null
+  const hasReadProfile = profile !== undefined
+
+  const balanceValue = balance === undefined ? '—' : formatTrx(balance.sun)
+
+  // The dollar value is a second reading of the balance, so it is absent rather
+  // than zeroed when there is no price. On a testnet it is what the same number
+  // of mainnet TRX would fetch, which the caption says outright — the figure is
+  // worth nothing on Nile and must not be read as money.
+  const balanceUSD =
+    balance === undefined
+      ? 'This account has not been read on this load.'
+      : balance.usdPerTrx === null
+        ? `Held on ${TRON_NETWORK_LABELS[balance.network]}. The market price could not be read.`
+        : balance.network === 'mainnet'
+          ? `${formatUsd(balance.sun, balance.usdPerTrx)}` // at the current market price.
+          : `${formatUsd(balance.sun, balance.usdPerTrx)}` // at the mainnet price — test TRX is worth nothing.
+
+  const balanceCaption = balance && balance.network === 'mainnet' ? 'at the current market price.' : 'at the mainnet price — test TRX is worth nothing.'
+
+
+  const networkLabel = balance === undefined ? null : TRON_NETWORK_LABELS[balance.network]
+
+  const copyAddress = useCallback(async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+    } catch {
+      // A refused clipboard leaves the address on screen to select by hand, so
+      // the only thing to undo is the confirmation.
+      setCopied(false)
+    }
+  }, [])
+
+section(className='relative overview-page px-4 pb-16 md:px-6')
+  div(className='px-4')
+    Masthead(
+      ~ eyebrow='TRON ACCOUNT'
+      ~ title={balanceValue ?? 'Balance'}
+      ~ description={address ?? 'TRX Address'}
+      ~ badgeClass='bg-destructive'
+      ~ )
+      if networkLabel
+        div(className='flex items-center gap-2 rounded-full border border-border/50 px-3 py-1.5')
+          span(aria-hidden={true} className={cn('size-1.5 rounded-full', balance?.network === 'mainnet' ? 'bg-chart-good' : 'bg-chart-warn')})
+          span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') #{networkLabel}
+
+    if isAuthLoading && !isSignedIn
+      div(className='mt-16 flex items-center gap-3')
+        Icon(name='spinner' size={16} className='animate-spin text-muted-foreground')
+        p(className='text-sm text-muted-foreground') Checking your session…
+    elseif !isSignedIn
+      div(className={cn(blankClass, 'mt-12')})
+        div(className='mx-auto grid size-10 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
+          Icon(name='person' size={18})
+        p(className='mt-5 text-sm text-foreground') Sign in to see your TRX account.
+        p(className='mx-auto mt-2 max-w-sm text-xs leading-relaxed text-muted-foreground') An account is minted for you the first time you sign in, and its address lives on your profile.
+    elseif hasReadProfile && address === null
+      // The row was read and carries no address: provisioning has not run for
+      // this account. That is a different fact from a read that has not landed,
+      // and only this one is worth explaining.
+      div(className={cn(blankClass, 'mt-12')})
+        div(className='mx-auto grid size-10 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
+          Icon(name='key' size={18})
+        p(className='mt-5 text-sm text-foreground') No TRON account yet.
+        p(className='mx-auto mt-2 max-w-sm text-xs leading-relaxed text-muted-foreground') One is minted on sign-in. Sign out and back in, and save the private key when it is shown — it is shown once and kept nowhere else.
+    else
+      div(className='overview-sections')
+        // One tile, so no column grid: in a three-column row the hero figure
+        // is squeezed into a third of the width and `2,000.00 TRX` breaks across
+        // two lines.
+        div(className='overview-stats')
+          StatTile(hero={true} label='Asset Value' value={balanceUSD} caption={balanceCaption})
+
+        // Not collapsible: the address is what the page is for, and a reader
+        // who came to copy it should not have to open a disclosure first.
+        Panel(title='Address' collapsible={false} description='Where TRX sent to this account arrives.' meta={address ? 'Public' : 'Not read yet'})
+          if address
+            div(className='grid gap-3')
+              div(className='grid gap-1')
+                span(className={readingLabelClass}) base58
+                code(className='block overflow-x-auto rounded-md bg-foreground/5 px-3 py-2 font-mono text-xs text-foreground') #{address}
+              div(className='flex flex-wrap items-center gap-2')
+                button(
+                  ~ type='button'
+                  ~ onClick={() => void copyAddress(address)}
+                  ~ className='inline-flex h-9 items-center gap-2 rounded-full border border-border px-4 text-xs font-medium text-foreground'
+                  ~ )
+                  Icon(name={copied ? 'check' : 'link'} size={14})
+                  span #{copied ? 'Copied' : 'Copy address'}
+                span(className={cn(chipClass, 'bg-foreground/5 text-muted-foreground')}) safe to share
+              p(className='text-xs leading-relaxed text-muted-foreground')
+                | An address is public — it is what someone needs to send you TRX.
+                | The private key that spends from it was shown once when the
+                | account was minted and is held nowhere on this site, so it
+                | cannot be shown again here.
+          else
+            div(className='flex items-start gap-2.5 rounded-lg border border-dashed border-border/60 px-4 py-3')
+              Icon(name='info' size={14} className='mt-0.5 shrink-0 text-muted-foreground')
+              p(className='text-xs leading-relaxed text-muted-foreground') This account has not been read on this load.
+
+    div(aria-hidden={true} className='h-20 w-full')

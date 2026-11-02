@@ -1,6 +1,7 @@
 import { handleAsgardAccounts } from './server/asgard-account-routes'
 import { handleAsgardSession, handleAsgardSessionToken } from './server/asgard-auth-routes'
 import { handleAsgardUsers } from './server/asgard-user-routes'
+import { handleTrxBalance } from './server/trx-routes'
 
 interface WorkerEnvironment {
   ASSETS: {
@@ -18,6 +19,7 @@ const ASGARD_SESSION_PATH = '/api/asgard/session'
 const ASGARD_SESSION_TOKEN_PATH = '/api/asgard/session/token'
 const ASGARD_USERS_PATH = '/api/asgard/users'
 const ASGARD_ACCOUNTS_PATH = '/api/asgard/accounts'
+const TRX_BALANCE_PATH = '/api/trx/balance'
 
 const isSpaNavigation = (request: Request) =>
   request.method === 'GET' && request.headers.get('accept')?.includes('text/html')
@@ -26,6 +28,7 @@ export default {
   async fetch(request: Request, env: WorkerEnvironment): Promise<Response> {
     const pathname = new URL(request.url).pathname
 
+    if (pathname === TRX_BALANCE_PATH) return handleTrxBalance(request)
     if (pathname === ASGARD_SESSION_TOKEN_PATH) return handleAsgardSessionToken(request)
     if (pathname === ASGARD_SESSION_PATH) return handleAsgardSession(request)
     if (pathname === ASGARD_USERS_PATH) return handleAsgardUsers(request)

@@ -1,4 +1,5 @@
 import { TronWeb } from 'tronweb'
+import type { TronNetwork } from './network'
 
 /**
  * WORKER ONLY. This module reads `TRON_PRO_API_KEY`, so it must never be reached
@@ -10,8 +11,6 @@ import { TronWeb } from 'tronweb'
  * `.dev.vars` locally and `wrangler secret put` in deploys. A plain `.env` entry
  * does not reach the Worker.
  */
-export type TronNetwork = 'mainnet' | 'testnet'
-
 const FULL_HOST_ENV: Record<TronNetwork, string> = {
   mainnet: 'TRON_MAINNET_FULL_HOST',
   testnet: 'TRON_TESTNET_FULL_HOST'

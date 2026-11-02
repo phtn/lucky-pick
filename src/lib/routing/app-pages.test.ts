@@ -6,7 +6,9 @@ describe('app page paths', () => {
   test('recognizes the pages that replace the game grid', () => {
     assert.equal(isAppPagePath('/me'), true)
     assert.equal(isAppPagePath('/analytics'), true)
+    assert.equal(isAppPagePath('/trx'), true)
     assert.equal(isAppPagePath('/me/'), true)
+    assert.equal(isAppPagePath('/trx/'), true)
   })
 
   test('leaves the game and the consoles alone', () => {

@@ -42,7 +42,7 @@ div(className={cn('overview-stat flex flex-col justify-between gap-5', className
   div
     p(className='font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground') #{label}
     div(className='mt-3 flex items-end gap-3')
-      span(className={cn('font-sans font-medium leading-none tracking-tight text-foreground', hero ? 'text-5xl' : 'text-3xl')}) #{value}
+      span(className={cn('font-sans font-medium leading-none tracking-tight text-foreground', hero ? 'text-2xl' : 'text-xl')}) #{value}
       if delta !== null
         span(className={cn('mb-1 inline-flex items-center gap-1 font-mono text-xs', deltaTone)})
           span(aria-hidden={true}) #{arrow}

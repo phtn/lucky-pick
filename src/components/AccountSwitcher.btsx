@@ -1,6 +1,8 @@
 module "use client";
 import { useCallback, useState } from 'octane'
 import Switcher from '@/components/ui/switcher.btsx'
+import { useConvexQuery } from '@/hooks/use-convex-query'
+import { useTrxBalance } from '@/hooks/use-trx-balance'
 import { isFirebaseConfigured } from '@/lib/firebase'
 import { forgetAllAccounts, getAccountLabel } from '@/lib/firebase/accounts'
 import { describeAuthError, signInWithGoogle, signOutUser, useFirebaseUser, useRememberedAccounts } from '@/lib/firebase/auth'
@@ -8,6 +10,8 @@ import type { IconName } from '@/lib/icons'
 import { canOpenAsgard } from '@/lib/asgard/access'
 import { navigate } from '@/lib/navigation'
 import { asgardHandoffPath } from '@/lib/routing/asgard-subdomain'
+import { formatTrx, formatUsd } from '@/lib/tronweb/balance'
+import { api } from '../../convex/_generated/api'
 
 module
   interface AccountSwitcherProps {
@@ -32,6 +36,9 @@ module
     icon: IconName
     onSelect: () => void
     variant?: 'default' | 'destructive'
+    labelSuffix?: string
+    /** Right-aligned qualifier the switcher renders muted beside the label. */
+    meta?: string
   }
 
 props { onNotify, children, footer }: AccountSwitcherProps
@@ -40,6 +47,9 @@ setup
   const { user, isLoading, authError, customClaims } = useFirebaseUser()
   const accounts = useRememberedAccounts()
   const [isPending, setIsPending] = useState(false)
+  // The address is on the caller's own `users` row, so the menu reads it rather
+  // than being told it. `undefined` until the Convex token exchange lands.
+  const profile = useConvexQuery(api.users.q.current, {}, { enabled: user !== null })
 
   const notify = useCallback((message: string | null) => {
     if (message) onNotify?.(message)
@@ -87,11 +97,38 @@ setup
     ? [{ id: 'asgard', label: 'Asgard', icon: 'asgard', onSelect: () => navigate(asgardHandoffPath) }]
     : []
 
+  // The balance belongs to whoever is signed in, so it is not behind the Asgard
+  // gate the row first sat in. The row is absent until there is an address to
+  // read: a user mid-provisioning has no account to show a balance for, and a
+  // zero against no address would read as an empty wallet rather than as none.
+  const trxBalance = useTrxBalance(profile?.trxAddress)
+  const trxAction: AccountAction[] = profile?.trxAddress
+    ? [
+        {
+          id: 'trx',
+          // `undefined` is no answer — in flight, or a node that refused — and
+          // an em dash says so. `0` is an answer, and reads as `0.00 TRX`.
+          label: trxBalance === undefined ? '' : formatTrx(trxBalance.sun),
+          labelSuffix: 'TRX',
+          // The dollar value is a second reading of the balance, so it is absent
+          // rather than zeroed when there is no balance or no price to read it at.
+          meta:
+            trxBalance && trxBalance.usdPerTrx !== null
+              ? formatUsd(trxBalance.sun, trxBalance.usdPerTrx)
+              : undefined,
+          icon: 'trx',
+          onSelect: () => navigate('/trx'),
+          variant: 'destructive'
+        }
+      ]
+    : []
+
   // Every signed-in user has a profile page. It is a page of the app, not a
   // console, so it is reached with the in-app navigation rather than a handoff.
   const actions: AccountAction[] = user
     ? [
         { id: 'profile', label: 'Profile', icon: 'user-settings', onSelect: () => navigate('/me') },
+        ...trxAction,
         ...asgardAction,
         { id: 'sign-out', label: 'Sign out', icon: 'signout', onSelect: () => void handleSignOut(), variant: 'destructive' }
       ]

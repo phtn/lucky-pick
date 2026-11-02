@@ -21,6 +21,7 @@ const asgardAccounts = lazyRouteComponent(() => import('../pages/asgard-accounts
 const asgardAccount = lazyRouteComponent(() => import('../pages/asgard-account-page.btsx'))
 
 const profilePage = lazyRouteComponent(() => import('../pages/profile-page.btsx'))
+const trxPage = lazyRouteComponent(() => import('../pages/trx-page.btsx'))
 
 const adminShell = lazyRouteComponent(() => import('../pages/admin-page.btsx'))
 const adminOverview = lazyRouteComponent(() => import('../pages/admin-overview-page.btsx'))
@@ -85,6 +86,14 @@ function createAppRouteTree() {
     component: profilePage
   })
 
+  // The TRX account, on its own path rather than a panel on `/me`: the profile
+  // page is the account's record, and this is the one page that reads a chain.
+  const trxRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/trx',
+    component: trxPage
+  })
+
   // The handoff mints an ID token on the origin the client SDK is signed in on
   // and sends the god to Asgard's root with it. It renders the console's own
   // shell rather than a page inside the app, since the app is not where it ends.
@@ -136,6 +145,7 @@ function createAppRouteTree() {
     playRoute,
     analyticsRoute,
     profileRoute,
+    trxRoute,
     asgardRoute.addChildren([asgardIndexRoute, asgardAccountsRoute, asgardAccountRoute]),
     adminRoute.addChildren([adminIndexRoute])
   ])
