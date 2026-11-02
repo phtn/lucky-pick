@@ -18,9 +18,15 @@ interface Delivery<Query extends FunctionReference<'query'>> {
  * subscribes through `convexClient.onUpdate`.
  *
  * Returns `undefined` while there is no answer: loading, no client, a signed-out
- * viewer, `options.enabled === false`, or a query that errored (logged, not
- * thrown, so one failing panel leaves the rest of the page intact). The value is
- * cleared whenever the subscription ends, so one session's data never outlives it.
+ * viewer, `options.enabled === false`, or a first read that errored (logged, not
+ * thrown, so one failing panel leaves the rest of the page intact). A later error
+ * leaves the last delivered value in place rather than replacing a true figure
+ * with an empty one. The value is cleared whenever the subscription ends, so one
+ * session's data never outlives it.
+ *
+ * `undefined` therefore means "no answer", which callers must not render as a
+ * fact: a read that has not landed is a different thing from one that answered
+ * nothing. See `lib/asgard/account-detail.ts` for the same distinction.
  */
 export function useConvexQuery<Query extends FunctionReference<'query'>>(
   reference: Query,
@@ -41,9 +47,14 @@ export function useConvexQuery<Query extends FunctionReference<'query'>>(
       args,
       (value) => setDelivery({ functionName, argsKey, value }),
       (error) => {
-        // Non-fatal: leave the panel on its empty state instead of throwing.
+        // Non-fatal: log it and keep the last delivery instead of throwing. A
+        // failed poll must not wipe a value that was correct a moment ago: a
+        // cleared read renders as a zero balance and as "nothing has ever
+        // happened on this account", which is a false claim rather than a
+        // missing one. Stale-but-true beats confidently-wrong. Clearing on an
+        // ended subscription or a changed query is a different matter — it is
+        // the privacy guarantee below, and it stays.
         console.error('Convex query failed', error)
-        setDelivery(undefined)
       }
     )
     return () => {
