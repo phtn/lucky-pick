@@ -14,6 +14,19 @@ export const PLAY_HISTORY_LIMIT = 200
 export const DEFAULT_PLAY_PAGE = 50
 
 /**
+ * Length bounds `record` applies to the arrays and strings a client sends. It
+ * is a public mutation, so without these a signed-in caller could store a
+ * ~1MB row: the app only ever sends six balls, six numbers a ticket, a name
+ * `addPlayer` already cuts to 12, and the short hex strings of a `DrawSeed`.
+ * Over-long input is trimmed rather than refused — a practice row is history,
+ * not money, so it is not worth an error (the same reasoning as `tickets`).
+ */
+export const DRAWN_BALL_LIMIT = 6
+export const TICKET_NUMBER_LIMIT = 6
+export const PLAYER_NAME_LIMIT = 24
+export const SEED_STRING_LIMIT = 128
+
+/**
  * The five games in `src/lib/games.ts`. Not `resultGame`: that is the PCSO
  * results vocabulary (`'lotto'`, `'mega'`, ...), a different naming of games.
  */

@@ -95,6 +95,20 @@ test("myWallet never returns another user's wallet", async () => {
   expect((await t.withIdentity(ana).query(api.ledger.q.myWallet, {}))?._id).toBe(anaWallet)
 })
 
+test('myWallet returns the oldest wallet when a user holds two', async () => {
+  const { t, anaId } = await setup()
+  // `findMyWallet` takes `.first()` on `by_userId` on purpose, while
+  // `balanceForCurrentUser` four lines above it takes `.unique()` on a
+  // different index. Tidying the two to agree would throw a ConvexError
+  // straight into the profile's hero tile, so the choice is pinned here.
+  const older = await insertUserWallet(t, anaId)
+  const newer = await insertUserWallet(t, anaId)
+
+  const wallet = await t.withIdentity(ana).query(api.ledger.q.myWallet, {})
+  expect(wallet?._id).toBe(older)
+  expect(wallet?._id).not.toBe(newer)
+})
+
 test('myLedgerHistory is empty when signed out or without a wallet', async () => {
   const { t, benId } = await setup()
   // Someone else's wallet carries entries, so an empty result is not just an empty ledger.

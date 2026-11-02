@@ -5,7 +5,7 @@ import { api } from '../_generated/api'
 import type { FunctionArgs } from 'convex/server'
 import { member } from '../lib/testIdentities'
 import schema from '../schema'
-import { DEFAULT_PLAY_PAGE, PLAY_HISTORY_LIMIT, TICKET_DETAIL_LIMIT } from './d'
+import { DEFAULT_PLAY_PAGE, PLAYER_NAME_LIMIT, PLAY_HISTORY_LIMIT, TICKET_DETAIL_LIMIT } from './d'
 
 // A root-absolute glob: `../**/*.ts` keys this directory's own files as `./x.ts`, which convex-test cannot place.
 const modules = import.meta.glob('/convex/**/*.ts')
@@ -88,6 +88,42 @@ test('record truncates a ticket detail array longer than the cap', async () => {
   expect(row.tickets.map((x) => x.numbers[5])).toEqual(tickets.slice(0, TICKET_DETAIL_LIMIT).map((x) => x.numbers[5]))
   expect(row.ticketCount).toBe(90)
   expect(row.spent).toBe(1800)
+})
+
+test('record refuses a future drawnAt and keeps the clock for ordering', async () => {
+  const { t, asAna } = await setup()
+  const before = Date.now()
+  // A clock a year fast would date every row ahead of the next one, making each
+  // new row the "oldest" and pruning it on the insert that created it.
+  await asAna.mutation(api.plays.m.record, play({ drawnAt: before + 365 * 24 * 3600 * 1_000 }))
+  await asAna.mutation(api.plays.m.record, play({ drawnAt: before - 60_000 }))
+
+  const rows = await asAna.query(api.plays.q.mine, {})
+  expect(rows).toHaveLength(2)
+  // The clamped row still sorts newest, and is dated now rather than next year.
+  expect(rows[0].drawnAt).toBeGreaterThanOrEqual(before)
+  expect(rows[0].drawnAt).toBeLessThanOrEqual(Date.now())
+  expect(rows[1].drawnAt).toBe(before - 60_000)
+})
+
+test('record bounds the arrays and strings a caller can store', async () => {
+  const { t, asAna } = await setup()
+  const long = 'x'.repeat(500)
+  await asAna.mutation(
+    api.plays.m.record,
+    play({
+      drawnBalls: Array.from({ length: 400 }, (_, i) => i),
+      seed: { clientSeed: long, serverSeed: long, nonce: 1, rolls: 6 },
+      tickets: [{ ...ticket(7), numbers: Array.from({ length: 400 }, (_, i) => i), playerName: long }]
+    })
+  )
+
+  const [row] = await t.run((ctx) => ctx.db.query('practicePlays').collect())
+  expect(row.drawnBalls).toHaveLength(6)
+  expect(row.tickets[0].numbers).toHaveLength(6)
+  expect(row.tickets[0].playerName).toHaveLength(PLAYER_NAME_LIMIT)
+  expect(row.seed?.clientSeed).toHaveLength(128)
+  expect(row.seed?.serverSeed).toHaveLength(128)
 })
 
 test('record prunes to the newest 200 rows per user', async () => {

@@ -96,6 +96,13 @@ export const ledgerEntryFields = {
   createdAt: v.number()
 }
 
+/**
+ * How much of their own history a user's panel shows. It lives here, beside the
+ * validators, because the profile page reads it too: `/me` sizes its request to
+ * the cap rather than hardcoding a second 20 that can drift from this one.
+ */
+export const MY_HISTORY_LIMIT = 20
+
 export type WalletKind = typeof walletKindSchema.type
 export type WalletBucket = typeof walletBucketSchema.type
 export type SystemWalletKey = typeof systemWalletKeySchema.type

@@ -7,7 +7,7 @@ import { getAccountBySlug, requireAccountManager } from '../accounts/helpers'
 import { isPlatformStaff } from '../lib/auth'
 import schema from '../schema'
 import { getUserByTokenIdentifier } from '../users/q'
-import { ledgerKindSchema, walletBucketSchema } from './d'
+import { ledgerKindSchema, MY_HISTORY_LIMIT, walletBucketSchema } from './d'
 import { findPartnerWallets } from './wallets'
 
 /** Staff read any account; everyone else must manage the one they are asking about. */
@@ -19,9 +19,7 @@ const requireAccountReader = async (ctx: QueryCtx, accountId: Id<'accounts'>) =>
 /** How much of a float's life one read returns. */
 const FLOAT_HISTORY_LIMIT = 50
 
-/** How much of their own history a user's panel shows. */
-const MY_HISTORY_LIMIT = 20
-
+/** Published to both `partnerFloatHistory` and `myLedgerHistory`: one joined-entry shape, so the two panels cannot drift. */
 const historyEntryValidator = v.object({
   _id: v.id('ledgerEntries'),
   amount: v.number(),
@@ -74,7 +72,11 @@ const findMyWallet = async (ctx: QueryCtx) => {
   const user = await getUserByTokenIdentifier(ctx, identity.tokenIdentifier)
   if (!user) return null
 
-  // A user holds one wallet per account they play on; the oldest is the one a profile shows.
+  // A user holds one wallet per account they play on; the oldest is the one a
+  // profile shows. Deliberately `.first()` and not the `.unique()` that
+  // `balanceForCurrentUser` uses on its own index: a second row must read as a
+  // profile, not as a `ConvexError` in the hero tile. Pinned by
+  // "myWallet returns the oldest wallet" in `my-reads.test.ts`.
   return await ctx.db
     .query('wallets')
     .withIndex('by_userId', (q) => q.eq('userId', user._id))
@@ -162,6 +164,9 @@ export const myLedgerHistory = query({
     const wallet = await findMyWallet(ctx)
     if (!wallet) return []
 
+    // Clamps up to 1, like `partnerFloatHistory` beside it; `plays.q.mine`
+    // reads a non-positive limit as malformed and falls back to its own page
+    // size. Each follows its own neighbourhood's convention.
     const take = Math.min(Math.max(Math.floor(limit ?? MY_HISTORY_LIMIT), 1), MY_HISTORY_LIMIT)
     const entries = await ctx.db
       .query('ledgerEntries')
