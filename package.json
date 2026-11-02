@@ -9,6 +9,7 @@
     "build": "bun run results:build && rsbuild build",
     "preview": "rsbuild preview",
     "typecheck": "tsrx-tsc --noEmit",
+    "typecheck:ts": "tsc -p tsconfig.typecheck.json",
     "check": "bun run typecheck && bun run build",
     "deploy": "bun run build && wrangler deploy",
     "deploy:dry": "bun run build && wrangler deploy --dry-run",

@@ -1,0 +1,30 @@
+{
+  /* The only committed type gate over the cross-boundary code.
+   *
+   * `bun run typecheck` runs `tsrx-tsc`, which currently dies with "Invalid
+   * TSRX compiler" on a @tsrx/typescript-plugin version mismatch, and nothing
+   * else here checks types at all: rsbuild strips them without checking and
+   * `bun test` does too. This config runs plain `tsc` over the parts that do
+   * not need the Octane compiler — every Convex function plus the `.ts`
+   * modules under `src` that the browser and the backend share — so an
+   * assignment like `Doc<'practicePlays'>` to `PracticePlayRow` cannot drift
+   * unnoticed. `.btsx` is excluded by construction: no glob here matches it.
+   *
+   * Add a directory below once its `.ts` files compile clean. The goal is for
+   * this to grow until `bun run typecheck` is repaired and takes over. */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    /* The Octane language-service plugin is editor-only and is what breaks the
+     * `tsrx-tsc` wrapper, so plain `tsc` runs without it. */
+    "plugins": [],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "bun"]
+  },
+  "include": [
+    "convex/**/*.ts",
+    "src/env.d.ts",
+    "src/hooks/**/*.ts",
+    "src/lib/profile/**/*.ts",
+    "src/lib/routing/**/*.ts"
+  ]
+}
