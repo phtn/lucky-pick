@@ -20,12 +20,12 @@ props { title, description, meta, children, className, bare = false, collapsible
 
 setup
   const contentId = useId()
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(false)
   const isOpen = !collapsible || expanded
 
 section(className={cn('overview-panel', bare && 'overview-panel--bare', className)})
   div(className='overview-panel-heading')
-    h2(className='min-w-0 font-sans text-xl font-medium tracking-tight text-foreground')
+    h2(className='min-w-0 font-sans text-lg font-[450] tracking-tight text-foreground')
       if collapsible
         button(type='button' className='overview-panel-toggle' aria-expanded={isOpen} aria-controls={contentId} onClick={() => setExpanded((value) => !value)})
           span #{title}

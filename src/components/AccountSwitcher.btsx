@@ -91,7 +91,7 @@ setup
   // console, so it is reached with the in-app navigation rather than a handoff.
   const actions: AccountAction[] = user
     ? [
-        { id: 'profile', label: 'Profile', icon: 'account', onSelect: () => navigate('/me') },
+        { id: 'profile', label: 'Profile', icon: 'user-settings', onSelect: () => navigate('/me') },
         ...asgardAction,
         { id: 'sign-out', label: 'Sign out', icon: 'signout', onSelect: () => void handleSignOut(), variant: 'destructive' }
       ]

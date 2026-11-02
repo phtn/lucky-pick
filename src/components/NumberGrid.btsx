@@ -17,7 +17,7 @@ fragment
       each n in Array.from({ length: pool }, (_, i) => i + 1) key n
         button(
           ~ onClick={() => onToggleNumber(n)}
-          ~ className={`aspect-square rounded-full shadow-sm text-lg font-bold transition-all relative flex items-center justify-center ${(selected.includes(n)) ? 'bg-[color-mix(in_oklab,var(--destructive)_69%,transparent)] text-foreground z-10 scale-[1.15]' : 'hover:scale-[1.25]'}`}
+          ~ className={`aspect-square rounded-full shadow-sm text-lg font-bold transition-all relative flex items-center justify-center ${(selected.includes(n)) ? 'bg-[color-mix(in_oklab,var(--destructive)_80%,transparent)] text-[#FFFFFF] z-10 scale-[1.15]' : 'hover:scale-[1.25]'}`}
           ~ )
           | #{n}
   div(className="mt-2 grid grid-cols-3 gap-2 mt-4")

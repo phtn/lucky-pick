@@ -67,7 +67,8 @@ header(className="app-header")
         p(className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-semibold mt-1.5 flex items-center gap-2")
           span
             | #{gameName}
-            | #{" • Philippines"}
+            | #{" • "}
+            span(className='font-[400] opacity-80') Philippines
 
     div(className={cn("app-header__games", {hidden: pathname === "/analytics"})})
       GameSwitcher(
@@ -81,8 +82,8 @@ header(className="app-header")
     div(className="app-header__account flex items-start gap-2")
       AccountSwitcher(onNotify={onNotify} footer={AnalyticsLink})
         DropdownMenuSeparator
-        DropdownMenuLabel(className="font-normal text-xs text-muted-foreground opacity-80") Mode
-        DropdownMenuRadioGroup(value={mode} onValueChange={(next: GameMode) => onSelectMode(next)})
+        DropdownMenuLabel(className="font-normal text-xs text-muted-foreground opacity-80") Settings
+        DropdownMenuRadioGroup(value={mode} onValueChange={(next: GameMode) => onSelectMode(next)} className='hidden')
           DropdownMenuRadioItem(value="solo" className={rowClass})
             div(className="flex size-6 items-center justify-center")
               Icon(name="user" className="w-3.5 h-3.5")
@@ -93,6 +94,7 @@ header(className="app-header")
             span(className="truncate") Party
 
         DropdownMenuSeparator
+
         DropdownMenuCheckboxItem(checked={soundOn} onCheckedChange={onToggleSound} className={rowClass})
           div(className="flex size-6 items-center justify-center")
             if soundOn
@@ -100,27 +102,15 @@ header(className="app-header")
             else
               Icon(name="mute" className="w-3.5 h-3.5 text-muted-foreground")
           span(className="truncate") Sound
+
+
         DropdownMenuCheckboxItem(checked={themeMode === 'dark'} onCheckedChange={onToggleThemeMode} className={rowClass})
           div(className="flex size-6 items-center justify-center")
             if themeMode === 'dark'
-              Icon(name="moon" className="w-3.5 h-3.5")
+              Icon(name="theme" className="size-3.25 opacity-70")
             else
-              Icon(name="sun" className="w-3.5 h-3.5")
-          span(className="truncate") Dark mode
-
+              Icon(name="theme" className="size-3.25 opacity-70")
+          span(className="truncate") #{themeMode === 'dark' ? 'Light' : 'Dark'}
         DropdownMenuSeparator
-        DropdownMenuLabel(className="font-normal text-xs text-muted-foreground opacity-80") Theme
-        DropdownMenuRadioGroup(value={theme} onValueChange={(next: ThemeId) => onPickTheme(next)})
-          each t in THEMES key t.id
-            DropdownMenuRadioItem(value={t.id} className={rowClass})
-              div(className="flex size-6 items-center justify-center")
-                span(
-                  ~ className={`w-4 h-4 rounded-full shrink-0 ${themeMode === 'dark' ? 'dark' : ''}`}
-                  ~ data-theme={t.id}
-                  ~ style={{ background: 'linear-gradient(135deg, var(--primary) 0 50%, var(--destructive) 50% 100%)' }}
-                  ~ )
-              span(className="min-w-0 flex-1")
-                span(className="block text-[12px] font-bold leading-none truncate")
-                  | #{t.name}
-                span(className="block text-[10px] opacity-60 mt-1 truncate")
-                  | #{t.blurb}
+
+        DropdownMenuLabel(className="font-normal text-xs text-muted-foreground opacity-80") Menu

@@ -580,7 +580,7 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
     ~ )
   if showMoneyRain
     div(className="fixed inset-0 pointer-events-none z-[90]")
-  div(className="app-frame relative z-10 w-full max-w-[1480px] mx-auto px-4 md:px-6 py-4 overflow-x-hidden")
+  div(className="app-frame relative z-10 w-full max-w-[1480px] mx-auto px-4 py-2 overflow-x-hidden")
     AnalyticsSessionContext(value={session})
       AppHeader(
         ~ pool={pool}

@@ -7,6 +7,7 @@
 @import './styles/new-default.css';
 @import './styles/doom.css';
 @import './styles/soft-pop.css';
+@import './styles/smooth-reveal.css';
 
 @source "./**/*.btsx";
 
@@ -478,7 +479,7 @@
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     height: 100%;
-    padding-top: clamp(12px, 2vh, 18px);
+    /*padding-top: clamp(12px, 2vh, 18px);*/
     padding-bottom: 8px;
   }
 

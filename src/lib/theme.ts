@@ -10,9 +10,9 @@ export interface ThemeOption {
 /** Registering a theme here is the last step; the token file in src/styles
  *  scopes itself to [data-theme='<id>'] and style.css imports it. */
 export const THEMES: ThemeOption[] = [
-  { id: 'default', name: 'Default', blurb: 'Quiet sage and cream' },
-  { id: 'doom', name: 'Doom', blurb: 'Hard red, square edges' },
-  { id: 'soft-pop', name: 'Soft Pop', blurb: 'Violet, round, loud' },
+  { id: 'default', name: 'Default', blurb: 'Quiet sage and cream' }
+  // { id: 'doom', name: 'Doom', blurb: 'Hard red, square edges' },
+  // { id: 'soft-pop', name: 'Soft Pop', blurb: 'Violet, round, loud' }
 ]
 
 export const DEFAULT_THEME: ThemeId = 'default'
@@ -21,7 +21,7 @@ export const DEFAULT_MODE: ThemeMode = 'dark'
 const STORAGE_KEY = 'lucky-pick:theme'
 
 export function isThemeId(value: unknown): value is ThemeId {
-  return THEMES.some(t => t.id === value)
+  return THEMES.some((t) => t.id === value)
 }
 
 export interface ThemeState {
@@ -37,7 +37,7 @@ export function readStoredTheme(): ThemeState {
       const parsed = JSON.parse(raw) as Partial<ThemeState>
       return {
         theme: isThemeId(parsed.theme) ? parsed.theme : DEFAULT_THEME,
-        mode: parsed.mode === 'light' ? 'light' : 'dark',
+        mode: parsed.mode === 'light' ? 'light' : 'dark'
       }
     }
   } catch {}
