@@ -13,7 +13,8 @@ import type { PracticePlayRow } from '@/lib/profile/record'
 import { readPracticeStats } from '@/lib/profile/stats'
 import { cn } from '@/lib/utils'
 import { api } from '../../convex/_generated/api'
-import { DEFAULT_PLAY_PAGE, TICKET_DETAIL_LIMIT } from '../../convex/plays/d'
+import { MY_HISTORY_LIMIT } from '../../convex/ledger/d'
+import { DEFAULT_PLAY_PAGE, PLAY_HISTORY_LIMIT, TICKET_DETAIL_LIMIT } from '../../convex/plays/d'
 
 module
   type Movement = FunctionReturnType<typeof api.ledger.q.myLedgerHistory>[number]
@@ -28,7 +29,7 @@ module
   // TICKET_DETAIL_LIMIT ticket details, so a live subscription over the full
   // PLAY_HISTORY_LIMIT would be a large payload for a panel that leads with a
   // summary. The statistics therefore describe this window, and say so.
-  const MOVEMENT_ARGS = { limit: 20 }
+  const MOVEMENT_ARGS = { limit: MY_HISTORY_LIMIT }
   const PLAYS_ARGS = { limit: DEFAULT_PLAY_PAGE }
   const PLAY_FEED_LIMIT = 10
 
@@ -55,6 +56,16 @@ module
   const formatNet = (net: number) => (net < 0 ? `−${formatPeso(-net)}` : formatPeso(net))
 
   const formatHits = (hits: number) => (hits === 1 ? '1 hit' : `${hits} hits`)
+
+  // A draw is stored in draw order, because reproducing a simulated draw needs
+  // the order the drum spat the balls out. A reader wants them ascending, the
+  // way `DrawHistory` shows the same draw, so the copy is sorted here.
+  const formatDrawnBalls = (balls: readonly number[]) => [...balls].sort((a, b) => a - b).join(' · ')
+
+  // A read that has not answered is not an account where nothing happened, so
+  // the two states are never given the same sentence.
+  const UNREAD_MOVEMENTS = 'Your credit movements have not been read on this load.'
+  const UNREAD_PLAYS = 'Your practice draws have not been read on this load.'
 
 // A labelled line of the record: whatever the account has, or an em dash.
 component Reading
@@ -110,8 +121,11 @@ setup
   const favouriteGame = stats.favouriteGame
 
   // A user who has never been allocated credits has no wallet row at all. That
-  // is a zero balance, not a failure, so it reads as one.
-  const balance = wallet?.available ?? 0
+  // is a zero balance, not a failure, so `null` reads as one — while `undefined`
+  // is no answer at all and reads as an em dash. That the balance is missing is
+  // a different fact from its being zero, and showing `0` for both would hide
+  // one of them (the rule `lib/asgard/account-detail.ts` already states).
+  const balanceValue = wallet === undefined ? '—' : `${formatCredits(wallet?.available ?? 0)} CR`
   // `null` is an answer — there is no wallet, so nothing was ever allocated.
   // `undefined` is no answer yet, which must not be reported as an allocation
   // that never happened.
@@ -126,6 +140,24 @@ setup
   // `undefined` is no answer at all, which says nothing about the account, so it
   // reads as an em dash rather than as a record that is missing.
   const accountRecordLabel = profile === undefined ? '—' : profile === null ? 'Not linked yet' : 'Linked'
+
+  // Same distinction, per panel: `undefined` is the whole window between
+  // Firebase resolving from local persistence and the Convex token exchange
+  // landing, so an account with credits and draws must not be told in it that
+  // nothing has ever happened on it.
+  const hasReadMovements = movements !== undefined
+  const hasReadPlays = plays !== undefined
+
+  // What the Practice panel counts, said truthfully. The window is the newest
+  // DEFAULT_PLAY_PAGE draws — which is every draw when the account holds fewer
+  // — and `plays.m.record` keeps only PLAY_HISTORY_LIMIT rows per user, so the
+  // ones past that are deleted rather than merely left out of these figures.
+  // Party draws aggregate every player at the table into their one row.
+  const practiceWindow =
+    stats.plays < DEFAULT_PLAY_PAGE
+      ? 'Every resolved draw on your record'
+      : `Your last ${formatCount(DEFAULT_PLAY_PAGE)} resolved draws`
+  const practiceDescription = `${practiceWindow}, counted at PCSO ticket prices. Draws past your most recent ${formatCount(PLAY_HISTORY_LIMIT)} are not kept. A party draw counts the tickets of every player at that table.`
 
   // Identity comes from Firebase first: it is there on a deployment with no
   // Convex client, and before `ensureCurrent` has written the `users` row.
@@ -174,9 +206,11 @@ section(className='relative overview-page pb-16')
         else
           div(className='grid size-8 shrink-0 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
             Icon(name='account' size={20})
+      // `||`, not `??`: `??` falls through only on null/undefined, and a Google
+      // account can carry `displayName: ''`, which would leave the page titleless.
       Masthead(
-        ~ eyebrow={email ?? ''}
-        ~ title={name ?? ''}
+        ~ eyebrow={email || 'No email on this account'}
+        ~ title={name || 'Your profile'}
         ~ description='Monitor tickets and review recent bets.'
         ~ titleClass='ml-12'
         ~ )
@@ -219,18 +253,18 @@ section(className='relative overview-page pb-16')
           p(className='mt-4 text-xs text-destructive') #{signInError}
     else
       div(className='overview-sections px-10')
-        Panel(title='Credits' description='What you hold, and how it has moved.' meta={entries.length === 0 ? 'No movements' : `Newest ${formatCount(entries.length)}`})
+        Panel(title='Credits' description='What you hold, and how it has moved.' meta={!hasReadMovements ? 'Not read yet' : entries.length === 0 ? 'No movements' : `Newest ${formatCount(entries.length)}`})
           div(className='grid gap-10 lg:grid-cols-5 lg:gap-8')
             div(className='lg:col-span-2')
               StatTile(
                 ~ hero={true}
                 ~ label='Balance'
-                ~ value={`${formatCredits(balance)} CR`}
+                ~ value={balanceValue}
                 ~ caption={balanceCaption}
                 ~ )
             div(className='lg:col-span-3')
               if entries.length === 0
-                Blank(message='No credit has moved on your account yet.')
+                Blank(message={hasReadMovements ? 'No credit has moved on your account yet.' : UNREAD_MOVEMENTS})
               else
                 ul(className='overview-feed')
                   each entry in entries key entry._id
@@ -244,11 +278,11 @@ section(className='relative overview-page pb-16')
 
         Panel(
           ~ title='Practice'
-          ~ description={`Your last ${formatCount(DEFAULT_PLAY_PAGE)} resolved draws, counted at PCSO ticket prices. Older draws are kept but are not counted here.`}
-          ~ meta={`${formatCount(stats.plays)} draws read`}
+          ~ description={practiceDescription}
+          ~ meta={hasReadPlays ? `${formatCount(stats.plays)} draws read` : 'Not read yet'}
           ~ )
           if stats.plays === 0
-            Blank(message='No practice draw has been recorded on your account yet.')
+            Blank(message={hasReadPlays ? 'No practice draw has been recorded on your account yet.' : UNREAD_PLAYS})
           else
             fragment
               div(className='overview-stats grid md:grid-cols-3')
@@ -258,7 +292,7 @@ section(className='relative overview-page pb-16')
                   ~ caption={`${formatCount(stats.officialPlays)} checked against an official draw · ${formatCount(stats.simulatedPlays)} simulated.`}
                   ~ )
                 StatTile(label='Stake' value={formatPeso(stats.spent)} caption='What those tickets would have cost.')
-                StatTile(label='Winnings' value={formatPeso(stats.won)} caption='What the same tickets would have paid.')
+                StatTile(label='Winnings' value={formatPeso(stats.won)} caption='What those tickets would have paid, official and simulated draws together.')
                 StatTile(
                   ~ label='Net'
                   ~ value={formatNet(stats.net)}
@@ -271,26 +305,35 @@ section(className='relative overview-page pb-16')
                     ~ value={formatPeso(bestDraw.won)}
                     ~ caption={`${GAMES[bestDraw.game].name} · ${formatRelativeTime(bestDraw.drawnAt, now)}.`}
                     ~ )
+              if stats.officialPlays > 0
+                // A PCSO check asks what own numbers would have done in the real
+                // draw. Pooled into totals dominated by generator fiction that
+                // answer is lost, so it is named once rather than doubling every tile.
+                p(className='mt-8 text-xs text-muted-foreground') #{`Of which official: ${formatPeso(stats.officialSpent)} staked and ${formatPeso(stats.officialWon)} paid across ${formatCount(stats.officialPlays)} checked draws, on ${formatCount(stats.officialWinCount)} winning tickets.`}
               if favouriteGame
-                p(className='mt-8 text-xs text-muted-foreground') #{`Most played: ${GAMES[favouriteGame].name}.`}
+                p(className='mt-4 text-xs text-muted-foreground') #{`Most played: ${GAMES[favouriteGame].name}.`}
               div(className='mt-10')
                 Distribution(
                   ~ segments={stats.hitDistribution}
                   ~ caption={`Tickets by numbers matched. Counted from the ticket detail each draw stores — at most ${formatCount(TICKET_DETAIL_LIMIT)} tickets of a draw — so a larger draw is represented by those rather than by every ticket it held.`}
                   ~ )
 
-        Panel(title='Recent plays' description='One row per resolved draw, newest first.' meta={rows.length === 0 ? 'No draws' : `${formatCount(playFeed.length)} of ${formatCount(rows.length)}`})
+        Panel(title='Recent plays' description='One row per resolved draw, newest first.' meta={!hasReadPlays ? 'Not read yet' : rows.length === 0 ? 'No draws' : `${formatCount(playFeed.length)} of ${formatCount(rows.length)}`})
           if playFeed.length === 0
-            Blank(message='Resolve a draw while signed in and it is listed here.')
+            Blank(message={hasReadPlays ? 'Resolve a draw while signed in and it is listed here.' : UNREAD_PLAYS})
           else
             ul(className='overview-feed')
               each play in playFeed key play._id
                 li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
                   div(className='min-w-0 flex-1')
                     p(className='truncate text-sm text-foreground') #{GAMES[play.game].name}
-                    p(className='truncate font-mono text-xs text-muted-foreground') #{play.drawnBalls.join(' · ')}
+                    p(className='truncate font-mono text-xs text-muted-foreground') #{formatDrawnBalls(play.drawnBalls)}
                   if play.isOfficial
                     span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) official
+                  // A party row holds every player's tickets, so its stake and
+                  // ticket count mean something other than a solo row's.
+                  if play.mode === 'party'
+                    span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) party
                   span(className='w-24 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{`${formatCount(play.ticketCount)} tickets`}
                   span(className='w-16 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{formatHits(play.bestHits)}
                   span(className={cn('w-24 shrink-0 text-right font-mono text-sm tabular-nums', play.won > 0 ? POSITIVE_TONE : 'text-muted-foreground/70')}) #{formatPeso(play.won)}
