@@ -33,9 +33,15 @@ const HIT_BUCKETS = [
 
 const HIT_KEYS = HIT_BUCKETS.map(({ hits }) => String(hits))
 
-/** The draw that paid most; the earliest of equals, so the answer does not flicker. */
+/**
+ * The draw that paid most, or null when none paid anything: a draw that won
+ * nothing is not a best draw. On a tie the first in input order wins; `mine`
+ * returns rows newest-first, so that is the most recent of the equals.
+ */
 function pickBestDraw(rows: readonly PracticePlayRow[]) {
-  return rows.reduce<PracticePlayRow | null>((best, row) => (best === null || row.won > best.won ? row : best), null)
+  const best = rows.reduce<PracticePlayRow | null>((top, row) => (top === null || row.won > top.won ? row : top), null)
+
+  return best !== null && best.won > 0 ? best : null
 }
 
 /** The game with the most draws; ties go to the first in game order. */

@@ -34,14 +34,17 @@ const row = (id: string, game: GameId, over: Partial<PracticePlayRow> = {}): Pra
   ...over
 })
 
-// Three draws, eight tickets, two of them winners. Two draws are 6/45 and one
-// of those is a PCSO draw checked against the player's own numbers.
+// Three draws. Two are 6/45 and one of those is a PCSO draw checked against the
+// player's own numbers. Draw 'a' played 60 tickets but its detail keeps only 3
+// (the stored detail is capped), so the aggregates cover 65 tickets with 4
+// winners while the detail lists 8 tickets with 2 winners. The two views give
+// different rates (4/65 against 2/8), which is what lets a test tell them apart.
 const rows: PracticePlayRow[] = [
   row('a', '6/45', {
-    ticketCount: 3,
+    ticketCount: 60,
     spent: 100,
     won: 1000,
-    winCount: 1,
+    winCount: 3,
     bestHits: 5,
     tickets: [detail(5, 1000), detail(1), detail(0)]
   }),
@@ -81,7 +84,8 @@ describe('readPracticeStats', () => {
   })
 
   test('win rate is winning tickets over tickets played', () => {
-    assert.equal(readPracticeStats(rows).winRate, 0.25) // 2 wins of 8 tickets
+    // 4 wins of 65 tickets from the aggregates; the capped detail alone would say 2 of 8.
+    assert.equal(readPracticeStats(rows).winRate, 4 / 65)
   })
 
   test('counts official and simulated plays apart', () => {
@@ -92,6 +96,7 @@ describe('readPracticeStats', () => {
   })
 
   test('hit distribution sums to the tickets it describes', () => {
+    // The 8 tickets kept in the detail, not the 65 the aggregates count.
     assert.equal(sum(readPracticeStats(rows).hitDistribution.map((segment) => segment.value)), 8)
   })
 
@@ -100,5 +105,11 @@ describe('readPracticeStats', () => {
 
     assert.equal(stats.bestDraw?.won, 1000)
     assert.equal(stats.favouriteGame, '6/45')
+  })
+
+  test('has no best draw when nothing was won', () => {
+    const losers = rows.map((play) => ({ ...play, won: 0, winCount: 0 }))
+
+    assert.equal(readPracticeStats(losers).bestDraw, null)
   })
 })
