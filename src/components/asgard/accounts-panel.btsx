@@ -43,7 +43,9 @@ module
   }
 
   const chipClassName =
-    'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 font-mono text-2xs uppercase tracking-wider transition-colors'
+    'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-3.5 font-sans font-[550] text-muted-foreground text-xs uppercase tracking-tight transition-colors'
+  const testChip = 'dark:border-emerald-400/40 border-emerald-400 bg-emerald-400 dark:bg-emerald-300/10 text-[#FFFFFF] dark:text-emerald-500 transition-colors duration-100 ease-out'
+  const creditChip = 'dark:border-active/40 bg-active dark:bg-active/10 text-[#FFFFFF] dark:text-active transition-colors duration-100 ease-out'
 
   const addButtonClassName = 'size-6 aspect-square flex items-center justify-center rounded-full bg-active text-white transition-colors duration-200 ease-out'
   const actionButtonClassName =
@@ -69,11 +71,12 @@ module
     label: string
     /** Shown under the chips until the field has an error of its own to report. */
     hint?: string
+    type: 'credits' | 'test'
   }
 
   const OPENING_GRANT_HINT = 'Minted into the float wallet the moment the account exists, so it opens with this balance.'
   const TEST_CREDITS_HINT =
-    'Minted alongside the opening grant and memoed as test money, so a transfer can be exercised without anything paid for behind it.'
+    'Minted alongside the opening grant and memoed as test money to test transactions.'
 
   type SlugAvailabilityState =
     | { status: 'idle'; slug: string; message: null }
@@ -144,7 +147,7 @@ component TextField
         span #{visibleMessage}
 
 component CreditAmountField
-  props { form, name, label, hint }: CreditAmountFieldProps
+  props { form, name, label, hint, type }: CreditAmountFieldProps
   setup
     // The ladder is a row of shortcuts, not the whole policy: `Custom` opens a
     // free amount for a grant the rungs do not cover. Which control is showing
@@ -166,21 +169,21 @@ component CreditAmountField
     }
 
   div(className='grid gap-1.5')
-    span(className={fieldLabelClassName}) #{label}
+    span(className={cn(fieldLabelClassName, type === 'credits' ? 'text-rose-400/80' : 'text-orange-400/80')}) #{label}
     div(className='flex flex-wrap gap-1.5')
       each option in ACCOUNT_CREDIT_OPTIONS key option
         button(
           ~ type='button'
           ~ onClick={() => chooseOption(option)}
           ~ aria-pressed={!isCustom && field.state.value === option}
-          ~ className={cn(chipClassName, !isCustom && field.state.value === option ? 'border-active/40 bg-active/10 text-active' : 'border-border/60 text-muted-foreground hover:bg-accent')}
+          ~ className={cn(chipClassName, !isCustom && field.state.value === option ? type === 'test' ? testChip : creditChip : 'border-border text-muted-foreground hover:bg-accent/50')}
           ~ )
           | #{formatAccountCredits(option)}
       button(
         ~ type='button'
         ~ onClick={() => setIsCustom(true)}
         ~ aria-pressed={isCustom}
-        ~ className={cn(chipClassName, isCustom ? 'border-active/40 bg-active/10 text-active' : 'border-border/60 text-muted-foreground hover:bg-accent')}
+        ~ className={cn(chipClassName, isCustom ? type === 'test' ? testChip : creditChip : 'border-border/60 text-muted-foreground hover:bg-accent/50')}
         ~ )
         | Custom
 
@@ -208,10 +211,9 @@ component CreditAmountField
 
 component CreditsField
   props { form }: { form: AccountForm }
-  div(className={cn('grid gap-3', ENTER_CLASS)})
-    CreditAmountField(form={form} name='initialCredits' label='Opening grant' hint={OPENING_GRANT_HINT})
-    div(className='border-t border-dotted border-border/60 pt-3')
-      CreditAmountField(form={form} name='testCredits' label='Test credits' hint={TEST_CREDITS_HINT})
+  div(className={cn('grid md:flex md:items-center md:justify-between gap-3', ENTER_CLASS)})
+    CreditAmountField(form={form} name='initialCredits' label='REAL CREDITS' type='credits' hint={OPENING_GRANT_HINT})
+    CreditAmountField(form={form} name='testCredits' label='Test credits' type='test' hint={TEST_CREDITS_HINT})
 
 component AccountIdentity
   props { account }: { account: AccountRow }
@@ -570,7 +572,7 @@ component CreateAccountForm
             TextField(form={accountForm} name='contactPhone' label='Contact phone' type='tel' placeholder='Optional')
             TextField(form={accountForm} name='contactTitle' label='Contact title' placeholder='Optional')
 
-      Step(icon='gift' title='Initial credits' state={creditsState} index={2} stepCount={5} meta={creditsMeta})
+      Step(icon='gift' title='Initial Credit Grant' state={creditsState} index={2} stepCount={5} meta={creditsMeta})
         CreditsField(form={accountForm})
 
       Step(
@@ -586,7 +588,7 @@ component CreateAccountForm
             TextField(form={accountForm} name='payoutBankOrWallet' label='Bank / Wallet' placeholder='BPI, GCash, Maya')
             TextField(form={accountForm} name='payoutAccountName' label='Account name' placeholder='Name on the account')
             TextField(form={accountForm} name='payoutAccountNumber' label='Account # / Phone #' placeholder='Account or mobile number')
-          TextField(form={accountForm} name='payoutNotes' label='Notes' placeholder='Optional')
+            TextField(form={accountForm} name='payoutNotes' label='Notes' placeholder='Optional')
 
       Step(icon='sparkle' title='Create' state={createState} index={4} stepCount={5} isLast={true})
         if canSubmit

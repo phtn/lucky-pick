@@ -182,7 +182,7 @@
   --color-raised: var(--lp-raised);
   --color-elevated: var(--lp-elevated);
 
-  --color-active: var(--active);
+  --color-active: var(--mac-blue);
   --color-surface: var(--surface);
   --color-control-line: var(--control-line);
   --color-chart-good: var(--chart-good);
