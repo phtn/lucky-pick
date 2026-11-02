@@ -2,6 +2,7 @@ import { useCallback, useState } from 'octane'
 import type { FunctionReturnType } from 'convex/server'
 import { Distribution, Masthead, Panel, StatTile } from '@/components/overview'
 import { useConvexQuery } from '@/hooks/use-convex-query'
+import { usePendingTronAccount } from '@/hooks/use-pending-tron-account'
 import { formatLedgerAmount, formatLedgerLabel } from '@/lib/asgard/account-detail'
 import { isFirebaseConfigured } from '@/lib/firebase'
 import { describeAuthError, signInWithGoogle, useFirebaseUser } from '@/lib/firebase/auth'
@@ -11,6 +12,7 @@ import { Icon } from '@/lib/icons'
 import { formatCount, formatPercent, formatRelativeTime } from '@/lib/overview/metrics'
 import type { PracticePlayRow } from '@/lib/profile/record'
 import { readPracticeStats } from '@/lib/profile/stats'
+import { clearPendingTronAccount } from '@/lib/tronweb/pending-account'
 import { cn } from '@/lib/utils'
 import { api } from '../../convex/_generated/api'
 import { MY_HISTORY_LIMIT } from '../../convex/ledger/d'
@@ -187,6 +189,35 @@ setup
     }
   }, [])
 
+  // The one load on which this user's private key exists anywhere. Everything
+  // below it is about getting the key off this page and into their keeping.
+  const pendingTronAccount = usePendingTronAccount()
+  const [copiedTronKey, setCopiedTronKey] = useState(false)
+
+  const copyTronKey = useCallback(async (privateKey: string) => {
+    try {
+      await navigator.clipboard.writeText(privateKey)
+      setCopiedTronKey(true)
+    } catch {
+      // A refused clipboard leaves the key on screen to be selected by hand, so
+      // the only thing to undo is the confirmation.
+      setCopiedTronKey(false)
+    }
+  }, [])
+
+  // An object URL rather than a `download` href: the key would otherwise sit in
+  // the document as an attribute, and this way it is revoked the moment the file
+  // is handed over.
+  const downloadTronKey = useCallback((address: string, privateKey: string) => {
+    const file = new Blob([`address: ${address}\nprivate key: ${privateKey}\n`], { type: 'text/plain' })
+    const url = URL.createObjectURL(file)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `tron-${address}.txt`
+    link.click()
+    URL.revokeObjectURL(url)
+  }, [])
+
 
 
 // A shared `/me` link must not look broken, so a signed-out viewer is shown the
@@ -253,6 +284,42 @@ section(className='relative overview-page pb-16')
           p(className='mt-4 text-xs text-destructive') #{signInError}
     else
       div(className='overview-sections px-10')
+        // Not collapsible, and first: this is the only moment the key exists,
+        // and a panel that can be folded away is one that can be missed.
+        if pendingTronAccount
+          Panel(title='Save your TRON key' collapsible={false} meta='shown once' className='border-amber-500/40')
+            div(className='grid gap-4')
+              div(className='flex items-start gap-3')
+                Icon(name='alert-triangle' size={16} className='mt-0.5 shrink-0 text-amber-600 dark:text-amber-400')
+                p(className='text-sm leading-relaxed text-foreground') A TRON account was created for you. Its private key is held nowhere but this page — not on our servers, not in this browser's storage. Leave or reload without saving it and the account is gone for good.
+              div(className='grid gap-1')
+                span(className={readingLabelClass}) address
+                code(className='block overflow-x-auto rounded-md bg-foreground/5 px-3 py-2 font-mono text-xs text-foreground') #{pendingTronAccount.address}
+              div(className='grid gap-1')
+                span(className={readingLabelClass}) private key
+                code(className='block overflow-x-auto rounded-md bg-foreground/5 px-3 py-2 font-mono text-xs text-foreground') #{pendingTronAccount.privateKey}
+              div(className='flex flex-wrap items-center gap-2')
+                button(
+                  ~ type='button'
+                  ~ onClick={() => void copyTronKey(pendingTronAccount.privateKey)}
+                  ~ className='inline-flex h-9 items-center gap-2 rounded-full border border-border px-4 text-xs font-medium text-foreground'
+                  ~ )
+                  Icon(name={copiedTronKey ? 'check' : 'key'} size={14})
+                  span #{copiedTronKey ? 'Copied' : 'Copy key'}
+                button(
+                  ~ type='button'
+                  ~ onClick={() => downloadTronKey(pendingTronAccount.address, pendingTronAccount.privateKey)}
+                  ~ className='inline-flex h-9 items-center gap-2 rounded-full border border-border px-4 text-xs font-medium text-foreground'
+                  ~ )
+                  Icon(name='arrow-right' size={14} className='rotate-90')
+                  span Download
+                // Dismissal is the reader's alone — nothing times this panel out.
+                button(
+                  ~ type='button'
+                  ~ onClick={() => clearPendingTronAccount()}
+                  ~ className='inline-flex h-9 items-center gap-2 rounded-full bg-foreground px-4 text-xs font-medium text-background'
+                  ~ )
+                  span I have saved it
         Panel(title='Credits' description='What you hold, and how it has moved.' meta={!hasReadMovements ? 'Not read yet' : entries.length === 0 ? 'No movements' : `Newest ${formatCount(entries.length)}`})
           div(className='grid gap-10 lg:grid-cols-5 lg:gap-8')
             div(className='lg:col-span-2')

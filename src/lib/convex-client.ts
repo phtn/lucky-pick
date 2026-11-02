@@ -1,6 +1,7 @@
 import { auth } from '@/lib/firebase'
 import { ConvexClient } from 'convex/browser'
 import { onAuthStateChanged } from 'firebase/auth'
+import { setPendingTronAccount } from '@/lib/tronweb/pending-account'
 import { api } from '../../convex/_generated/api'
 
 const url = import.meta.env.PUBLIC_CONVEX_URL
@@ -53,6 +54,32 @@ export const subscribeToConvexAuthState = (onStoreChange: () => void) => {
 // uid keeps token refreshes (which re-fire the callback) from re-running it.
 let ensuredUid: string | null = null
 
+/**
+ * Gives a user who has no TRON address one, on the first sign-in that finds the
+ * field empty.
+ *
+ * The keypair is generated here, in the browser, and only the address is sent:
+ * the private key is handed to its owner through `setPendingTronAccount` and
+ * stored nowhere. `claimTrxAddress` answering `false` means the row already had
+ * an address — another tab won, or this read was stale — and the key generated
+ * here is then for an account nothing points at, so it is dropped unshown
+ * rather than offered to someone as theirs.
+ *
+ * Nothing in here logs the account: a thrown Convex error carries the address at
+ * most, but the key must not reach a console or an error reporter.
+ */
+const provisionTrxAddress = async (client: ConvexClient) => {
+  if (!(await client.query(api.users.q.needsTrxAddress, {}))) return
+
+  // Imported here, not at the top: keypair generation pulls in elliptic-curve
+  // and mnemonic code worth ~230kB gzipped, and all but one sign-in per account
+  // returns above without needing a byte of it.
+  const { createTronAccount } = await import('@/lib/tronweb/account')
+  const account = createTronAccount()
+  const claimed = await client.mutation(api.users.m.claimTrxAddress, { trxAddress: account.address })
+  if (claimed) setPendingTronAccount(account)
+}
+
 if (convexClient && auth) {
   onAuthStateChanged(auth, (user) => {
     // Reconfigure only on sign-in and sign-out. Convex owns token rotation;
@@ -75,10 +102,15 @@ if (convexClient && auth) {
       ensuredUid = uid
       // A failed upsert must not block sign-in; clearing the marker lets the
       // next auth callback retry it.
-      convexClient.mutation(api.users.m.ensureCurrent, {}).catch((error) => {
-        if (ensuredUid === uid) ensuredUid = null
-        console.error('Failed to ensure the current user row', error)
-      })
+      convexClient
+        .mutation(api.users.m.ensureCurrent, {})
+        // Strictly after the upsert: provisioning reads the row that mutation
+        // writes, and on a first-ever sign-in there is nothing to read before it.
+        .then(() => provisionTrxAddress(convexClient))
+        .catch((error) => {
+          if (ensuredUid === uid) ensuredUid = null
+          console.error('Failed to ensure the current user row', error)
+        })
     })
   })
 }

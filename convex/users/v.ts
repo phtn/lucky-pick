@@ -14,7 +14,8 @@ export const userFields = {
   preferredUsername: v.union(v.string(), v.null()),
   profileUrl: v.optional(v.string()),
   phone: v.union(v.string(), v.null()),
-  emailVerified: v.union(v.boolean(), v.null())
+  emailVerified: v.union(v.boolean(), v.null()),
+  trxAddress: v.optional(v.string())
 }
 
 export const userValidator = v.object({
