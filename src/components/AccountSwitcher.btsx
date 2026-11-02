@@ -84,7 +84,7 @@ setup
   // Asgard is only offered to the accounts that can open it; the handoff page
   // mints the ID token this origin holds and leaves for the console's own host.
   const asgardAction: AccountAction[] = canOpenAsgard(user !== null, customClaims)
-    ? [{ id: 'asgard', label: 'Asgard', icon: 'key', onSelect: () => navigate(asgardHandoffPath) }]
+    ? [{ id: 'asgard', label: 'Asgard', icon: 'asgard', onSelect: () => navigate(asgardHandoffPath) }]
     : []
 
   // Every signed-in user has a profile page. It is a page of the app, not a

@@ -45,7 +45,7 @@ module
 
   // Below this the panel is a rail: icons only, labels gone.
   const COMPACT_AT_PX = 90
-  const EXPANDED_SIZE = '238px'
+  const EXPANDED_SIZE = '180px'
 
   type Failure = { status: 'unauthorized' | 'unavailable' | 'error'; detail: string }
 
