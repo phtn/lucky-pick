@@ -1,6 +1,6 @@
 import { paginationOptsValidator, paginationResultValidator } from 'convex/server'
 import { ConvexError, v } from 'convex/values'
-import type { Id } from '../_generated/dataModel'
+import type { Doc, Id } from '../_generated/dataModel'
 import type { QueryCtx } from '../_generated/server'
 import { query } from '../_generated/server'
 import { getAccountBySlug, requireAccountManager } from '../accounts/helpers'
@@ -18,6 +18,68 @@ const requireAccountReader = async (ctx: QueryCtx, accountId: Id<'accounts'>) =>
 
 /** How much of a float's life one read returns. */
 const FLOAT_HISTORY_LIMIT = 50
+
+/** How much of their own history a user's panel shows. */
+const MY_HISTORY_LIMIT = 20
+
+const historyEntryValidator = v.object({
+  _id: v.id('ledgerEntries'),
+  amount: v.number(),
+  balanceAfter: v.number(),
+  bucket: walletBucketSchema,
+  createdAt: v.number(),
+  kind: ledgerKindSchema,
+  memo: v.union(v.string(), v.null())
+})
+
+/**
+ * Joins each entry to the kind and memo of its transaction, keeping the order.
+ *
+ * One `get` per distinct transaction, bounded by the number of entries: entries
+ * of one transaction share a header, so this is at most that many reads and
+ * usually fewer.
+ */
+const withTransactionHeaders = async (ctx: QueryCtx, entries: Doc<'ledgerEntries'>[]) => {
+  const headers = new Map<string, { kind: typeof ledgerKindSchema.type; memo: string | null }>()
+  for (const entry of entries) {
+    if (headers.has(entry.txnId)) continue
+    const txn = await ctx.db.get('ledgerTransactions', entry.txnId)
+    // A transaction is immutable and never deleted, so this is defensive only.
+    if (txn) headers.set(entry.txnId, { kind: txn.kind, memo: txn.memo })
+  }
+
+  return entries.flatMap((entry) => {
+    const header = headers.get(entry.txnId)
+    if (!header) return []
+
+    return [
+      {
+        _id: entry._id,
+        amount: entry.amount,
+        balanceAfter: entry.balanceAfter,
+        bucket: entry.bucket,
+        createdAt: entry.createdAt,
+        kind: header.kind,
+        memo: header.memo
+      }
+    ]
+  })
+}
+
+/** The signed-in user's own wallet, or `null` when signed out, unseen, or never allocated credits. */
+const findMyWallet = async (ctx: QueryCtx) => {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) return null
+
+  const user = await getUserByTokenIdentifier(ctx, identity.tokenIdentifier)
+  if (!user) return null
+
+  // A user holds one wallet per account they play on; the oldest is the one a profile shows.
+  return await ctx.db
+    .query('wallets')
+    .withIndex('by_userId', (q) => q.eq('userId', user._id))
+    .first()
+}
 
 /** What the signed-in user can spend on one account: 0 until they have a wallet there. */
 export const balanceForCurrentUser = query({
@@ -64,17 +126,7 @@ export const partnerWallets = query({
  */
 export const partnerFloatHistory = query({
   args: { accountId: v.id('accounts'), limit: v.optional(v.number()) },
-  returns: v.array(
-    v.object({
-      _id: v.id('ledgerEntries'),
-      amount: v.number(),
-      balanceAfter: v.number(),
-      bucket: walletBucketSchema,
-      createdAt: v.number(),
-      kind: ledgerKindSchema,
-      memo: v.union(v.string(), v.null())
-    })
-  ),
+  returns: v.array(historyEntryValidator),
   handler: async (ctx, { accountId, limit }) => {
     await requireAccountReader(ctx, accountId)
 
@@ -88,32 +140,36 @@ export const partnerFloatHistory = query({
       .order('desc')
       .take(take)
 
-    // One `get` per entry, bounded by `take`. Entries of one transaction share
-    // a header, so this is at most `take` reads and usually fewer.
-    const headers = new Map<string, { kind: typeof ledgerKindSchema.type; memo: string | null }>()
-    for (const entry of entries) {
-      if (headers.has(entry.txnId)) continue
-      const txn = await ctx.db.get('ledgerTransactions', entry.txnId)
-      // A transaction is immutable and never deleted, so this is defensive only.
-      if (txn) headers.set(entry.txnId, { kind: txn.kind, memo: txn.memo })
-    }
+    return await withTransactionHeaders(ctx, entries)
+  }
+})
 
-    return entries.flatMap((entry) => {
-      const header = headers.get(entry.txnId)
-      if (!header) return []
+/** The caller's own wallet. Takes no id: it is derived from the identity, so there is nothing to probe. */
+export const myWallet = query({
+  args: {},
+  returns: v.union(schema.doc('wallets'), v.null()),
+  handler: async (ctx) => await findMyWallet(ctx)
+})
 
-      return [
-        {
-          _id: entry._id,
-          amount: entry.amount,
-          balanceAfter: entry.balanceAfter,
-          bucket: entry.bucket,
-          createdAt: entry.createdAt,
-          kind: header.kind,
-          memo: header.memo
-        }
-      ]
-    })
+/**
+ * The caller's own recent movements, newest first, shaped like
+ * `partnerFloatHistory`. Capped rather than paginated: it feeds a fixed panel.
+ */
+export const myLedgerHistory = query({
+  args: { limit: v.optional(v.number()) },
+  returns: v.array(historyEntryValidator),
+  handler: async (ctx, { limit }) => {
+    const wallet = await findMyWallet(ctx)
+    if (!wallet) return []
+
+    const take = Math.min(Math.max(Math.floor(limit ?? MY_HISTORY_LIMIT), 1), MY_HISTORY_LIMIT)
+    const entries = await ctx.db
+      .query('ledgerEntries')
+      .withIndex('by_walletId_and_createdAt', (q) => q.eq('walletId', wallet._id))
+      .order('desc')
+      .take(take)
+
+    return await withTransactionHeaders(ctx, entries)
   }
 })
 
