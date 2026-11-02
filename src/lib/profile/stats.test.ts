@@ -95,6 +95,28 @@ describe('readPracticeStats', () => {
     assert.equal(stats.simulatedPlays, 2)
   })
 
+  test('keeps the official rows\' own spend, winnings and winners', () => {
+    // Row 'b' is the only PCSO check: ₱100 staked, ₱200 paid, 1 winning ticket.
+    // The pooled totals (300 / 1200) are dominated by the simulated draws, so
+    // the official figures have to be readable apart from them.
+    const stats = readPracticeStats(rows)
+
+    assert.equal(stats.officialSpent, 100)
+    assert.equal(stats.officialWon, 200)
+    assert.equal(stats.officialWinCount, 1)
+  })
+
+  test('reads the official figures as zero when no draw was checked', () => {
+    const simulated = readPracticeStats(rows.filter((play) => !play.isOfficial))
+
+    assert.equal(simulated.officialPlays, 0)
+    assert.deepEqual(
+      [simulated.officialSpent, simulated.officialWon, simulated.officialWinCount],
+      [0, 0, 0]
+    )
+    assert.deepEqual(readPracticeStats([]).officialSpent, 0)
+  })
+
   test('hit distribution sums to the tickets it describes', () => {
     // The 8 tickets kept in the detail, not the 65 the aggregates count.
     assert.equal(sum(readPracticeStats(rows).hitDistribution.map((segment) => segment.value)), 8)

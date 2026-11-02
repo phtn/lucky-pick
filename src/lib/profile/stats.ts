@@ -18,6 +18,15 @@ export interface PracticeStats {
   hitDistribution: Segment[]
   officialPlays: number
   simulatedPlays: number
+  /**
+   * Spend, winnings and winning tickets of the `isOfficial` rows alone. A PCSO
+   * check asks what own numbers would have done in the real draw; the totals
+   * above pool that with simulated draws, which usually outnumber it heavily,
+   * so the answer is also kept on its own. Zero when no draw was checked.
+   */
+  officialSpent: number
+  officialWon: number
+  officialWinCount: number
 }
 
 // A six-ball game: 0 to 6 numbers matched. The tone ramps with the hit count.
@@ -75,7 +84,7 @@ function readHitDistribution(rows: readonly PracticePlayRow[]) {
 export function readPracticeStats(rows: readonly PracticePlayRow[]): PracticeStats {
   const spent = sum(rows.map((row) => row.spent))
   const won = sum(rows.map((row) => row.won))
-  const officialPlays = rows.filter((row) => row.isOfficial).length
+  const official = rows.filter((row) => row.isOfficial)
 
   return {
     plays: rows.length,
@@ -86,7 +95,10 @@ export function readPracticeStats(rows: readonly PracticePlayRow[]): PracticeSta
     bestDraw: pickBestDraw(rows),
     favouriteGame: pickFavouriteGame(rows),
     hitDistribution: readHitDistribution(rows),
-    officialPlays,
-    simulatedPlays: rows.length - officialPlays
+    officialPlays: official.length,
+    simulatedPlays: rows.length - official.length,
+    officialSpent: sum(official.map((row) => row.spent)),
+    officialWon: sum(official.map((row) => row.won)),
+    officialWinCount: sum(official.map((row) => row.winCount))
   }
 }

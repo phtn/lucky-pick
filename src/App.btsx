@@ -23,7 +23,7 @@ import { GAMES, GAME_IDS, betPrize, type BetType, type GameId } from './lib/game
 import { drawBalls, evenOddPick, randomPick, randomPicks, randomRollover, type DrawSeed } from './lib/rng';
 import { formatCompactPeso, formatPeso } from './lib/format';
 import { MAX_TICKETS, OFFICIAL_RESULTS, PLAYER_COLORS, genRoomCode, getNextDrawDate, type BetCost, type ChatMsg, type Draw, type GameMode, type Player, type PrizeMode, type SessionTotals, type Ticket, type WinEntry } from './lib/lotto';
-import { buildPracticePlay } from './lib/profile/record';
+import { buildPracticePlay, type SettledTicket } from './lib/profile/record';
 import { convexClient } from './lib/convex-client';
 import { auth } from './lib/firebase';
 import { api } from '../convex/_generated/api';
@@ -389,7 +389,12 @@ setup
     // Only the evaluation itself knows which tickets THIS draw settled: once
     // flipped to 'won'/'lost' they are indistinguishable from an earlier
     // draw's, so they are collected here rather than re-read off the list.
-    const settled: { ticket:Ticket; playerName?:string }[]=[];
+    // Nothing is recorded when signed out, so nothing is collected then either:
+    // a draw can settle up to MAX_TICKETS tickets, and a wrapper object apiece
+    // is work this thread would only throw away. The guard at the write site
+    // below stays; this one just stops paying for it in advance.
+    const shouldRecord = Boolean(convexClient && auth?.currentUser);
+    const settled: SettledTicket[]=[];
 
     const calcPrize = (t:Ticket, hits:number): { won:boolean; prize:number } => {
       if(t.betType===6){
@@ -410,11 +415,11 @@ setup
           if(won){
             const nt={...t,hits,status:'won' as const, prizeWon:prize};
             wins.push({ticket:nt, prize});
-            settled.push({ticket:nt});
+            if(shouldRecord) settled.push({ticket:nt});
             return nt;
           } else {
             const nt={...t,hits,status:'lost' as const, prizeWon:0};
-            settled.push({ticket:nt});
+            if(shouldRecord) settled.push({ticket:nt});
             return nt;
           }
       });
@@ -430,11 +435,11 @@ setup
               w+=prize; wc+=1;
               const nt={...t,hits,status:'won' as const, prizeWon:prize};
               wins.push({ticket:nt, player:p, prize});
-              settled.push({ticket:nt, playerName:p.name});
+              if(shouldRecord) settled.push({ticket:nt, playerName:p.name});
               return nt;
             } else {
               const nt={...t,hits,status:'lost' as const, prizeWon:0};
-              settled.push({ticket:nt, playerName:p.name});
+              if(shouldRecord) settled.push({ticket:nt, playerName:p.name});
               return nt;
             }
           });
@@ -469,7 +474,7 @@ setup
 
     // History only: fire-and-forget so nothing here can delay the reveal, and
     // a lost row stays in the console rather than reaching the player.
-    if(convexClient && auth?.currentUser){
+    if(shouldRecord && convexClient && auth?.currentUser){
       const play = buildPracticePlay({ draw, mode, settled });
       if(play) void convexClient.mutation(api.plays.m.record, play).catch(err=>console.error('Failed to record the practice play', err));
     }

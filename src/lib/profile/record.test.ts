@@ -58,6 +58,45 @@ describe('buildPracticePlay', () => {
     assert.deepEqual(input.map((s) => s.ticket.id), [1, 2, 3, 4, 5]) // the caller's array is left in order
   })
 
+  test('ranks past the detail cap, and keeps ties in input order', () => {
+    // 63 tickets for 50 places: the 13 that must be dropped are the last of the
+    // prizeless, since among equals the earlier ticket keeps its place. A
+    // sort-then-slice and a bounded selection agree only if both are stable.
+    const tickets = [
+      ...Array.from({ length: 40 }, (_, i) => ticket(i + 100, { hits: 2 })),
+      won(1, 500, 4),
+      ...Array.from({ length: 20 }, (_, i) => ticket(i + 200, { hits: 2 })),
+      won(2, 500, 4),
+      won(3, 9000, 6)
+    ]
+    const play = buildPracticePlay({ draw, mode: 'solo', settled: settle(tickets) })!
+
+    assert.equal(play.ticketCount, 63)
+    assert.equal(play.tickets.length, TICKET_DETAIL_LIMIT)
+    // Prize descending; the two 500s in the order they were played; then the
+    // prizeless, of which the earliest 47 survive.
+    assert.deepEqual(play.tickets.slice(0, 3).map((t) => t.prize), [9000, 500, 500])
+    assert.deepEqual(play.tickets.slice(3).map((t) => t.prize), Array.from({ length: 47 }, () => 0))
+    assert.deepEqual(play.tickets.slice(3).map((t) => t.hits), Array.from({ length: 47 }, () => 2))
+  })
+
+  test('a won ticket carrying no prize adds nothing to the money figures', () => {
+    // `calcPrize` always writes `prizeWon`, so `status` and `prize` agree today.
+    // The row's money comes from the prize, never from the status, and this
+    // pins that: an edit that left `prizeWon` unset must not invent winnings.
+    const play = buildPracticePlay({
+      draw,
+      mode: 'solo',
+      settled: settle([ticket(1, { status: 'won', hits: 4, prizeWon: undefined }), won(2, 300, 3)])
+    })!
+
+    assert.equal(play.won, 300)
+    assert.equal(play.winCount, 1)
+    assert.equal(play.ticketCount, 2)
+    assert.equal(play.bestHits, 4) // the hits still count: only the prize is absent
+    assert.equal(play.tickets.find((t) => t.hits === 4)?.prize, 0)
+  })
+
   test('returns null for a draw with no settled tickets', () => {
     assert.equal(buildPracticePlay({ draw, mode: 'solo', settled: [] }), null)
   })
