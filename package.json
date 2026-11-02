@@ -15,6 +15,7 @@
     "deploy": "bun run build && wrangler deploy",
     "deploy:dry": "bun run build && wrangler deploy --dry-run",
     "cf:preview": "bun run build && wrangler dev",
+    "cf:secrets": "bun scripts/secrets-put.ts",
     "icons:build": "bun scripts/build-icons.ts --svg src/lib/icons/svg --out src/lib/icons/icons.ts",
     "icons:check": "bun scripts/build-icons.ts --svg src/lib/icons/svg --out src/lib/icons/icons.ts --check",
     "results:build": "bun scripts/build-results.ts",
