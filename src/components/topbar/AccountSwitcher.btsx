@@ -1,0 +1,161 @@
+module "use client";
+import { useCallback, useState } from 'octane'
+import Switcher from '@/components/ui/switcher.btsx'
+import { useConvexQuery } from '@/hooks/use-convex-query'
+import { useTrxBalance } from '@/hooks/use-trx-balance'
+import { isFirebaseConfigured } from '@/lib/firebase'
+import { forgetAllAccounts, getAccountLabel } from '@/lib/firebase/accounts'
+import { describeAuthError, signInWithGoogle, signOutUser, useFirebaseUser, useRememberedAccounts } from '@/lib/firebase/auth'
+import type { IconName } from '@/lib/icons'
+import { canOpenAsgard } from '@/lib/asgard/access'
+import { navigate } from '@/lib/navigation'
+import { asgardHandoffPath } from '@/lib/routing/asgard-subdomain'
+import { formatTrx, formatUsd } from '@/lib/tronweb/balance'
+import { api } from '../../../convex/_generated/api'
+
+module
+  interface AccountSwitcherProps {
+    /** Surfaces sign-in failures through the app's existing toast. */
+    onNotify?: (message: string) => void
+    /** App settings rendered inside this menu, below the account rows. */
+    children?: unknown
+    footer?: unknown
+  }
+
+  interface AccountItem {
+    id: string
+    label: string
+    icon: IconName
+    description?: string
+    imageUrl?: string | null
+  }
+
+  interface AccountAction {
+    id: string
+    label: string
+    icon: IconName
+    onSelect: () => void
+    variant?: 'default' | 'destructive'
+    labelSuffix?: string
+    /** Right-aligned qualifier the switcher renders muted beside the label. */
+    meta?: string
+  }
+
+props { onNotify, children, footer }: AccountSwitcherProps
+
+setup
+  const { user, isLoading, authError, customClaims } = useFirebaseUser()
+  const accounts = useRememberedAccounts()
+  const [isPending, setIsPending] = useState(false)
+  // The address is on the caller's own `users` row, so the menu reads it rather
+  // than being told it. `undefined` until the Convex token exchange lands.
+  const profile = useConvexQuery(api.users.q.current, {}, { enabled: user !== null })
+
+  const notify = useCallback((message: string | null) => {
+    if (message) onNotify?.(message)
+  }, [onNotify])
+
+  // `loginHint` is the address of a roster entry, so Google opens on that
+  // account instead of its generic chooser.
+  const startSignIn = useCallback(async (loginHint?: string) => {
+    setIsPending(true)
+    try {
+      const credential = await signInWithGoogle(loginHint)
+      // A redirect flow resolves after navigation, so there is nothing to
+      // announce on this side of it.
+      if (credential) notify(`Signed in as ${credential.user.displayName ?? credential.user.email ?? 'your account'}`)
+    } catch (error) {
+      notify(describeAuthError(error))
+    } finally {
+      setIsPending(false)
+    }
+  }, [notify])
+
+  const handleSignOut = useCallback(async () => {
+    setIsPending(true)
+    try {
+      await signOutUser()
+      notify('Signed out')
+    } catch (error) {
+      notify(describeAuthError(error))
+    } finally {
+      setIsPending(false)
+    }
+  }, [notify])
+
+  const items: AccountItem[] = accounts.map(account => ({
+    id: account.uid,
+    label: getAccountLabel(account),
+    icon: 'account',
+    description: account.email ?? undefined,
+    imageUrl: account.photoURL
+  }))
+
+  // Asgard is only offered to the accounts that can open it; the handoff page
+  // mints the ID token this origin holds and leaves for the console's own host.
+  const asgardAction: AccountAction[] = canOpenAsgard(user !== null, customClaims)
+    ? [{ id: 'asgard', label: 'Asgard', icon: 'asgard', onSelect: () => navigate(asgardHandoffPath) }]
+    : []
+
+  // The balance belongs to whoever is signed in, so it is not behind the Asgard
+  // gate the row first sat in. The row is absent until there is an address to
+  // read: a user mid-provisioning has no account to show a balance for, and a
+  // zero against no address would read as an empty wallet rather than as none.
+  const trxBalance = useTrxBalance(profile?.trxAddress)
+  const trxAction: AccountAction[] = profile?.trxAddress
+    ? [
+        {
+          id: 'trx',
+          // `undefined` is no answer — in flight, or a node that refused — and
+          // an em dash says so. `0` is an answer, and reads as `0.00 TRX`.
+          label: trxBalance === undefined ? '' : formatTrx(trxBalance.sun),
+          labelSuffix: 'TRX',
+          // The dollar value is a second reading of the balance, so it is absent
+          // rather than zeroed when there is no balance or no price to read it at.
+          meta:
+            trxBalance && trxBalance.usdPerTrx !== null
+              ? formatUsd(trxBalance.sun, trxBalance.usdPerTrx)
+              : undefined,
+          icon: 'trx',
+          onSelect: () => navigate('/trx'),
+          variant: 'destructive'
+        }
+      ]
+    : []
+
+  // Every signed-in user has a profile page. It is a page of the app, not a
+  // console, so it is reached with the in-app navigation rather than a handoff.
+  const actions: AccountAction[] = user
+    ? [
+        { id: 'profile', label: 'Profile', icon: 'user-settings', onSelect: () => navigate('/me') },
+        ...trxAction,
+        ...asgardAction,
+        { id: 'sign-out', label: 'Sign out', icon: 'signout', onSelect: () => void handleSignOut() }
+      ]
+    : accounts.length > 0
+      ? [{ id: 'forget', label: 'Forget saved accounts', icon: 'close', onSelect: forgetAllAccounts }]
+      : []
+
+  // An unconfigured deployment has no auth to offer, so the control says so
+  // rather than opening a menu that cannot do anything.
+  const title = isFirebaseConfigured ? (user ? '' : 'Recent accounts') : 'Auth unavailable'
+  const emptyLabel = isFirebaseConfigured ? 'Sign in' : 'Auth off'
+
+if !isFirebaseConfigured
+  Switcher(items={[]} title={title} activeId={null} emptyLabel={emptyLabel} icon='key' children={children} footer={footer})
+else
+  Switcher(
+    ~ items={items}
+    ~ title={title}
+    ~ activeId={user?.uid ?? null}
+    ~ emptyLabel={authError ? 'Sign in again' : emptyLabel}
+    ~ busy={isPending || isLoading}
+    ~ createLabel={user ? 'Switch account' : 'Sign in with Google'}
+    ~ createLabelIcon='goog'
+    ~ icon={user ? 'account' : 'person'}
+    ~ onSelect={(item) => void startSignIn(item.description)}
+    ~ onCreate={() => void startSignIn()}
+    ~ actions={actions}
+    ~ children={children}
+    ~ footer={footer}
+    ~ )

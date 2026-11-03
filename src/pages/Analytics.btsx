@@ -1,11 +1,11 @@
 import { useMemo, useEffect, useRef } from 'octane'
-import { Icon } from '../lib/icons'
-import { GAMES } from '../lib/games'
-import { formatPeso } from '../lib/format'
-import { summarizeSession } from '../lib/analytics'
-import type { Ticket, Player, Draw, GameMode } from '../lib/lotto'
-import TabPanel, { TabPanelList, TabPanelTrigger, TabPanelContent } from '../components/ui/tab-panel.btsx'
-import ResultsPanel from '../components/ResultsPanel.btsx'
+import { Icon } from '@/lib/icons'
+import { GAMES } from '@/lib/games'
+import { formatPeso } from '@/lib/format'
+import { summarizeSession } from '@/lib/analytics'
+import type { Ticket, Player, Draw, GameMode } from '@/lib/lotto'
+import TabPanel, { TabPanelList, TabPanelTrigger, TabPanelContent } from '@/components/ui/tab-panel.btsx'
+import ResultsPanel from '@/components/analytics/ResultsPanel.btsx'
 
 props { tickets, players, draws, mode }: { tickets: Ticket[]; players: Player[]; draws: Draw[]; mode: GameMode }
 setup

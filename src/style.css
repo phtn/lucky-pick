@@ -194,6 +194,9 @@
   --color-tier-2: var(--tier-2);
   --color-tier-3: var(--tier-3);
   --color-tier-4: var(--tier-4);
+  --font-sans: 'OKX', system-ui, sans-serif;
+  --font-mono: 'BMR', monospace;
+  --font-ark: 'ARK', sans-serif;
 }
 
 @layer base {
@@ -221,7 +224,7 @@
     min-height: 100vh;
     background: var(--background);
     color: var(--foreground);
-    font-family: 'Manrope', 'Geist', system-ui, sans-serif;
+    font-family: var(--font-sans);
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
@@ -504,6 +507,7 @@
 
   .app-main-grid {
     min-height: 0;
+    margin: 24px 0 0;
     align-items: stretch;
     overflow: hidden;
   }
@@ -592,7 +596,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.38rem;
-  padding: 0.2rem 0.6rem;
+  padding: 0.2rem 0.4rem;
   border-radius: var(--lp-r-pill);
   color: var(--destructive);
   background: color-mix(in oklab, var(--destructive) 14%, transparent);

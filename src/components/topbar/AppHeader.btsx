@@ -1,0 +1,114 @@
+import AccountSwitcher from './AccountSwitcher.btsx';
+import GameSwitcher from './GameSwitcher.btsx';
+import { DropdownMenuItem, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu.btsx';
+import { Icon } from '@/lib/icons';
+import { THEMES, type ThemeId, type ThemeMode } from '@/lib/theme';
+import type { GameConfig, GameId } from '@/lib/games';
+import type { GameMode } from '@/lib/lotto';
+import { cn } from '@/lib/utils';
+import { Link } from '@octanejs/tanstack-router';
+import { usePathname } from '@/lib/navigation';
+
+module
+  interface AppHeaderProps {
+    /** Ball pool of the selected game, shown inside the wordmark. */
+    pool: number;
+    gameName: string;
+    game: GameConfig;
+    gameId: GameId;
+    jackpots: Record<GameId, number>;
+    isDrawing: boolean;
+    onSwitchGame?: (next: GameId) => void;
+    mode: GameMode;
+    onSelectMode?: (next: GameMode) => void;
+    soundOn: boolean;
+    onToggleSound?: VoidFunction;
+    theme: ThemeId;
+    themeMode?: ThemeMode;
+    onToggleThemeMode?: VoidFunction;
+    onPickTheme?: (next: ThemeId) => void;
+    /** Routes sign-in results into the app's toast. */
+    onNotify?: (message: string) => void;
+  }
+
+  // Checkbox and radio rows keep the menu open on click, so the whole header's
+  // worth of settings can be worked through in one visit.
+  const rowClass = 'gap-1 p-2 hover:bg-foreground/10!';
+
+component AnalyticsLink
+  DropdownMenuSeparator
+  DropdownMenuItem( className="gap-1 p-2 hover:bg-foreground/10!")
+    Link(to="/analytics" className="flex items-center gap-1")
+      div(className="flex size-6 items-center justify-center")
+        Icon(name="columns" size={14})
+      span Analytics
+
+props { pool, gameName, game, gameId, jackpots, isDrawing, onSwitchGame, mode, onSelectMode, soundOn, onToggleSound, theme, themeMode, onToggleThemeMode, onPickTheme, onNotify }: AppHeaderProps
+
+setup
+  const pathname = usePathname();
+
+header(className="app-header")
+  div(className="app-header__layout")
+    div(className="app-header__brand flex min-w-0 items-center gap-3")
+      div(className="brand-mark rounded-full!")
+        span(className="brand-mark__number")
+          | #{pool}
+        span(className="brand-mark__orbit animate-spin blur-xs" aria-hidden="true")
+        span(className="brand-mark__orbit -rotate-12 scale-130 opacity-20 animate-pulse" aria-hidden="true")
+        span(className="brand-mark__orbit" aria-hidden="true")
+      div
+        Link(to="/")
+          h1(className="flex items-center gap-2 text-[22px] md:text-xl font-bold tracking-tighter leading-none")
+            span Lucky Pick
+            span(className="live-chip text-[10px] uppercase tracking-[0.18em]")
+              span(className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse")
+              | #{" Live"}
+        p(className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-semibold mt-1.5 flex items-center gap-2")
+          span
+            | #{gameName}
+            | #{" • "}
+            span(className='font-[400] opacity-80') Philippines
+
+    div(className={cn("app-header__games", {hidden: pathname === "/analytics"})})
+      GameSwitcher(
+        ~ game={game}
+        ~ gameId={gameId}
+        ~ jackpots={jackpots}
+        ~ isDrawing={isDrawing}
+        ~ onSwitchGame={onSwitchGame}
+        ~ )
+
+    div(className="app-header__account flex items-start gap-2")
+      AccountSwitcher(onNotify={onNotify} footer={AnalyticsLink})
+        DropdownMenuSeparator
+        DropdownMenuLabel(className="font-normal text-xs text-muted-foreground opacity-80") Settings
+        DropdownMenuRadioGroup(value={mode} onValueChange={(next: GameMode) => onSelectMode && onSelectMode(next)} className='hidden')
+          DropdownMenuRadioItem(value="solo" className={rowClass})
+            div(className="flex size-6 items-center justify-center")
+              Icon(name="user" className="w-3.5 h-3.5")
+            span(className="truncate") Solo
+          DropdownMenuRadioItem(value="party" className={rowClass})
+            div(className="flex size-6 items-center justify-center")
+              Icon(name="user-plus" className="w-3.5 h-3.5")
+            span(className="truncate") Party
+
+        DropdownMenuSeparator
+
+        DropdownMenuCheckboxItem(checked={soundOn} onCheckedChange={onToggleSound} className={rowClass})
+          div(className="flex size-6 items-center justify-center")
+            if soundOn
+              Icon(name="radio" className="w-3.5 h-3.5")
+            else
+              Icon(name="mute" className="w-3.5 h-3.5 text-muted-foreground")
+          span(className="truncate") Sound
+
+
+        DropdownMenuCheckboxItem(checked={themeMode === 'dark'} onCheckedChange={onToggleThemeMode} className={rowClass})
+          div(className="flex size-6 items-center justify-center")
+            if themeMode === 'dark'
+              Icon(name="theme" className="size-3.25 opacity-70")
+            else
+              Icon(name="theme" className="size-3.25 opacity-70")
+          span(className="truncate") #{themeMode === 'dark' ? 'Light' : 'Dark'}
+        DropdownMenuSeparator

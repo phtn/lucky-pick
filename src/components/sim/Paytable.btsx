@@ -1,0 +1,41 @@
+import { PAYOUT_RTP, type BetType, type GameConfig } from '@/lib/games';
+import { formatCompactPeso } from '@/lib/format';
+import { jackpotLadder, pickPaytable, type BetCost } from '@/lib/lotto';
+
+module
+  // A jackpot ticket and a pick bet settle on different odds models, so each
+  // gets its own table rather than one mixed column.
+  interface PaytableProps {
+    game: GameConfig;
+    betType: BetType;
+    /** Rolling pot, shown as the 6/6 prize on the jackpot ladder. */
+    jackpot: number;
+    /** Stake a pick bet is priced against. */
+    betCost: BetCost;
+    /** The bet panel shows one selected tier; references can opt into every tier. */
+    showAll?: boolean;
+  }
+
+props { game, betType, jackpot, betCost, showAll }: PaytableProps
+setup
+  const selectedMatch = `${betType}/${betType}`;
+  const allRows = betType === 6 ? jackpotLadder(game, jackpot) : pickPaytable(game, betCost);
+  const rows = showAll ? allRows : allRows.filter(row => row.m === selectedMatch);
+
+div(className="mb-1 rounded-[14px] overflow-hidden")
+  div(className="hidden px-3 py-2 flex items-center justify-between")
+    span(className="select-none text-[10px] font-black tracking-widest text-muted-foreground")
+      | #{betType === 6 ? '' : 'PAYTABLE • '}
+      | #{game.name.toUpperCase()}
+    span(className="text-[9px] px-1.5 py-0.5 rounded-full text-primary font-bold")
+      | #{betType === 6 ? formatCompactPeso(game.baseJackpot) + '+ BASE' : Math.round(PAYOUT_RTP * 1000) / 10 + '% RETURN'}
+  div(className="divide-y divide-[var(--lp-divider)]")
+    each r in rows key r.m
+      div(className={`flex items-center justify-between h-10 px-4 text-sm ${r.m === selectedMatch ? 'bg-primary/10' : ''}`})
+        span(className={`font-bold ${r.m === selectedMatch ? 'text-primary' : 'text-foreground'}`})
+          | #{r.prize}
+        span(className="flex flex-col leading-tight")
+          span(className="text-[9px] text-muted-foreground")
+            | #{r.sub}
+        span(className="text-right text-[10px] text-muted-foreground font-mono")
+          | #{r.odds}

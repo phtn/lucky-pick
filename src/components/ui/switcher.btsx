@@ -110,7 +110,7 @@ component SwitcherRoot
               // `ml-auto` rather than a spacer: a row without `meta` keeps the
               // layout it had before this slot existed.
               if action.meta
-                div(className="ml-auto shrink-0 pl-3 font-sans text-sm -tracking-[0.02em] whitespace-nowrap text-muted-foreground/80") #{action.meta}
+                div(className="ml-auto shrink-0 pl-3 font-sans text-sm -tracking-[0.02em] whitespace-nowrap text-muted-foreground") #{action.meta}
       if children
         DropdownMenuGroup(children={children})
       if footer

@@ -1,22 +1,22 @@
 import { useState, useRef, useEffect, useMemo } from 'octane';
-import AppHeader from './components/AppHeader.btsx';
+import AppHeader from '@/components/topbar/AppHeader.btsx';
 import { Outlet } from '@octanejs/tanstack-router';
-import { AnalyticsSessionContext } from './lib/analytics-session';
-import { usePathname } from './lib/navigation';
-import { isAppPagePath } from './lib/routing/app-pages';
-import BetPanel from './components/BetPanel.btsx';
-import DrawHistory from './components/DrawHistory.btsx';
-import DrawStage from './components/DrawStage.btsx';
-import HowItWorks from './components/HowItWorks.btsx';
-import Leaderboard from './components/Leaderboard.btsx';
-import LiveBoard from './components/LiveBoard.btsx';
-import PartyChat from './components/PartyChat.btsx';
-import PlayerTickets from './components/PlayerTickets.btsx';
-import PayoutReference from './components/PayoutReference.btsx';
-import PrizeNote from './components/PrizeNote.btsx';
-import RoomPanel from './components/RoomPanel.btsx';
-import SessionStats from './components/SessionStats.btsx';
-import TicketList from './components/TicketList.btsx';
+import { AnalyticsSessionContext } from '@/lib/analytics-session';
+import { usePathname } from '@/lib/navigation';
+import { isAppPagePath } from '@/lib/routing/app-pages';
+import BetPanel from '@/components/sim/BetPanel.btsx';
+import DrawHistory from '@/components/sim/DrawHistory.btsx';
+import DrawStage from '@/components/sim/DrawStage.btsx';
+import HowItWorks from '@/components/sim/HowItWorks.btsx';
+import Leaderboard from '@/components/sim/Leaderboard.btsx';
+import LiveBoard from '@/components/sim/LiveBoard.btsx';
+import PartyChat from '@/components/sim/PartyChat.btsx';
+import PlayerTickets from '@/components/sim/PlayerTickets.btsx';
+import PayoutReference from '@/components/sim/PayoutReference.btsx';
+import PrizeNote from '@/components/sim/PrizeNote.btsx';
+import RoomPanel from '@/components/sim/RoomPanel.btsx';
+import SessionStats from '@/components/sim/SessionStats.btsx';
+import TicketList from '@/components/sim/TicketList.btsx';
 import { THEMES, applyTheme, readStoredTheme, storeTheme, type ThemeId, type ThemeMode } from './lib/theme';
 import { readConfettiColors } from './lib/theme-colors';
 import { GAMES, GAME_IDS, betPrize, type BetType, type GameId } from './lib/games';
@@ -101,7 +101,7 @@ setup
   const timersRef = useRef(new Set<number>());
 
   // Draw, sound, toast, and chat timers belong to this mounted application.
-  const schedule = (callback: () => void, delay: number) => {
+  const schedule = (callback: VoidFunction, delay: number) => {
     const timer = window.setTimeout(() => {
       timersRef.current.delete(timer);
       callback();

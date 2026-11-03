@@ -1,0 +1,25 @@
+import { formatPeso } from '@/lib/format';
+import type { SessionTotals } from '@/lib/lotto';
+import { Icon } from '@/lib/icons';
+
+
+props { stats }: { stats: SessionTotals }
+
+div(className=" p-4 flex items-center justify-between")
+  div(className="flex items-center gap-2.5")
+    div(className="w-8 h-8 rounded-full bg-elevated flex items-center justify-center")
+      Icon(name="chart" className="w-4 h-4 text-foreground/70")
+    div
+      p(className="text-[11px] tracking-wide text-foreground/70 space-x-2")
+        span(className="font-bold") SIMULATION SESSION
+        span(className="opacity-70") &rarr;
+        span(className="text-sky-700") #{(+stats.total * 25).toLocaleString('en-US', {style: 'currency', currency: 'PHP'} )}
+      p(className="text-[12px] font-semibold font-mist-800")
+        | #{stats.total.toLocaleString()}
+        | #{" plays • "}
+        | #{stats.wins}
+        | #{" wins • "}
+        | #{stats.rate}
+        | #{"% • "}
+        | #{formatPeso(stats.wonAmount)}
+        | #{" won"}

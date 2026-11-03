@@ -1,0 +1,23 @@
+import { PAYOUT_RTP, type GameConfig } from '@/lib/games';
+import { formatCompactPeso, formatPeso } from '@/lib/format';
+import {Icon} from '@/lib/icons';
+
+module
+  // How this game's pot and paytable are priced, in one paragraph.
+
+props { game }: { game: GameConfig }
+
+details(className="collapsible rounded-[20px] bg-card")
+  summary(className="flex cursor-pointer list-none items-center gap-1.5 p-4 text-[11px] font-black tracking-widest text-foreground/70")
+    Icon(name="sparkle" className="w-3.5 h-3.5 text-primary")
+    span(className="flex-1 select-none") PRIZE NOTE
+    Icon(name="chevron-down" className="collapsible__chevron w-3.5 h-3.5 text-muted-foreground")
+  p(className="px-4 pb-4 text-[11px] leading-[1.5] text-foreground/70")
+    | #{game.name}
+    | #{" jackpot starts "}
+    | #{formatPeso(game.baseJackpot)}
+    | #{" and rolls over about "}
+    | #{formatCompactPeso(game.rollover)}
+    | #{" per drawn-out night. A jackpot ticket's lower tiers are the fixed amounts PCSO publishes. Pick bets use a separate paytable priced at a flat "}
+    | #{Math.round(PAYOUT_RTP * 1000) / 10}
+    | #{"% return, anchored on 6/42 pick 3 at ×360. Only 6/42 ships with recorded draws — paste a result for the others."}
