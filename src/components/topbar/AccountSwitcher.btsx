@@ -1,6 +1,6 @@
 module "use client";
 import { useCallback, useState } from 'octane'
-import Switcher from '@/components/ui/switcher.btsx'
+import Switcher, { SwitcherAction, SwitcherItem } from '@/components/ui/switcher.btsx'
 import { useConvexQuery } from '@/hooks/use-convex-query'
 import { useTrxBalance } from '@/hooks/use-trx-balance'
 import { isFirebaseConfigured } from '@/lib/firebase'
@@ -20,25 +20,6 @@ module
     /** App settings rendered inside this menu, below the account rows. */
     children?: unknown
     footer?: unknown
-  }
-
-  interface AccountItem {
-    id: string
-    label: string
-    icon: IconName
-    description?: string
-    imageUrl?: string | null
-  }
-
-  interface AccountAction {
-    id: string
-    label: string
-    icon: IconName
-    onSelect: () => void
-    variant?: 'default' | 'destructive'
-    labelSuffix?: string
-    /** Right-aligned qualifier the switcher renders muted beside the label. */
-    meta?: string
   }
 
 props { onNotify, children, footer }: AccountSwitcherProps
@@ -83,17 +64,17 @@ setup
     }
   }, [notify])
 
-  const items: AccountItem[] = accounts.map(account => ({
+  const items: SwitcherItem[] = accounts.map(account => ({
     id: account.uid,
     label: getAccountLabel(account),
-    icon: 'account',
+    icon: 'user-settings',
     description: account.email ?? undefined,
     imageUrl: account.photoURL
   }))
 
   // Asgard is only offered to the accounts that can open it; the handoff page
   // mints the ID token this origin holds and leaves for the console's own host.
-  const asgardAction: AccountAction[] = canOpenAsgard(user !== null, customClaims)
+  const asgardAction: SwitcherAction[] = canOpenAsgard(user !== null, customClaims)
     ? [{ id: 'asgard', label: 'Asgard', icon: 'asgard', onSelect: () => navigate(asgardHandoffPath) }]
     : []
 
@@ -102,7 +83,7 @@ setup
   // read: a user mid-provisioning has no account to show a balance for, and a
   // zero against no address would read as an empty wallet rather than as none.
   const trxBalance = useTrxBalance(profile?.trxAddress)
-  const trxAction: AccountAction[] = profile?.trxAddress
+  const trxAction: SwitcherAction[] = profile?.trxAddress
     ? [
         {
           id: 'trx',
@@ -125,7 +106,7 @@ setup
 
   // Every signed-in user has a profile page. It is a page of the app, not a
   // console, so it is reached with the in-app navigation rather than a handoff.
-  const actions: AccountAction[] = user
+  const actions: SwitcherAction[] = user
     ? [
         { id: 'profile', label: 'Profile', icon: 'user-settings', onSelect: () => navigate('/me') },
         ...trxAction,
@@ -152,7 +133,7 @@ else
     ~ busy={isPending || isLoading}
     ~ createLabel={user ? 'Switch account' : 'Sign in with Google'}
     ~ createLabelIcon='goog'
-    ~ icon={user ? 'account' : 'person'}
+    ~ icon={user ? 'user-settings' : 'person'}
     ~ onSelect={(item) => void startSignIn(item.description)}
     ~ onCreate={() => void startSignIn()}
     ~ actions={actions}

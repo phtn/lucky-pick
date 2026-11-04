@@ -1,6 +1,6 @@
 import { Outlet, useRouterState } from '@octanejs/tanstack-router'
-import App from '../App.btsx'
 import { isAdminRoutePath } from '../lib/routing/admin-subdomain'
+import { isGameRoutePath } from '../lib/routing/app-pages'
 import { asgardHandoffPath } from '../lib/routing/asgard-subdomain'
 import Main from "../components/main/Main.btsx";
 
@@ -9,12 +9,17 @@ import Main from "../components/main/Main.btsx";
 // under that path too, so the whole subtree is handed over — rendering any of
 // it inside the app would stack a console shell on top of the game. `/admin` is
 // the same arrangement for the admin console, which has no subdomain here.
+//
+// The simulator at `/play` is handed over for the same reason: it carries its
+// own shell, frame and header, so rendering it inside the landing page would
+// stack two of each.
 setup
   const pathname = useRouterState({ select: (state) => state.location.pathname.replace(/\/$/, '') || '/' })
   const isConsoleSurface =
     pathname === asgardHandoffPath || pathname.startsWith(`${asgardHandoffPath}/`) || isAdminRoutePath(pathname)
+  const isOwnSurface = isConsoleSurface || isGameRoutePath(pathname)
 
-if isConsoleSurface
+if isOwnSurface
   Outlet
 else
   Main

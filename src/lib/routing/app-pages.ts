@@ -14,3 +14,17 @@ export function isAppPagePath(pathname: string) {
   const normalizedPathname = pathname.replace(/\/$/, '') || '/'
   return APP_PAGE_PATHS.includes(normalizedPathname)
 }
+
+/**
+ * The simulator's own surface.
+ *
+ * Not a member of `APP_PAGE_PATHS`: those render inside the landing shell's
+ * `Outlet`, whereas the game brings its own shell, frame and header, so it is
+ * chosen in `AppRoot.btsx` the same way the consoles are.
+ */
+export const gameRoutePath = '/play'
+
+export function isGameRoutePath(pathname: string) {
+  const normalizedPathname = pathname.replace(/\/$/, '') || '/'
+  return normalizedPathname === gameRoutePath
+}

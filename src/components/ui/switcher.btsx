@@ -2,6 +2,7 @@ module "use client";
 import DropdownMenu, { DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu.btsx";
 import Button from '@/components/ui/button.btsx'
 import { Icon, type IconName } from "@/lib/icons";
+import { useMobile } from '../table/lib/use-mobile';
 
 module
   interface SwitcherItem {
@@ -18,6 +19,7 @@ module
   interface SwitcherAction {
     id: string
     label: string
+    labelSuffix?: string
     icon: IconName
     onSelect: () => void
     variant?: 'default' | 'destructive'
@@ -54,18 +56,15 @@ component SwitcherRoot
     const activeItem = activeId === undefined ? items[0] : items.find(item => item.id === activeId);
     const trigger = <Button/>;
     const label = busy ? 'Loading…' : activeItem?.label ?? emptyLabel;
+    const isMobile = useMobile()
 
   DropdownMenu
-    DropdownMenuTrigger(render={trigger} className='h-12 bg-background dark:bg-muted/50 hover:dark:bg-muted text-fg hover:bg-background/90 data-pressed:bg-background px-4 gap-0 rounded-lg light:bg-panel' disabled={busy})
+    DropdownMenuTrigger(render={trigger} className='h-12 dark:bg-muted/80 hover:dark:bg-muted light:text-neutral-100 dark:text-fg dark:data-pressed:bg-panel light:bg-panel md:px-4 px-3 gap-1 md:rounded-lg rounded-xl overflow-hidden' disabled={busy})
       div(className="flex aspect-square size-6 items-center justify-center")
-        // if activeItem?.imageUrl
-        //   img(src={activeItem.photoUrl} alt="" className='size-5 rounded-full object-cover')
-        // else
-        Icon(name={activeItem?.icon ?? icon ?? 'circle-plus'} className='size-3.5 text-foreground/70')
-
+        Icon(name={isMobile ? 'user-settings' : activeItem?.icon ?? icon ?? 'circle-plus'} className='size-9 md:size-4.5 dark:text-foreground/70')
       div(className=' min-w-0 h-6 flex items-center max-[760px]:hidden')
-        span(className='font-sans font-normal text-muted-foreground text-sm -tracking-[0.02em] truncate capitalize' title={label}) #{label.split(' ').shift()}
-      Icon(name='select-caret' className='size-3 ml-1 opacity-70')
+        span(className='font-sans font-[450] dark:text-muted-foreground text-sm tracking-tight truncate capitalize' title={label}) #{label.split(' ').shift()}
+      Icon(name='select-caret' className='size-2.75 ml-1 opacity-70 dark:text-foreground/40 hidden md:flex')
     DropdownMenuContent(className="min-w-54 max-w-72 bg-background" align="start" side="bottom" sideOffset={4})
       DropdownMenuGroup
         if !items

@@ -8,16 +8,24 @@ import { useState } from "octane/server";
 import { Draw, GameMode, OFFICIAL_RESULTS, Player, PLAYER_COLORS, Ticket } from "@/lib/lotto.ts";
 import { readStoredTheme, ThemeId, ThemeMode } from "@/lib/theme.ts";
 import { isAppPagePath } from "@/lib/routing/app-pages.ts";
-import { usePathname } from "@/lib/navigation.ts";
+import { navigate, usePathname } from "@/lib/navigation.ts";
+import { gameRoutePath } from "@/lib/routing/app-pages.ts";
 import Button from "@/components/ui/button.btsx";
 import { applyTheme } from "../../lib/theme.ts";
 import { cn } from '@/lib/utils.ts';
 
 component HeroImage
   props {className}: {className?: ClassValue}
-  div(className={cn('col-span-3 size-full space-y-4 flex flex-col items-center h-100 border', className)})
+  div(className={cn('hero-reveal col-span-3 size-full space-y-4 flex flex-col items-center h-100', className)})
     div(className='size-full')
-      img(src={'./assets/lp-banner-06.png'} className='w-full aspect-auto rounded-[3rem] select-none')
+      img(
+        ~ src={'./assets/lp-banner-06.webp'}
+        ~ alt='Lucky Pick 360x Super Jackpot'
+        ~ draggable={false}
+        ~ fetchpriority='high'
+        ~ decoding='async'
+        ~ className='w-full aspect-auto rounded-[3rem] select-none'
+        ~ )
 props {}: {}
 setup
   const pathname = usePathname();
@@ -78,25 +86,29 @@ div(className='app-shell')
 
             HeroImage(className='flex md:hidden h-72')
 
-            div(className='col-span-2 gap-6 flex flex-col justify-center h-80 md:h-100')
-              h1(className={"text-5xl md:text-6xl font-black tracking-tight md:block flex justify-center"})
-                span(className='block font-ark font-bold text-[#92fb06] text-8xl md:text-8xl tracking-tight leading-24') #{"360x"}
-                div(className='')
+            div(className='col-span-2 gap-6 flex flex-col justify-center min-h-80 md:min-h-100')
+              h1(className={"text-5xl md:text-6xl font-black tracking-tight md:block flex flex-col items-center"})
+                span(className='hero-rise [--hero-delay:40ms] block font-ark font-bold text-[#92fb06] text-8xl md:text-8xl tracking-tight leading-24') #{"360x"}
+                div(className='hero-rise [--hero-delay:100ms]')
                   span(className='block font-ark font-bold leading-10 md:leading-12') #{"Super"}
-                  span(className='block translate-x-4 font-ark font-black') #{"Jackpot"}
+                  span(className='block md:translate-x-4 font-ark font-black') #{"Jackpot"}
                 // span(className='block font-ark font-bold leading-6') #{"up to"}
               // p(className='text-sm text-muted-foreground') Lucky Pick 3 Lottery
 
-              div(className='w-full flex items-center py-2 md:justify-start justify-center md:translate-y-0 translate-y-8')
-                div(className='relative w-fit flex items-center justify-center _border border-white px-3 py-2')
-                  div(className='absolute flex items-center justify-center size-full border-3 border-[#82d006]/80 skew-12 scale-90')
-                  div(className='absolute flex items-center justify-center size-full bg-[#92fb06]/80 skew-3 scale-84')
-                  div(className='absolute flex items-center justify-center size-full border-4 border-white/80 bg-[#ddfe24]/20 -skew-4 scale-90 drop-shadow-sm')
-                  div(className='absolute flex items-center justify-center size-full border-3 border-white/50 bg-[#ddfe24]/20 -skew-2 scale-88')
-                  Button(size='xl' className='rounded-none bg-transparent relative z-10 w-full active:scale-97 transition-all duration-180 ease-out')
-                    span(className='') Enter Game
+              div(className='hero-rise [--hero-delay:260ms] w-full flex items-center py-2 md:justify-start justify-center md:translate-y-0 translate-y-8')
+                div(className='group/cta relative w-fit flex items-center justify-center px-3 py-2')
+                  div(aria-hidden={true} className='pointer-events-none absolute size-full border-3 border-[#82d006]/80 skew-12 scale-90 transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.87]')
+                  div(aria-hidden={true} className='pointer-events-none absolute size-full border-4 border-white/80 bg-[#ddfe24]/20 -skew-4 scale-90 drop-shadow-sm transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.875]')
+                  div(aria-hidden={true} className='pointer-events-none absolute size-full border-3 border-white/50 bg-[#ddfe24]/20 -skew-2 scale-88 transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.855]')
+                  div(aria-hidden={true} className='pointer-events-none absolute size-full bg-white skew-3 scale-84 transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.82]')
+                  Button(
+                    ~ size='xl'
+                    ~ onClick={() => navigate(gameRoutePath)}
+                    ~ className='rounded-none bg-transparent relative z-10 w-full transition-transform duration-[160ms] ease-out-strong active:scale-[0.97]'
+                    ~ )
+                    span Enter Game
 
-            HeroImage(className='hidden md:flex')
+            HeroImage(className='hidden md:flex [--hero-delay:160ms]')
 
 //             div(className='hidden col-span-1 bg-[#303030] rounded-[3rem] size-full')
 //               div(className='h-20 border-b border-border/20 w-full flex items-center justify-center')

@@ -2,6 +2,7 @@ import { createRootRoute, createRoute, createRouter, lazyRouteComponent } from '
 import AnalyticsRoute from '../pages/AnalyticsRoute.btsx'
 import AppRoot from '../pages/AppRoot.btsx'
 import { adminRoutePrefix, isAdminSubdomainHostname } from './routing/admin-subdomain'
+import { gameRoutePath } from './routing/app-pages'
 import { asgardHandoffPath, isAsgardSubdomainHostname } from './routing/asgard-subdomain'
 
 // Asgard is a surface of its own, not a page of the app: on its subdomain the
@@ -22,6 +23,12 @@ const asgardAccount = lazyRouteComponent(() => import('../pages/asgard-account-p
 
 const profilePage = lazyRouteComponent(() => import('../pages/profile-page.btsx'))
 const trxPage = lazyRouteComponent(() => import('../pages/trx-page.btsx'))
+
+// The simulator is a surface of its own, not a page inside the landing shell:
+// it brings its own `app-shell`, frame and header, so it hangs off the root
+// rather than the landing page's `Outlet`. Lazy, so arriving at the landing
+// page does not pay for the whole game up front.
+const gamePage = lazyRouteComponent(() => import('../App.btsx'))
 
 const adminShell = lazyRouteComponent(() => import('../pages/admin-page.btsx'))
 const adminOverview = lazyRouteComponent(() => import('../pages/admin-overview-page.btsx'))
@@ -67,9 +74,15 @@ function createAsgardRouteTree() {
 function createAppRouteTree() {
   const rootRoute = createRootRoute({ component: AppRoot })
 
-  const playRoute = createRoute({
+  const landingRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/'
+  })
+
+  const playRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: gameRoutePath,
+    component: gamePage
   })
 
   const analyticsRoute = createRoute({
@@ -142,6 +155,7 @@ function createAppRouteTree() {
   })
 
   return rootRoute.addChildren([
+    landingRoute,
     playRoute,
     analyticsRoute,
     profileRoute,

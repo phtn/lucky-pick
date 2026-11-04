@@ -60,11 +60,11 @@ header(className="app-header")
       div
         Link(to="/")
           h1(className="flex items-center gap-2 text-[22px] md:text-xl font-bold tracking-tighter leading-none")
-            span Lucky Pick
-            span(className="live-chip text-[10px] uppercase tracking-[0.18em]")
+            img(src='/assets/lp-wordmark-04.svg' className='h-12 w-full aspect-auto')
+            span(className="hidden! live-chip text-[10px] uppercase tracking-[0.18em]")
               span(className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse")
               | #{" Live"}
-        p(className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-semibold mt-1.5 flex items-center gap-2")
+        p(className="hidden text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-semibold mt-1.5 flex items-center gap-2")
           span
             | #{gameName}
             | #{" • "}

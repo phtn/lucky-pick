@@ -74,6 +74,12 @@
   --font-sans: 'Manrope', 'Geist', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', 'Geist Mono', monospace;
   --text-2xs: 10px;
+
+  /* The built-in CSS easings are too weak to read as intentional. These are
+     the stronger variants: `ease-out-strong` for anything entering or
+     responding to input, `ease-in-out-strong` for on-screen movement. */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
 /* Tokens the shadcn sets do not carry, derived from each theme's own palette
@@ -1410,5 +1416,67 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Hero entrance ─────────────────────────────────────────────────────────
+   The entrance is predetermined, so it runs as a CSS animation (off the main
+   thread) instead of JS — it stays smooth while the rest of the page is still
+   loading and painting. Stagger is set per element with --hero-delay; keep the
+   gaps in the 40–80ms range so the cascade never makes the page feel slow. */
+.hero-rise {
+  animation: hero-rise 480ms var(--ease-out-strong) both;
+  animation-delay: var(--hero-delay, 0ms);
+}
+
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Nothing in the real world appears from nothing: the banner is wiped in from
+   the top with clip-path and settles out of a barely-perceptible overscale,
+   rather than fading in as a flat rectangle. `round 3rem` keeps the clip in
+   step with the image's own corner radius. */
+.hero-reveal {
+  animation: hero-reveal 720ms var(--ease-out-strong) both;
+  animation-delay: var(--hero-delay, 0ms);
+}
+
+@keyframes hero-reveal {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0 round 3rem);
+    transform: scale(1.03);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round 3rem);
+    transform: scale(1);
+  }
+}
+
+/* Reduced motion means fewer and gentler animations, not none — the opacity
+   fade still explains that something arrived, the movement is dropped. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-rise,
+  .hero-reveal {
+    animation: hero-fade 200ms ease both !important;
+    animation-delay: var(--hero-delay, 0ms) !important;
+  }
+
+  @keyframes hero-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 }
