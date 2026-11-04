@@ -150,3 +150,82 @@ test('refuses to claim a malformed address', async () => {
   await expect(ana.mutation(api.users.m.claimTrxAddress, { trxAddress: 'nope' })).rejects.toThrow()
   expect(await ana.query(api.users.q.needsTrxAddress, {})).toBe(true)
 })
+
+const setStatus = (t: ReturnType<typeof convexTest>, accountId: Id<'accounts'>, status: 'active' | 'suspended') =>
+  t.run(async (ctx) => {
+    await ctx.db.patch(accountId, { status })
+  })
+
+const selectedAccountId = (t: ReturnType<typeof convexTest>, userId: Id<'users'>) =>
+  t.run(async (ctx) => (await ctx.db.get(userId))!.selectedAccountId ?? null)
+
+test('selectBanker stores an active house', async () => {
+  const t = convexTest(schema, modules)
+  const accountId = await createAccount(t, 'Ana Store', contact('ana@example.com'))
+  await setStatus(t, accountId, 'active')
+  const player = t.withIdentity(member('pat', 'pat@example.com'))
+  const userId = await player.mutation(api.users.m.ensureCurrent, {})
+
+  await player.mutation(api.users.m.selectBanker, { accountId })
+
+  expect(await selectedAccountId(t, userId)).toBe(accountId)
+})
+
+test('selectBanker clears with null', async () => {
+  const t = convexTest(schema, modules)
+  const accountId = await createAccount(t, 'Ana Store', contact('ana@example.com'))
+  await setStatus(t, accountId, 'active')
+  const player = t.withIdentity(member('pat', 'pat@example.com'))
+  const userId = await player.mutation(api.users.m.ensureCurrent, {})
+
+  await player.mutation(api.users.m.selectBanker, { accountId })
+  expect(await selectedAccountId(t, userId)).toBe(accountId)
+  await player.mutation(api.users.m.selectBanker, { accountId: null })
+
+  expect(await selectedAccountId(t, userId)).toBeNull()
+})
+
+test('selectBanker refuses a pending house', async () => {
+  const t = convexTest(schema, modules)
+  const accountId = await createAccount(t, 'Ana Store', contact('ana@example.com'))
+  const player = t.withIdentity(member('pat', 'pat@example.com'))
+  const userId = await player.mutation(api.users.m.ensureCurrent, {})
+
+  await expect(player.mutation(api.users.m.selectBanker, { accountId })).rejects.toThrow(
+    'That house is not taking players right now.'
+  )
+  expect(await selectedAccountId(t, userId)).toBeNull()
+})
+
+test('selectBanker refuses a suspended house', async () => {
+  const t = convexTest(schema, modules)
+  const accountId = await createAccount(t, 'Ana Store', contact('ana@example.com'))
+  await setStatus(t, accountId, 'suspended')
+  const player = t.withIdentity(member('pat', 'pat@example.com'))
+  const userId = await player.mutation(api.users.m.ensureCurrent, {})
+
+  await expect(player.mutation(api.users.m.selectBanker, { accountId })).rejects.toThrow(
+    'That house is not taking players right now.'
+  )
+  expect(await selectedAccountId(t, userId)).toBeNull()
+})
+
+test('selectBanker refuses an unknown account id', async () => {
+  const t = convexTest(schema, modules)
+  const accountId = await createAccount(t, 'Ana Store', contact('ana@example.com'))
+  await t.run((ctx) => ctx.db.delete(accountId))
+  const player = t.withIdentity(member('pat', 'pat@example.com'))
+  await player.mutation(api.users.m.ensureCurrent, {})
+
+  await expect(player.mutation(api.users.m.selectBanker, { accountId })).rejects.toThrow(
+    'That house is no longer available.'
+  )
+})
+
+test('selectBanker refuses an unauthenticated caller', async () => {
+  const t = convexTest(schema, modules)
+  const accountId = await createAccount(t, 'Ana Store', contact('ana@example.com'))
+  await setStatus(t, accountId, 'active')
+
+  await expect(t.mutation(api.users.m.selectBanker, { accountId })).rejects.toThrow('Unauthenticated.')
+})

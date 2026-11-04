@@ -2,6 +2,7 @@ import type { UserIdentity } from 'convex/server'
 import { ConvexError, v } from 'convex/values'
 import type { Id } from '../_generated/dataModel'
 import { type MutationCtx, mutation } from '../_generated/server'
+import { canUseAccount } from '../../src/lib/accounts/accounts'
 import { linkAccountsToUser } from '../accounts/contacts'
 import { isTronAddressShape, trimOrNull } from '../utils'
 import { getUserByTokenIdentifier } from './q'
@@ -89,6 +90,41 @@ export const setTrxAddress = mutation({
     // The field is optional, so `undefined` is what removes it — `null` is not a
     // value this column accepts.
     await ctx.db.patch(user._id, { trxAddress: trxAddress ?? undefined, updatedAt: Date.now() })
+    return null
+  }
+})
+
+/**
+ * Stores the house the signed-in player has chosen as their banker, or clears
+ * it when given `null`. Only a house that can currently take players may be
+ * chosen.
+ */
+export const selectBanker = mutation({
+  args: { accountId: v.union(v.id('accounts'), v.null()) },
+  returns: v.null(),
+  handler: async (ctx, { accountId }) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) {
+      throw new ConvexError('Unauthenticated.')
+    }
+
+    const user = await getUserByTokenIdentifier(ctx, identity.tokenIdentifier)
+    if (!user) {
+      throw new ConvexError('No user row yet. Call `users:ensureCurrent` first.')
+    }
+
+    if (accountId !== null) {
+      const account = await ctx.db.get('accounts', accountId)
+      if (!account) {
+        throw new ConvexError('That house is no longer available.')
+      }
+      if (!canUseAccount(account.status)) {
+        throw new ConvexError('That house is not taking players right now.')
+      }
+    }
+
+    // The field is optional, so `undefined` is what removes it.
+    await ctx.db.patch(user._id, { selectedAccountId: accountId ?? undefined, updatedAt: Date.now() })
     return null
   }
 })
