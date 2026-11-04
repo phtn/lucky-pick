@@ -1,0 +1,55 @@
+module "use client";
+import { useCallback } from 'octane'
+import Switcher from '@/components/ui/switcher.btsx'
+import { useConvexQuery } from '@/hooks/use-convex-query'
+import { convexClient } from '@/lib/convex-client'
+import { canUseAccount } from '@/lib/accounts/accounts'
+import { resolveSelectedBanker, toBankerItems } from '@/lib/accounts/bankers'
+import { ACCOUNT_STATUS_TONE } from '@/lib/asgard/accounts'
+import { useFirebaseUser } from '@/lib/firebase/auth'
+import { api } from '../../../convex/_generated/api'
+import type { Id } from '../../../convex/_generated/dataModel'
+
+module
+  interface BankerSwitcherProps {
+    /** Surfaces a rejected selection through the app's existing toast. */
+    onNotify?: (message: string) => void
+  }
+
+props { onNotify }: BankerSwitcherProps
+
+setup
+  const { user } = useFirebaseUser()
+  const enabled = user !== null
+  // `undefined` is no answer (loading, signed out, a failed first read), never
+  // "no houses": only an empty array says that.
+  const rows = useConvexQuery(api.accounts.q.listBankers, {}, { enabled })
+  const profile = useConvexQuery(api.users.q.current, {}, { enabled })
+
+  const selected = rows === undefined ? null : resolveSelectedBanker(rows, profile?.selectedAccountId)
+  const items = rows === undefined ? [] : toBankerItems(rows)
+  // A house suspended after it was chosen stays selected, and says so.
+  const needsAttention = selected !== null && !canUseAccount(selected.status)
+
+  const handleSelect = useCallback(async (accountId: string) => {
+    try {
+      await convexClient.mutation(api.users.m.selectBanker, { accountId: accountId as Id<'accounts'> })
+    } catch (error) {
+      // A ConvexError carries a sentence meant for the player; anything else
+      // (offline, a server fault) gets a generic one.
+      const data = (error as { data?: unknown }).data
+      onNotify?.(typeof data === 'string' ? data : 'Could not select that house. Try again.')
+    }
+  }, [onNotify])
+
+if user !== null
+  Switcher(
+    ~ items={items}
+    ~ title='Play against'
+    ~ activeId={selected?.accountId ?? null}
+    ~ emptyLabel={rows !== undefined && rows.length === 0 ? 'No houses yet' : 'Choose house'}
+    ~ busy={rows === undefined}
+    ~ icon='cash'
+    ~ onSelect={(item) => void handleSelect(item.id)}
+    ~ triggerClassName={needsAttention ? ACCOUNT_STATUS_TONE.suspended : undefined}
+    ~ )
