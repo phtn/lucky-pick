@@ -110,7 +110,9 @@ export const selectBanker = mutation({
 
     const user = await getUserByTokenIdentifier(ctx, identity.tokenIdentifier)
     if (!user) {
-      throw new ConvexError('No user row yet. Call `users:ensureCurrent` first.')
+      // Reachable from the picker while the profile row is still being created,
+      // so this one is worded for the player rather than for a developer.
+      throw new ConvexError('Your profile is still being set up. Try again in a moment.')
     }
 
     if (accountId !== null) {

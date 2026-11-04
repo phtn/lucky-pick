@@ -44,7 +44,8 @@ export function toBankerItems(rows: BankerRow[]): BankerItem[] {
     label: row.name,
     icon: 'cash',
     description: describeBankerStatus(row.status) ?? undefined,
-    meta: formatAccountCredits(row.balance),
+    // A balance only means something at a house the player can play at.
+    meta: canUseAccount(row.status) ? formatAccountCredits(row.balance) : undefined,
     disabled: !canUseAccount(row.status)
   }))
 }

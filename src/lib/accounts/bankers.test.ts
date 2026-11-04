@@ -89,6 +89,14 @@ describe('toBankerItems', () => {
     assert.equal(item?.label, 'A')
     assert.equal(item?.icon, 'cash')
   })
+
+  test('omits the balance on rows that cannot take players', () => {
+    const items = toBankerItems([row('A', 'pending', { balance: 5 }), row('B', 'suspended', { balance: 5 })])
+    assert.deepEqual(
+      items.map((i) => i.meta),
+      [undefined, undefined]
+    )
+  })
 })
 
 describe('resolveSelectedBanker', () => {

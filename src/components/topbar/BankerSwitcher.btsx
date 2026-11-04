@@ -22,7 +22,9 @@ setup
   const { user } = useFirebaseUser()
   const enabled = user !== null
   // `undefined` is no answer (loading, signed out, a failed first read), never
-  // "no houses": only an empty array says that.
+  // "no houses": only an empty array says that. The selection arrives on its own
+  // subscription, so it is no answer either until it lands; otherwise a player who
+  // has chosen a house would briefly be told to "Choose house".
   const rows = useConvexQuery(api.accounts.q.listBankers, {}, { enabled })
   const profile = useConvexQuery(api.users.q.current, {}, { enabled })
 
@@ -48,9 +50,10 @@ if user !== null
     ~ title='Play against'
     ~ activeId={selected?.accountId ?? null}
     ~ emptyLabel={rows !== undefined && rows.length === 0 ? 'No houses yet' : 'Choose house'}
-    ~ busy={rows === undefined}
+    ~ busy={rows === undefined || profile === undefined}
     ~ icon='cash'
     ~ fullLabel
+    ~ keepIcon
     ~ onSelect={(item) => void handleSelect(item.id)}
     ~ tone={needsAttention ? ACCOUNT_STATUS_TONE.suspended : undefined}
     ~ )

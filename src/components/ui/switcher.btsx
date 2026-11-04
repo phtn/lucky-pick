@@ -59,10 +59,12 @@ module
     tone?: string
     /** Shows the whole label on the trigger rather than its first word. */
     fullLabel?: boolean
+    /** Keeps the chosen icon on narrow screens instead of the generic `user-settings` one. */
+    keepIcon?: boolean
   }
 
 component SwitcherRoot
-  props { items, title, activeId, emptyLabel, busy = false, createLabel, createLabelIcon, onSelect, onCreate, actions, icon, children, footer, tone, fullLabel }: SwitcherProps
+  props { items, title, activeId, emptyLabel, busy = false, createLabel, createLabelIcon, onSelect, onCreate, actions, icon, children, footer, tone, fullLabel, keepIcon }: SwitcherProps
   setup
     // Omitting `activeId` falls back to the first item; passing `null` states
     // that nothing is selected, which is what drops the trigger to `emptyLabel`.
@@ -75,9 +77,9 @@ component SwitcherRoot
   DropdownMenu
     DropdownMenuTrigger(render={trigger} className={cn('h-12', triggerColour, 'md:px-4 px-3 gap-1 md:rounded-lg rounded-xl overflow-hidden')} disabled={busy})
       div(className="flex aspect-square size-6 items-center justify-center")
-        Icon(name={isMobile ? 'user-settings' : activeItem?.icon ?? icon ?? 'circle-plus'} className={cn('size-9 md:size-4.5', !tone && 'dark:text-foreground/70')})
+        Icon(name={isMobile && !keepIcon ? 'user-settings' : activeItem?.icon ?? icon ?? 'circle-plus'} className={cn('size-9 md:size-4.5', !tone && 'dark:text-foreground/70')})
       div(className=' min-w-0 h-6 flex items-center max-[760px]:hidden')
-        span(className={cn('font-sans font-[450] text-sm tracking-tight truncate capitalize', !tone && 'dark:text-muted-foreground')} title={label}) #{fullLabel ? label : label.split(' ').shift()}
+        span(className={cn('font-sans font-[450] text-sm tracking-tight truncate', !fullLabel && 'capitalize', !tone && 'dark:text-muted-foreground')} title={label}) #{fullLabel ? label : label.split(' ').shift()}
       Icon(name='select-caret' className='size-2.75 ml-1 opacity-70 dark:text-foreground/40 hidden md:flex')
     DropdownMenuContent(className="min-w-54 max-w-72 bg-background" align="start" side="bottom" sideOffset={4})
       DropdownMenuGroup
