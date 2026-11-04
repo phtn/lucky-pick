@@ -14,6 +14,10 @@ module
     description?: string
     /** Avatar or logo shown in place of `icon` when it loads. */
     imageUrl?: string | null
+    /** Greys the row and blocks selection; the active row is always blocked. */
+    disabled?: boolean
+    /** Right-aligned qualifier to the label, e.g. a short status. */
+    meta?: string
   }
   /** Trailing commands that are not one of the selectable items. */
   interface SwitcherAction {
@@ -72,7 +76,7 @@ component SwitcherRoot
         if items.length
           DropdownMenuSeparator
         each item in items key item.id
-          DropdownMenuItem(onClick={() => onSelect?.(item)} disabled={item.id === activeItem?.id} className="gap-1 p-2 hover:bg-foreground/10!")
+          DropdownMenuItem(onClick={() => onSelect?.(item)} disabled={item.disabled === true || item.id === activeItem?.id} className="gap-1 p-2 hover:bg-foreground/10!")
             div(className="flex size-6 items-center justify-center")
               // if item.imageUrl
               //   img(src={item.imageUrl} alt="" className='size-5 rounded-full object-cover')
@@ -81,6 +85,12 @@ component SwitcherRoot
 
             div(className='min-w-0 flex-1')
               span(className='block truncate pe-2') #{item.label}
+              if item.description
+                span(className='block truncate pe-2 text-xs text-muted-foreground') #{item.description}
+            // `ml-auto` rather than a spacer: a row without `meta` keeps the
+            // layout it had before this slot existed.
+            if item.meta
+              div(className="ml-auto shrink-0 pl-3 font-sans text-sm -tracking-[0.02em] whitespace-nowrap text-muted-foreground") #{item.meta}
             if item.id === activeItem?.id
               Icon(name='check' className='size-3.5 ml-auto text-accent')
         empty
