@@ -51,26 +51,33 @@ module
      */
     children?: unknown
     footer?: unknown
-    /** Extra classes on the trigger, e.g. a status tone. */
-    triggerClassName?: string
+    /**
+     * Colours the trigger (border, fill, text) in place of its theme defaults.
+     * It replaces the `dark:`/`light:` colour classes rather than adding to
+     * them, because those out-specify an unprefixed utility and would hide it.
+     */
+    tone?: string
+    /** Shows the whole label on the trigger rather than its first word. */
+    fullLabel?: boolean
   }
 
 component SwitcherRoot
-  props { items, title, activeId, emptyLabel, busy = false, createLabel, createLabelIcon, onSelect, onCreate, actions, icon, children, footer, triggerClassName }: SwitcherProps
+  props { items, title, activeId, emptyLabel, busy = false, createLabel, createLabelIcon, onSelect, onCreate, actions, icon, children, footer, tone, fullLabel }: SwitcherProps
   setup
     // Omitting `activeId` falls back to the first item; passing `null` states
     // that nothing is selected, which is what drops the trigger to `emptyLabel`.
     const activeItem = activeId === undefined ? items[0] : items.find(item => item.id === activeId);
     const trigger = <Button/>;
+    const triggerColour = tone ? `border ${tone}` : 'dark:bg-muted/80 hover:dark:bg-muted light:text-neutral-100 dark:text-fg dark:data-pressed:bg-panel light:bg-panel'
     const label = busy ? 'Loading…' : activeItem?.label ?? emptyLabel;
     const isMobile = useMobile()
 
   DropdownMenu
-    DropdownMenuTrigger(render={trigger} className={cn('h-12 dark:bg-muted/80 hover:dark:bg-muted light:text-neutral-100 dark:text-fg dark:data-pressed:bg-panel light:bg-panel md:px-4 px-3 gap-1 md:rounded-lg rounded-xl overflow-hidden', triggerClassName)} disabled={busy})
+    DropdownMenuTrigger(render={trigger} className={cn('h-12', triggerColour, 'md:px-4 px-3 gap-1 md:rounded-lg rounded-xl overflow-hidden')} disabled={busy})
       div(className="flex aspect-square size-6 items-center justify-center")
-        Icon(name={isMobile ? 'user-settings' : activeItem?.icon ?? icon ?? 'circle-plus'} className='size-9 md:size-4.5 dark:text-foreground/70')
+        Icon(name={isMobile ? 'user-settings' : activeItem?.icon ?? icon ?? 'circle-plus'} className={cn('size-9 md:size-4.5', !tone && 'dark:text-foreground/70')})
       div(className=' min-w-0 h-6 flex items-center max-[760px]:hidden')
-        span(className='font-sans font-[450] dark:text-muted-foreground text-sm tracking-tight truncate capitalize' title={label}) #{label.split(' ').shift()}
+        span(className={cn('font-sans font-[450] text-sm tracking-tight truncate capitalize', !tone && 'dark:text-muted-foreground')} title={label}) #{fullLabel ? label : label.split(' ').shift()}
       Icon(name='select-caret' className='size-2.75 ml-1 opacity-70 dark:text-foreground/40 hidden md:flex')
     DropdownMenuContent(className="min-w-54 max-w-72 bg-background" align="start" side="bottom" sideOffset={4})
       DropdownMenuGroup

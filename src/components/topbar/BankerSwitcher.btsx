@@ -50,6 +50,7 @@ if user !== null
     ~ emptyLabel={rows !== undefined && rows.length === 0 ? 'No houses yet' : 'Choose house'}
     ~ busy={rows === undefined}
     ~ icon='cash'
+    ~ fullLabel
     ~ onSelect={(item) => void handleSelect(item.id)}
-    ~ triggerClassName={needsAttention ? ACCOUNT_STATUS_TONE.suspended : undefined}
+    ~ tone={needsAttention ? ACCOUNT_STATUS_TONE.suspended : undefined}
     ~ )
