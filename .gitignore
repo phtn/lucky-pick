@@ -11,3 +11,6 @@ public/results/generated/
 
 sa.json
 .dev.vars*
+
+# Superpowers brainstorming companion scratch
+.superpowers/
