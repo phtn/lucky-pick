@@ -16,8 +16,8 @@ import { cn } from '@/lib/utils.ts';
 
 component HeroImage
   props {className}: {className?: ClassValue}
-  div(className={cn('hero-reveal col-span-3 size-full space-y-4 flex flex-col items-center h-100', className)})
-    div(className='size-full')
+  div(className={cn('hero-reveal col-span-3 size-full space-y-4 flex flex-col items-center justify-center h-100', className)})
+    div(className='w-full')
       img(
         ~ src={'./assets/lp-banner-06.webp'}
         ~ alt='Lucky Pick 360x Super Jackpot'
@@ -82,7 +82,7 @@ div(className='app-shell')
         Outlet
       if !isAppPagePath(pathname)
         fragment
-          div(className='font-sans grid grid-cols-1 md:grid-cols-5 md:border-t size-full pt-6 md:pt-20 md:max-w-6xl mx-auto')
+          div(className='font-sans grid grid-cols-1 md:grid-cols-5 md:items-center md:border-t size-full pt-6 md:pt-20 md:max-w-6xl mx-auto')
 
             HeroImage(className='flex md:hidden h-72')
 
@@ -95,7 +95,7 @@ div(className='app-shell')
                 // span(className='block font-ark font-bold leading-6') #{"up to"}
               // p(className='text-sm text-muted-foreground') Lucky Pick 3 Lottery
 
-              div(className='hero-rise [--hero-delay:260ms] w-full flex items-center py-2 md:justify-start justify-center md:translate-y-0 translate-y-8')
+              div(className='hero-rise [--hero-delay:260ms] w-full flex items-center md:justify-start justify-center md:translate-y-0 translate-y-8')
                 div(className='group/cta relative w-fit flex items-center justify-center px-3 py-2')
                   div(aria-hidden={true} className='pointer-events-none absolute size-full border-3 border-[#82d006]/80 skew-12 scale-90 transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.87]')
                   div(aria-hidden={true} className='pointer-events-none absolute size-full border-4 border-white/80 bg-[#ddfe24]/20 -skew-4 scale-90 drop-shadow-sm transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.875]')
