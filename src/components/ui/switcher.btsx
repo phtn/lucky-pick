@@ -44,6 +44,12 @@ module
     onSelect?: (item: SwitcherItem) => void
     onCreate?: () => void
     actions?: SwitcherAction[]
+    /**
+     * Commands that belong at the very bottom of the menu, below `footer` —
+     * the one a menu is closed with, such as signing out. Same rows as
+     * `actions`, placed last rather than among the account's own commands.
+     */
+    footerActions?: SwitcherAction[]
     icon?: IconName
     /**
      * Extra menu content — settings, toggles, submenus — rendered between the
@@ -64,8 +70,24 @@ module
     keepIcon?: boolean
   }
 
+component SwitcherActionRow
+  props { action }: { action: SwitcherAction }
+  DropdownMenuItem(onClick={action.onSelect} disabled={action.disabled} variant={action.variant ?? 'default'} className="flex items-center gap-1 p-2 text-foreground/80 hover:bg-muted-foreground/10! hover:text-accent")
+    div(className="flex size-6 items-center justify-center rounded-md")
+      Icon(name={action.icon} className='size-4')
+    // `whitespace-nowrap`: a figure is read as one word, and in a narrow menu
+    // `2,000.00 TRX` otherwise breaks after the amount and leaves its unit
+    // alone on a second line.
+    div(className="flex items-center gap-1")
+      span(className="font-sans text-sm -tracking-[0.02em] whitespace-nowrap") #{action.label}
+      span(className="font-mono font-bold text-sm tracking-tight whitespace-nowrap text-foreground/70") #{action.labelSuffix}
+    // `ml-auto` rather than a spacer: a row without `meta` keeps the layout it
+    // had before this slot existed.
+    if action.meta
+      div(className="ml-auto shrink-0 pl-3 font-sans text-sm -tracking-[0.02em] whitespace-nowrap text-muted-foreground") #{action.meta}
+
 component SwitcherRoot
-  props { items, title, activeId, emptyLabel, busy = false, createLabel, createLabelIcon, onSelect, onCreate, actions, icon, children, footer, tone, fullLabel, keepIcon }: SwitcherProps
+  props { items, title, activeId, emptyLabel, busy = false, createLabel, createLabelIcon, onSelect, onCreate, actions, footerActions, icon, children, footer, tone, fullLabel, keepIcon }: SwitcherProps
   setup
     // Omitting `activeId` falls back to the first item; passing `null` states
     // that nothing is selected, which is what drops the trigger to `emptyLabel`.
@@ -135,23 +157,16 @@ component SwitcherRoot
         DropdownMenuGroup
           DropdownMenuSeparator
           each action in actions key action.id
-            DropdownMenuItem(onClick={action.onSelect} disabled={action.disabled} variant={action.variant ?? 'default'} className="flex items-center gap-1 p-2 text-foreground/80 hover:bg-muted-foreground/10! hover:text-accent")
-              div(className="flex size-6 items-center justify-center rounded-md")
-                Icon(name={action.icon} className='size-4')
-              // `whitespace-nowrap`: a figure is read as one word, and in a
-              // narrow menu `2,000.00 TRX` otherwise breaks after the amount and
-              // leaves its unit alone on a second line.
-              div(className="flex items-center gap-1")
-                span(className="font-sans text-sm -tracking-[0.02em] whitespace-nowrap") #{action.label}
-                span(className="font-mono font-bold text-sm tracking-tight whitespace-nowrap text-foreground/70") #{action.labelSuffix}
-              // `ml-auto` rather than a spacer: a row without `meta` keeps the
-              // layout it had before this slot existed.
-              if action.meta
-                div(className="ml-auto shrink-0 pl-3 font-sans text-sm -tracking-[0.02em] whitespace-nowrap text-muted-foreground") #{action.meta}
+            SwitcherActionRow(action={action})
       if children
         DropdownMenuGroup(children={children})
       if footer
         DropdownMenuGroup(children={footer})
+      if footerActions && footerActions.length
+        DropdownMenuGroup
+          DropdownMenuSeparator
+          each action in footerActions key action.id
+            SwitcherActionRow(action={action})
 
 module
   export type { SwitcherItem, SwitcherAction, SwitcherProps }

@@ -107,7 +107,7 @@ describe('toBankerItems', () => {
     assert.equal(item?.meta, '250K')
     assert.equal(item?.id, 'id-A')
     assert.equal(item?.label, 'A')
-    assert.equal(item?.icon, 'cash')
+    assert.equal(item?.icon, 'bank')
   })
 
   test('omits the balance on rows that cannot take players', () => {

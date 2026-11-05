@@ -37,13 +37,14 @@ module
   // worth of settings can be worked through in one visit.
   const rowClass = 'gap-1 p-2 hover:bg-foreground/10!';
 
+// A settings row like the others, so it carries no separator of its own: the
+// group it sits in owns the rules above and below it.
 component AnalyticsLink
-  DropdownMenuSeparator
-  DropdownMenuItem( className="gap-1 p-2 hover:bg-foreground/10!")
+  DropdownMenuItem(className={rowClass})
     Link(to="/analytics" className="flex items-center gap-1")
       div(className="flex size-6 items-center justify-center")
         Icon(name="columns" size={14})
-      span Analytics
+      span(className="truncate") Analytics
 
 props { pool, gameName, game, gameId, jackpots, isDrawing, onSwitchGame, mode, onSelectMode, soundOn, onToggleSound, theme, themeMode, onToggleThemeMode, onPickTheme, onNotify }: AppHeaderProps
 
@@ -83,7 +84,7 @@ header(className="app-header")
 
     div(className="app-header__account flex items-start gap-2")
       BankerSwitcher(onNotify={onNotify})
-      AccountSwitcher(onNotify={onNotify} footer={AnalyticsLink})
+      AccountSwitcher(onNotify={onNotify})
         DropdownMenuSeparator
         DropdownMenuLabel(className="font-normal text-xs text-muted-foreground opacity-80") Settings
         DropdownMenuRadioGroup(value={mode} onValueChange={(next: GameMode) => onSelectMode && onSelectMode(next)} className='hidden')
@@ -114,6 +115,7 @@ header(className="app-header")
             else
               Icon(name="theme" className="size-3.25 opacity-70")
           span(className="truncate") #{themeMode === 'dark' ? 'Light' : 'Dark'}
-        DropdownMenuSeparator
+
+        AnalyticsLink
 
       NotificationBell(onNotify={onNotify})

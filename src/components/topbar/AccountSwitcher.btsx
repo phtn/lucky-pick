@@ -123,12 +123,17 @@ setup
     ? [
         { id: 'profile', label: 'Profile', icon: 'user-settings', onSelect: () => navigate('/me') },
         ...trxAction,
-        ...asgardAction,
-        { id: 'sign-out', label: 'Sign out', icon: 'signout', onSelect: () => void handleSignOut() }
+        ...asgardAction
       ]
     : accounts.length > 0
       ? [{ id: 'forget', label: 'Forget saved accounts', icon: 'close', onSelect: forgetAllAccounts }]
       : []
+
+  // Signing out closes the menu and ends the session, so it sits at the very
+  // bottom rather than among the rows that take you somewhere in the app.
+  const footerActions: SwitcherAction[] = user
+    ? [{ id: 'sign-out', label: 'Sign out', icon: 'signout', onSelect: () => void handleSignOut() }]
+    : []
 
   // An unconfigured deployment has no auth to offer, so the control says so
   // rather than opening a menu that cannot do anything.
@@ -150,6 +155,7 @@ else
     ~ onSelect={(item) => void startSignIn(item.description)}
     ~ onCreate={() => void startSignIn()}
     ~ actions={actions}
+    ~ footerActions={footerActions}
     ~ children={children}
     ~ footer={footer}
     ~ )
