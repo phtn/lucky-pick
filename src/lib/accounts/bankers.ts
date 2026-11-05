@@ -1,4 +1,8 @@
-import type { IconName } from '../icons'
+// Deliberately the module, not the `../icons` barrel: that barrel re-exports
+// `./icon.btsx`, and this file is reachable from `convex/accounts/q.ts`, whose
+// typecheck cannot resolve a `.btsx` module. Importing the barrel here breaks
+// `convex dev`.
+import type { IconName } from '../icons/icons'
 import { canUseAccount, formatAccountCredits, type AccountStatus } from './accounts'
 
 export interface BankerRow {
