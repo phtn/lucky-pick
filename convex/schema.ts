@@ -4,6 +4,7 @@ import { accountSchema } from './accounts/d'
 import { creditsFields } from './credits/d'
 import { ledgerEntryFields, ledgerTransactionFields, walletFields } from './ledger/d'
 import { topupRequestFields } from './money/d'
+import { notificationFields } from './notifications/d'
 import { practicePlayFields } from './plays/d'
 import { resultFields, resultGame } from './resultValidators'
 import { userDocumentValidator } from './users/v'
@@ -52,4 +53,5 @@ export default defineSchema({
     .index('by_status_and_createdAt', ['status', 'createdAt'])
     .index('by_accountId_and_createdAt', ['accountId', 'createdAt']),
   practicePlays: defineTable(practicePlayFields).index('by_userId_and_drawnAt', ['userId', 'drawnAt']),
+  notifications: defineTable(notificationFields).index('by_userId_and_createdAt', ['userId', 'createdAt']),
 })
