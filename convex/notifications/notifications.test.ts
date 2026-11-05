@@ -211,3 +211,98 @@ test('an event on a house whose contact never signed in writes nothing and still
   expect((await t.run((ctx) => ctx.db.get('accounts', accountId)))!.status).toBe('suspended')
   expect((await t.run((ctx) => ctx.db.get('topupRequests', id)))!.status).toBe('approved')
 })
+
+// --- Reading and marking read. ---
+
+const bo = member('bo', 'bo@example.com')
+
+const userIdOf = async (t: T, who: typeof ana) => {
+  await signIn(t, who)
+  const user = await t.run((ctx) =>
+    ctx.db
+      .query('users')
+      .withIndex('by_tokenIdentifier', (q) => q.eq('tokenIdentifier', who.tokenIdentifier))
+      .unique()
+  )
+  return user!._id
+}
+
+const seed = (t: T, userId: Id<'users'>, createdAt: number, amount: number | null = null) =>
+  t.run((ctx) =>
+    ctx.db.insert('notifications', {
+      userId,
+      kind: 'topup-approved',
+      accountId: null,
+      accountName: 'Store',
+      amount,
+      readAt: null,
+      createdAt
+    })
+  )
+
+test('mine returns exactly the seven permitted keys', async () => {
+  const t = makeT()
+  const userId = await userIdOf(t, ana)
+  await seed(t, userId, 1, 100)
+  const rows = await t.withIdentity(ana).query(api.notifications.q.mine, {})
+  expect(rows).toHaveLength(1)
+  expect(Object.keys(rows[0]).sort()).toEqual(
+    ['accountId', 'accountName', 'amount', 'createdAt', 'kind', 'notificationId', 'readAt'].sort()
+  )
+})
+
+test("mine returns only the caller's rows, newest first", async () => {
+  const t = makeT()
+  const anaId = await userIdOf(t, ana)
+  const boId = await userIdOf(t, bo)
+  await seed(t, anaId, 1, 1)
+  await seed(t, anaId, 3, 3)
+  await seed(t, anaId, 2, 2)
+  await seed(t, boId, 4, 4)
+  const rows = await t.withIdentity(ana).query(api.notifications.q.mine, {})
+  expect(rows.map((r) => r.amount)).toEqual([3, 2, 1])
+})
+
+test('mine returns [] for a caller with no users row', async () => {
+  const t = makeT()
+  expect(await t.withIdentity(ana).query(api.notifications.q.mine, {})).toEqual([])
+})
+
+test('mine refuses an unauthenticated caller', async () => {
+  const t = makeT()
+  await expect(t.query(api.notifications.q.mine, {})).rejects.toThrow('Unauthorized.')
+})
+
+test("markRead marks the caller's own row", async () => {
+  const t = makeT()
+  const userId = await userIdOf(t, ana)
+  const id = await seed(t, userId, 1)
+  await t.withIdentity(ana).mutation(api.notifications.m.markRead, { notificationId: id })
+  const row = await t.run((ctx) => ctx.db.get('notifications', id))
+  expect(typeof row!.readAt).toBe('number')
+})
+
+test("markRead refuses another user's row and leaves it unread", async () => {
+  const t = makeT()
+  const anaId = await userIdOf(t, ana)
+  await userIdOf(t, bo)
+  const id = await seed(t, anaId, 1)
+  await expect(t.withIdentity(bo).mutation(api.notifications.m.markRead, { notificationId: id })).rejects.toThrow(
+    'Unauthorized.'
+  )
+  expect((await t.run((ctx) => ctx.db.get('notifications', id)))!.readAt).toBeNull()
+})
+
+test("markAllRead marks only the caller's rows", async () => {
+  const t = makeT()
+  const anaId = await userIdOf(t, ana)
+  const boId = await userIdOf(t, bo)
+  const a1 = await seed(t, anaId, 1)
+  const a2 = await seed(t, anaId, 2)
+  const b1 = await seed(t, boId, 3)
+  await t.withIdentity(ana).mutation(api.notifications.m.markAllRead, {})
+  const read = (id: Id<'notifications'>) => t.run((ctx) => ctx.db.get('notifications', id))
+  expect(typeof (await read(a1))!.readAt).toBe('number')
+  expect(typeof (await read(a2))!.readAt).toBe('number')
+  expect((await read(b1))!.readAt).toBeNull()
+})
