@@ -2,6 +2,8 @@
 import { convexTest } from 'convex-test'
 import { expect, test } from 'vitest'
 import type { Id } from '../_generated/dataModel'
+import { api } from '../_generated/api'
+import { god, godB, member } from '../lib/testIdentities'
 import schema from '../schema'
 import { NOTIFICATION_HISTORY_LIMIT } from './d'
 import { notify } from './helpers'
@@ -92,4 +94,120 @@ test("notify leaves another user's rows alone when trimming", async () => {
   const rows = await t.run((ctx) => ctx.db.query('notifications').collect())
   expect(rows.filter((r) => r.userId === bo)).toHaveLength(1)
   expect(rows.filter((r) => r.userId === ana)).toHaveLength(NOTIFICATION_HISTORY_LIMIT)
+})
+
+// --- Producers: each is driven through the real mutation, not through `notify`. ---
+
+const ana = member('ana', 'ana@example.com')
+
+const provision = (t: T) =>
+  t.withIdentity(god).mutation(api.accounts.m.create, {
+    name: 'Ana Store',
+    primaryContact: { name: 'Ana', email: 'ana@example.com' }
+  })
+
+/** Signing in is what links the account: it runs the real `linkAccountsToUser`. */
+const signIn = (t: T, who: typeof ana) => t.withIdentity(who).mutation(api.users.m.ensureCurrent, {})
+
+const setStatus = (t: T, accountId: Id<'accounts'>, status: 'pending' | 'confirmed' | 'active' | 'suspended' | 'closed') =>
+  t.run(async (ctx) => {
+    await ctx.db.patch(accountId, { status })
+  })
+
+const allNotifications = (t: T) => t.run((ctx) => ctx.db.query('notifications').collect())
+
+test('linking a contact to a pending house notifies them', async () => {
+  const t = makeT()
+  const accountId = await provision(t)
+  await signIn(t, ana)
+  const rows = await allNotifications(t)
+  expect(rows).toHaveLength(1)
+  expect(rows[0]).toMatchObject({ kind: 'house-awaiting-confirmation', accountId, accountName: 'Ana Store', readAt: null })
+  const user = (await t.run((ctx) => ctx.db.query('users').collect()))[0]
+  expect(rows[0].userId).toBe(user._id)
+})
+
+test('linking a contact to an already-confirmed house notifies nobody', async () => {
+  const t = makeT()
+  const accountId = await provision(t)
+  await setStatus(t, accountId, 'confirmed')
+  await signIn(t, ana)
+  expect(await allNotifications(t)).toHaveLength(0)
+})
+
+test('suspending a house notifies its contact', async () => {
+  const t = makeT()
+  const accountId = await provision(t)
+  await signIn(t, ana)
+  await setStatus(t, accountId, 'active')
+  await t.withIdentity(god).mutation(api.accounts.m.update, { id: accountId, status: 'suspended' })
+  const rows = (await allNotifications(t)).filter((r) => r.kind !== 'house-awaiting-confirmation')
+  expect(rows).toHaveLength(1)
+  expect(rows[0]).toMatchObject({ kind: 'house-suspended', accountId, accountName: 'Ana Store' })
+})
+
+test('re-saving a house with an unchanged status notifies nobody', async () => {
+  const t = makeT()
+  const accountId = await provision(t)
+  await signIn(t, ana)
+  await setStatus(t, accountId, 'suspended')
+  const before = (await allNotifications(t)).length
+  await t.withIdentity(god).mutation(api.accounts.m.update, { id: accountId, status: 'suspended', name: 'Ana Store 2' })
+  await t.withIdentity(god).mutation(api.accounts.m.update, { id: accountId, name: 'Ana Store 3' })
+  expect(await allNotifications(t)).toHaveLength(before)
+})
+
+const topupFor = async (t: T, accountId: Id<'accounts'>) =>
+  t.withIdentity(god).mutation(api.money.topups.request, { accountId, amount: 5_000, paymentReference: 'GCASH-001' })
+
+test('approving a top-up notifies the contact with the amount', async () => {
+  const t = makeT()
+  const accountId = await provision(t)
+  await signIn(t, ana)
+  await setStatus(t, accountId, 'active')
+  const id = await topupFor(t, accountId)
+  await t.withIdentity(godB).mutation(api.money.topups.approve, { id })
+  const rows = (await allNotifications(t)).filter((r) => r.kind === 'topup-approved')
+  expect(rows).toHaveLength(1)
+  expect(rows[0]).toMatchObject({ accountId, accountName: 'Ana Store', amount: 5_000 })
+})
+
+test('rejecting a top-up notifies the contact with the amount', async () => {
+  const t = makeT()
+  const accountId = await provision(t)
+  await signIn(t, ana)
+  await setStatus(t, accountId, 'active')
+  const id = await topupFor(t, accountId)
+  await t.withIdentity(godB).mutation(api.money.topups.reject, { id, decisionNote: 'No payment found.' })
+  const rows = (await allNotifications(t)).filter((r) => r.kind === 'topup-rejected')
+  expect(rows).toHaveLength(1)
+  expect(rows[0]).toMatchObject({ accountId, accountName: 'Ana Store', amount: 5_000 })
+})
+
+test("reversing a transaction notifies the account's contact", async () => {
+  const t = makeT()
+  const accountId = await provision(t)
+  await signIn(t, ana)
+  await setStatus(t, accountId, 'active')
+  const id = await topupFor(t, accountId)
+  await t.withIdentity(godB).mutation(api.money.topups.approve, { id })
+  const txnId = (await t.run((ctx) => ctx.db.get('topupRequests', id)))!.txnId!
+  await t.withIdentity(god).mutation(api.ledger.m.reverseTransaction, { txnId, memo: 'duplicate' })
+  // A retry replays the reversal, so it must not tell the contact twice.
+  await t.withIdentity(god).mutation(api.ledger.m.reverseTransaction, { txnId, memo: 'duplicate' })
+  const rows = (await allNotifications(t)).filter((r) => r.kind === 'transaction-reversed')
+  expect(rows).toHaveLength(1)
+  expect(rows[0]).toMatchObject({ accountId, accountName: 'Ana Store' })
+})
+
+test('an event on a house whose contact never signed in writes nothing and still commits', async () => {
+  const t = makeT()
+  const accountId = await provision(t)
+  await setStatus(t, accountId, 'active')
+  await t.withIdentity(god).mutation(api.accounts.m.update, { id: accountId, status: 'suspended' })
+  const id = await topupFor(t, accountId)
+  await t.withIdentity(godB).mutation(api.money.topups.approve, { id })
+  expect(await allNotifications(t)).toHaveLength(0)
+  expect((await t.run((ctx) => ctx.db.get('accounts', accountId)))!.status).toBe('suspended')
+  expect((await t.run((ctx) => ctx.db.get('topupRequests', id)))!.status).toBe('approved')
 })

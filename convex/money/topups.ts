@@ -4,6 +4,7 @@ import type { Doc, Id } from '../_generated/dataModel'
 import { mutation, query, type MutationCtx } from '../_generated/server'
 import { requireGodIdentity, requireStaffIdentity } from '../accounts/helpers'
 import { post } from '../ledger/post'
+import { notify } from '../notifications/helpers'
 import { getPartnerWallets, getSystemWallet } from '../ledger/wallets'
 import schema from '../schema'
 import { trimOrNull } from '../utils'
@@ -197,6 +198,14 @@ export const approve = mutation({
       updatedAt: now
     })
 
+    await notify(ctx, {
+      userId: account.primaryContact.userId,
+      kind: 'topup-approved',
+      accountId: account._id,
+      accountName: account.name,
+      amount: topup.amount
+    })
+
     return null
   }
 })
@@ -227,6 +236,17 @@ export const reject = mutation({
       decidedAt: now,
       updatedAt: now
     })
+
+    const account = await ctx.db.get('accounts', topup.accountId)
+    if (account) {
+      await notify(ctx, {
+        userId: account.primaryContact.userId,
+        kind: 'topup-rejected',
+        accountId: account._id,
+        accountName: account.name,
+        amount: topup.amount
+      })
+    }
 
     return null
   }

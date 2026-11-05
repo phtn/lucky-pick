@@ -1,5 +1,6 @@
 import type { Doc, Id } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
+import { notify } from '../notifications/helpers'
 
 // An account is provisioned before its contact has ever signed in, so there is
 // nothing to match on but what the platform was told. The caps keep one sign-in
@@ -40,6 +41,15 @@ export async function linkAccountsToUser(ctx: MutationCtx, user: Doc<'users'>): 
       }
     })
     linked.push(account._id)
+    // Only a pending house is waiting on this person; one already past that has nothing to ask of them.
+    if (account.status === 'pending') {
+      await notify(ctx, {
+        userId: user._id,
+        kind: 'house-awaiting-confirmation',
+        accountId: account._id,
+        accountName: account.name
+      })
+    }
   }
 
   const byUid = await ctx.db

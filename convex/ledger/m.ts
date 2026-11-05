@@ -1,6 +1,7 @@
 import { ConvexError, v } from 'convex/values'
 import { mutation } from '../_generated/server'
 import { requireGodIdentity } from '../accounts/helpers'
+import { notify } from '../notifications/helpers'
 import { walletStatusSchema } from './d'
 import { reverse } from './post'
 
@@ -23,6 +24,20 @@ export const reverseTransaction = mutation({
     }
 
     const result = await reverse(ctx, { txnId, actorTokenIdentifier: identity.tokenIdentifier, memo: reason })
+
+    // A replayed retry changed nothing, so it is not news a second time.
+    if (!result.replayed) {
+      const original = await ctx.db.get('ledgerTransactions', txnId)
+      const account = original?.accountId ? await ctx.db.get('accounts', original.accountId) : null
+      if (account) {
+        await notify(ctx, {
+          userId: account.primaryContact.userId,
+          kind: 'transaction-reversed',
+          accountId: account._id,
+          accountName: account.name
+        })
+      }
+    }
     return result.txnId
   }
 })

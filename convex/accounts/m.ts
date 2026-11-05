@@ -1,8 +1,10 @@
 import { ConvexError, v } from 'convex/values'
 import { DEFAULT_ACCOUNT_STATUS } from '../../src/lib/accounts/accounts'
+import type { Doc } from '../_generated/dataModel'
 import { mutation } from '../_generated/server'
 import { listCreditsForAccount, openCredits } from '../credits/helpers'
 import { post } from '../ledger/post'
+import { notify } from '../notifications/helpers'
 import { findPartnerWallets, getPartnerWallets, getSystemWallet } from '../ledger/wallets'
 import { accountDocumentSchema, createAccountSchema, updateAccountSchema } from './d'
 import {
@@ -139,6 +141,10 @@ export const confirmAsContact = mutation({
   }
 })
 
+const STATUS_NOTIFICATION_KIND: Partial<
+  Record<Doc<'accounts'>['status'], 'house-suspended' | 'house-closed' | 'house-activated'>
+> = { suspended: 'house-suspended', closed: 'house-closed', active: 'house-activated' }
+
 export const update = mutation({
   args: updateAccountSchema.extend({ id: v.id('accounts') }),
   returns: accountDocumentSchema,
@@ -190,6 +196,20 @@ export const update = mutation({
 
     const updated = await ctx.db.get(id)
     if (!updated) throw new ConvexError('Account not found.')
+
+    // The patch is arbitrary (a name fix, a payout edit), so only a real status
+    // change is news. `confirmed` is the player's own act and is never announced.
+    if (args.status !== undefined && args.status !== existing.status) {
+      const kind = STATUS_NOTIFICATION_KIND[args.status]
+      if (kind) {
+        await notify(ctx, {
+          userId: updated.primaryContact.userId,
+          kind,
+          accountId: id,
+          accountName: updated.name
+        })
+      }
+    }
     return updated
   }
 })
