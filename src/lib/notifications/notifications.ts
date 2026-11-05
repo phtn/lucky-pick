@@ -59,7 +59,8 @@ function copyFor(row: NotificationRow): Copy {
     case 'topup-approved':
       return {
         title: `Top-up approved for ${name}`,
-        detail: `${formatAccountCredits(row.amount ?? 0)} CR was added.`,
+        // A null amount is omitted rather than shown as "0 CR", which would contradict "approved".
+        detail: row.amount === null ? null : `${formatAccountCredits(row.amount)} CR was added.`,
         href: null
       }
     case 'topup-rejected':

@@ -51,6 +51,10 @@ describe('toNotificationItems', () => {
     assert.equal(only(row('topup-approved', { amount: 1_234 })).detail, `${(1_234).toLocaleString()} CR was added.`)
   })
 
+  test('omits the detail of an approved top-up with no amount rather than claiming 0 CR', () => {
+    assert.equal(only(row('topup-approved', { amount: null })).detail, null)
+  })
+
   test('links house kinds to /me and leaves the rest null', () => {
     const kinds: NotificationKind[] = [
       'house-awaiting-confirmation',
