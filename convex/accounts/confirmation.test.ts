@@ -120,3 +120,64 @@ test.each(['confirmed', 'active', 'suspended', 'closed'] as const)(
     expect(await read(t, accountId)).toEqual(before)
   }
 )
+
+test('myHouses returns exactly the five permitted keys', async () => {
+  const t = makeT()
+  const accountId = await provision(t)
+  await signIn(t, ana)
+
+  const houses = await t.withIdentity(ana).query(api.accounts.q.myHouses, {})
+
+  expect(houses).toHaveLength(1)
+  expect(Object.keys(houses[0]!).sort()).toEqual(['accountId', 'confirmedAt', 'name', 'slug', 'status'])
+  expect(houses[0]!.accountId).toBe(accountId)
+})
+
+test('myHouses returns only the callers own accounts', async () => {
+  const t = makeT()
+  const anasId = await provision(t)
+  const otherId = await t.withIdentity(god).mutation(api.accounts.m.create, {
+    name: 'Stranger Store',
+    primaryContact: { name: 'Stranger', email: 'stranger@example.com' }
+  })
+  await signIn(t, ana)
+  await signIn(t, stranger)
+
+  const anas = await t.withIdentity(ana).query(api.accounts.q.myHouses, {})
+  const strangers = await t.withIdentity(stranger).query(api.accounts.q.myHouses, {})
+
+  expect(anas.map((h) => h.accountId)).toEqual([anasId])
+  expect(strangers.map((h) => h.accountId)).toEqual([otherId])
+})
+
+test('myHouses reports confirmedAt as null when unset', async () => {
+  const t = makeT()
+  await provision(t)
+  await signIn(t, ana)
+
+  const [house] = await t.withIdentity(ana).query(api.accounts.q.myHouses, {})
+
+  expect(house!.confirmedAt).toBeNull()
+  expect(house!.status).toBe('pending')
+})
+
+test('myHouses refuses an unauthenticated caller', async () => {
+  const t = makeT()
+  await provision(t)
+
+  await expect(t.query(api.accounts.q.myHouses, {})).rejects.toThrow('Unauthorized.')
+})
+
+test('after confirmAsContact the house appears in listBankers as confirmed', async () => {
+  const t = makeT()
+  const accountId = await provision(t)
+  await signIn(t, ana)
+
+  await t.withIdentity(ana).mutation(api.accounts.m.confirmAsContact, { accountId })
+
+  const bankers = await t.withIdentity(ana).query(api.accounts.q.listBankers, {})
+  expect(bankers.find((b) => b.accountId === accountId)?.status).toBe('confirmed')
+  const [house] = await t.withIdentity(ana).query(api.accounts.q.myHouses, {})
+  expect(house!.status).toBe('confirmed')
+  expect(typeof house!.confirmedAt).toBe('number')
+})

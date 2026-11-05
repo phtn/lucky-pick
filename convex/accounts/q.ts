@@ -143,3 +143,43 @@ export const listBankers = query({
       .sort(compareBankerRows)
   }
 })
+
+/**
+ * The houses the caller is the linked primary contact for, so `/me` can offer to
+ * confirm them. Matches on the identity's token directly: it needs no `users`
+ * row, so a contact who has only just signed in still sees their houses. Like
+ * `listBankers`, the explicit `returns` validator is the security boundary: it
+ * keeps payout details and contact phone numbers out. Do not swap it for
+ * `accountDocumentSchema`.
+ */
+export const myHouses = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      accountId: v.id('accounts'),
+      slug: v.string(),
+      name: v.string(),
+      status: accountStatusSchema,
+      confirmedAt: v.union(v.number(), v.null())
+    })
+  ),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new ConvexError('Unauthorized.')
+
+    const accounts = await ctx.db
+      .query('accounts')
+      .withIndex('by_primaryContact_tokenIdentifier', (q) =>
+        q.eq('primaryContact.tokenIdentifier', identity.tokenIdentifier)
+      )
+      .take(MAX_LIST_LIMIT)
+
+    return accounts.map((account) => ({
+      accountId: account._id,
+      slug: account.slug,
+      name: account.name,
+      status: account.status,
+      confirmedAt: account.confirmedAt ?? null
+    }))
+  }
+})
