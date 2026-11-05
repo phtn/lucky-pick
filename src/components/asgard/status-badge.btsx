@@ -2,7 +2,7 @@ import Badge from '@/components/ui/badge.btsx'
 import { Icon } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import type { AccountStatus } from '@/lib/accounts/accounts'
-import { ACCOUNT_STATUS_ICON, ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE } from '@/lib/asgard/accounts'
+import { ACCOUNT_STATUS_ICON, ACCOUNT_STATUS_LABEL, ACCOUNT_STATUS_TONE } from '@/lib/accounts/account-status'
 
 module
   /**
