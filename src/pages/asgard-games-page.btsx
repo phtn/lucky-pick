@@ -1,0 +1,17 @@
+import GamesPanel from '@/components/asgard/games-panel.btsx'
+
+module
+  /**
+   * The games console: which games are on sale, which bet types each one sells,
+   * and what a ticket of each costs. The grid is the whole page — a game's odds
+   * and payout ladder are the shape of the game, set in code, not here.
+   */
+  const scrollerClass = 'px-4 pb-16 md:px-6 h-[calc(100dvh-60px)] overflow-scroll'
+
+section(className='flex min-h-0 flex-col')
+  header(className='asgard-topbar')
+    div(className='min-w-0')
+      h1(className='font-sans text-base font-[450] leading-none tracking-tight text-foreground') Games
+
+  div(className={scrollerClass})
+    GamesPanel

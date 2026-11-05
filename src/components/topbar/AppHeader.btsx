@@ -20,6 +20,8 @@ module
     gameId: GameId;
     jackpots: Record<GameId, number>;
     isDrawing: boolean;
+    /** The games on sale, in rail order; absent shows every game. */
+    gameIds?: GameId[];
     onSwitchGame?: (next: GameId) => void;
     mode: GameMode;
     onSelectMode?: (next: GameMode) => void;
@@ -46,7 +48,7 @@ component AnalyticsLink
         Icon(name="columns" size={14})
       span(className="truncate") Analytics
 
-props { pool, gameName, game, gameId, jackpots, isDrawing, onSwitchGame, mode, onSelectMode, soundOn, onToggleSound, theme, themeMode, onToggleThemeMode, onPickTheme, onNotify }: AppHeaderProps
+props { pool, gameName, game, gameId, jackpots, isDrawing, gameIds, onSwitchGame, mode, onSelectMode, soundOn, onToggleSound, theme, themeMode, onToggleThemeMode, onPickTheme, onNotify }: AppHeaderProps
 
 setup
   const pathname = usePathname();
@@ -79,6 +81,7 @@ header(className="app-header")
         ~ gameId={gameId}
         ~ jackpots={jackpots}
         ~ isDrawing={isDrawing}
+        ~ gameIds={gameIds}
         ~ onSwitchGame={onSwitchGame}
         ~ )
 

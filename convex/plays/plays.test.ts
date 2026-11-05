@@ -71,9 +71,11 @@ test('record owns the row by identity, not by any client-supplied id', async () 
   expect(rows[0].userId).toBe(anaUser?._id)
 })
 
-test('record rejects a ticket whose cost is not one of the game\'s bet costs', async () => {
+test('record rejects a ticket whose cost is not a whole, in-range price', async () => {
   const { t, asAna } = await setup()
-  const bad = { ...ticket(7), cost: 21 }
+  // A configured ticket cost may be any whole peso amount, so 21 is now a real
+  // price. A fraction of a peso is not one, whatever the console was set to.
+  const bad = { ...ticket(7), cost: 20.5 }
   await expect(asAna.mutation(api.plays.m.record, play({ tickets: [bad as never] }))).rejects.toThrow()
   expect(await t.run((ctx) => ctx.db.query('practicePlays').collect())).toEqual([])
 })

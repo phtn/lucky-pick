@@ -45,7 +45,7 @@ setup
     if (item.href !== null) navigate(item.href)
     if (!item.isUnread) return
     try {
-      await convexClient.mutation(api.notifications.m.markRead, { notificationId: item.id as Id<'notifications'> })
+      await convexClient?.mutation(api.notifications.m.markRead, { notificationId: item.id as Id<'notifications'> })
     } catch (error) {
       reportFailure(error)
     }

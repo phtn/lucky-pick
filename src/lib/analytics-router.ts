@@ -20,6 +20,7 @@ const asgardShell = lazyRouteComponent(() => import('../pages/asgard-page.btsx')
 const asgardOverview = lazyRouteComponent(() => import('../pages/asgard-overview-page.btsx'))
 const asgardAccounts = lazyRouteComponent(() => import('../pages/asgard-accounts-page.btsx'))
 const asgardAccount = lazyRouteComponent(() => import('../pages/asgard-account-page.btsx'))
+const asgardGames = lazyRouteComponent(() => import('../pages/asgard-games-page.btsx'))
 
 const profilePage = lazyRouteComponent(() => import('../pages/profile-page.btsx'))
 const trxPage = lazyRouteComponent(() => import('../pages/trx-page.btsx'))
@@ -68,7 +69,13 @@ function createAsgardRouteTree() {
     component: asgardAccount
   })
 
-  return rootRoute.addChildren([overviewRoute, accountsRoute, accountRoute])
+  const gamesRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/games',
+    component: asgardGames
+  })
+
+  return rootRoute.addChildren([overviewRoute, accountsRoute, accountRoute, gamesRoute])
 }
 
 function createAppRouteTree() {
@@ -138,6 +145,12 @@ function createAppRouteTree() {
     component: asgardAccount
   })
 
+  const asgardGamesRoute = createRoute({
+    getParentRoute: () => asgardRoute,
+    path: 'games',
+    component: asgardGames
+  })
+
   // Where no `admin.` subdomain is in front of the app — the dev server, a
   // workers.dev origin — `/admin` is the console rather than a doorway to it,
   // so the whole surface hangs off this path. On a host that carries the
@@ -160,7 +173,7 @@ function createAppRouteTree() {
     analyticsRoute,
     profileRoute,
     trxRoute,
-    asgardRoute.addChildren([asgardIndexRoute, asgardAccountsRoute, asgardAccountRoute]),
+    asgardRoute.addChildren([asgardIndexRoute, asgardAccountsRoute, asgardAccountRoute, asgardGamesRoute]),
     adminRoute.addChildren([adminIndexRoute])
   ])
 }

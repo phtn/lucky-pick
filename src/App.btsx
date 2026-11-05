@@ -27,6 +27,8 @@ import { buildPracticePlay, type SettledTicket } from './lib/profile/record';
 import { convexClient } from './lib/convex-client';
 import { auth } from './lib/firebase';
 import { api } from '../convex/_generated/api';
+import { useGameSettings } from './hooks/use-game-settings';
+import { enabledBetTypes, enabledGameIds, stakesFor, ticketCostFor } from './lib/game-settings';
 
 setup
   const pathname = usePathname();
@@ -36,7 +38,9 @@ setup
   const [gameId, setGameId, getGameId] = useState<GameId>('6/42');
   const [mode, setMode] = useState<GameMode>('solo');
   const [betType, setBetType] = useState<BetType>(6);
-  const [betCost, setBetCost] = useState<BetCost>(25);
+  // What the player picked out of the stakes this cell offers. Null — and a
+  // stake the house has since withdrawn — falls back to the configured price.
+  const [stakeChoice, setStakeChoice] = useState<BetCost | null>(null);
   const [prizeMode, setPrizeMode] = useState<PrizeMode>('official');
   const [selected, setSelected] = useState<number[]>([7, 14, 21, 28, 35, 42]);
   const [tickets, setTickets, getTickets] = useState<Ticket[]>([]);
@@ -116,6 +120,36 @@ setup
   const required = betType;
   const game = GAMES[gameId];
   const pool = game.pool;
+
+  // What the house currently sells, from the `games` table in Convex. An
+  // unconfigured deployment resolves to the static config, so every game and
+  // every bet type is on sale at the code's own price.
+  const gameSettings = useGameSettings();
+  const sellableGames = enabledGameIds(gameSettings);
+  const sellableBetTypes = enabledBetTypes(gameSettings[gameId]);
+  const stakes = stakesFor(gameSettings, gameId, betType);
+  // The configured price is what a ticket costs unless the player picked
+  // another stake this cell actually offers.
+  const betCost: BetCost =
+    stakeChoice !== null && stakes.includes(stakeChoice) ? stakeChoice : ticketCostFor(gameSettings, gameId, betType);
+
+  // The house can withdraw a game, or one of its bet types, while someone is
+  // sitting on it. The board moves to something still on sale rather than
+  // taking bets on what is closed; the selection is trimmed to fit what it
+  // moved to, the same way switching by hand does.
+  useEffect(() => {
+    if (sellableGames.includes(gameId)) return;
+    const next = sellableGames[0];
+    setGameId(next);
+    setSelected(prev => prev.filter(n => n <= GAMES[next].pool));
+  }, [sellableGames.join(','), gameId]);
+
+  useEffect(() => {
+    if (sellableBetTypes.includes(betType)) return;
+    const next = sellableBetTypes[sellableBetTypes.length - 1];
+    setBetType(next);
+    setSelected(prev => prev.slice(0, next).sort((a, b) => a - b));
+  }, [sellableBetTypes.join(','), betType]);
   const jackpot = jackpots[gameId];
   const officialResults = OFFICIAL_RESULTS[gameId];
   const latestOfficial = officialResults[0];
@@ -303,7 +337,7 @@ setup
   };
 
   const switchGame = (next: GameId) => {
-    if (next === gameId || isDrawing) return;
+    if (next === gameId || isDrawing || !sellableGames.includes(next)) return;
     const nextPool = GAMES[next].pool;
     setGameId(next);
     setSelected(prev => prev.filter(n => n <= nextPool));
@@ -569,6 +603,7 @@ setup
 
   // A bet type is also the size of a ticket, so the selection is trimmed to fit.
   const selectBetType = (bt: BetType) => {
+    if (!sellableBetTypes.includes(bt)) return;
     setBetType(bt);
     setSelected(prev => prev.slice(0, bt).sort((a, b) => a - b));
   };
@@ -594,6 +629,7 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
         ~ gameId={gameId}
         ~ jackpots={jackpots}
         ~ isDrawing={isDrawing}
+        ~ gameIds={sellableGames}
         ~ onSwitchGame={switchGame}
         ~ mode={mode}
         ~ onSelectMode={selectMode}
@@ -642,6 +678,9 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
               ~ jackpot={jackpot}
               ~ betType={betType}
               ~ betCost={betCost}
+              ~ betTypes={sellableBetTypes}
+              ~ stakes={stakes}
+              ~ onSelectStake={setStakeChoice}
               ~ selected={selected}
               ~ ticketCount={ticketCount}
               ~ buyerTag={buyerTag}

@@ -1,0 +1,367 @@
+import { useEffect, useState } from 'octane'
+import { Icon } from '@/lib/icons'
+import Button from '@/components/ui/button.btsx'
+import { cn } from '@/lib/utils'
+import { isAbortError, readErrorMessage } from '@/lib/asgard/errors'
+import { countEnabledBetTypes, fetchGames, formatConfiguredAt, seedGames, setGameEnabled, updateBetType, type GameBetTypeRow, type GameRow } from '@/lib/asgard/games'
+import { DEFAULT_TICKET_COST, MAX_STAKE_OPTIONS, MAX_TICKET_COST, MIN_TICKET_COST, isTicketCost } from '@/lib/game-settings'
+import { GAMES, GAME_IDS, type BetType, type GameId } from '@/lib/games'
+
+module
+  type GridStatus = 'loading' | 'ready' | 'error'
+
+  /** What a cell is waiting on, so only the control being used goes quiet. */
+  type PendingKey = string
+
+  const cellKey = (gameId: GameId, betType: BetType) => `${gameId}:${betType}`
+
+  const labelClass = 'font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground'
+  const inputClass =
+    'h-7 w-20 rounded-xs border border-border/60 bg-sidebar px-2 font-mono text-xs text-foreground focus-visible:bg-background focus-visible:outline-active focus-visible:outline-[1px] focus-visible:outline-offset-0 disabled:opacity-50'
+  const stakesInputClass = `${inputClass} w-36`
+
+  const betTypeLabel = (betType: BetType) => (betType === 6 ? '6/6 · jackpot' : `${betType}/6`)
+
+  /** `20, 24, 25` — how a stake list is typed and read back. */
+  const stakesText = (stakes: readonly number[]) => stakes.join(', ')
+
+  /**
+   * The stakes an operator typed. Anything that is not a number is dropped
+   * rather than guessed at, and `null` means the box held nothing usable — the
+   * caller then leaves the stored list alone instead of emptying it.
+   */
+  function readStakesInput(value: string): number[] | null {
+    const parts = value
+      .split(/[,\s]+/)
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0)
+
+    if (parts.length === 0) return null
+
+    const stakes = parts.map((part) => Number.parseInt(part, 10)).filter((stake) => isTicketCost(stake))
+    return stakes.length > 0 ? stakes : null
+  }
+
+  /** On/off, said as a switch rather than a checkbox so a row reads at a glance. */
+  interface ToggleProps {
+    isOn: boolean
+    label: string
+    disabled?: boolean
+    onToggle: VoidFunction
+  }
+
+  /**
+   * One cell of the price grid. Its two boxes keep their own draft so a
+   * half-typed price is never sent; each commits on blur and on Enter, and
+   * reverts on Escape.
+   */
+  interface BetTypeCellProps {
+    gameId: GameId
+    bet: GameBetTypeRow
+    isBusy: boolean
+    onToggle: (betType: BetType) => void
+    onCost: (betType: BetType, ticketCost: number) => void
+    onStakes: (betType: BetType, stakes: number[]) => void
+  }
+
+  /** One game: whether it is on sale, and the six cells beneath it. */
+  interface GameCardProps {
+    row: GameRow
+    pendingKeys: ReadonlySet<PendingKey>
+    onToggleGame: (gameId: GameId) => void
+    onToggleBetType: (gameId: GameId, betType: BetType) => void
+    onCost: (gameId: GameId, betType: BetType, ticketCost: number) => void
+    onStakes: (gameId: GameId, betType: BetType, stakes: number[]) => void
+  }
+
+component Toggle
+  props { isOn, label, disabled = false, onToggle }: ToggleProps
+  button(
+    ~ type='button'
+    ~ role='switch'
+    ~ aria-checked={isOn}
+    ~ aria-label={label}
+    ~ disabled={disabled}
+    ~ onClick={onToggle}
+    ~ className={cn(
+    ~   'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors duration-150 ease-out disabled:opacity-50',
+    ~   isOn ? 'border-active bg-active' : 'border-border/60 bg-muted'
+    ~ )}
+    ~ )
+    span(
+      ~ aria-hidden={true}
+      ~ className={cn(
+      ~   'size-3.5 rounded-full bg-background transition-transform duration-150 ease-out',
+      ~   isOn ? 'translate-x-[18px]' : 'translate-x-[3px]'
+      ~ )}
+      ~ )
+
+component BetTypeCell
+  props { gameId, bet, isBusy, onToggle, onCost, onStakes }: BetTypeCellProps
+  setup
+    const [costDraft, setCostDraft] = useState(String(bet.ticketCost))
+    const [stakesDraft, setStakesDraft] = useState(stakesText(bet.stakes))
+
+    // The server is the authority on both values: a refused write, or someone
+    // else's change arriving in a re-read, resets the boxes to what is stored.
+    useEffect(() => setCostDraft(String(bet.ticketCost)), [bet.ticketCost])
+    useEffect(() => setStakesDraft(stakesText(bet.stakes)), [bet.stakes.join(',')])
+
+    const commitCost = () => {
+      const next = Number.parseInt(costDraft, 10)
+      if (!isTicketCost(next) || next === bet.ticketCost) {
+        setCostDraft(String(bet.ticketCost))
+        return
+      }
+      onCost(bet.betType, next)
+    }
+
+    const commitStakes = () => {
+      const next = readStakesInput(stakesDraft)
+      if (next === null || stakesText(next) === stakesText(bet.stakes)) {
+        setStakesDraft(stakesText(bet.stakes))
+        return
+      }
+      onStakes(bet.betType, next)
+    }
+
+    const handleKey = (commit: VoidFunction, revert: VoidFunction) => (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        commit()
+      }
+      if (event.key === 'Escape') revert()
+    }
+
+  div(
+    ~ className={cn(
+    ~   'flex flex-wrap items-center gap-3 rounded-lg border border-border/50 px-3 py-2 transition-opacity',
+    ~   !bet.enabled && 'opacity-60'
+    ~ )}
+    ~ )
+    div(className='flex w-28 shrink-0 items-center gap-2')
+      Toggle(
+        ~ isOn={bet.enabled}
+        ~ disabled={isBusy}
+        ~ label={`${bet.enabled ? 'Disable' : 'Enable'} ${betTypeLabel(bet.betType)} on ${gameId}`}
+        ~ onToggle={() => onToggle(bet.betType)}
+        ~ )
+      span(className='font-mono text-xs text-foreground') #{betTypeLabel(bet.betType)}
+
+    label(className='flex items-center gap-2')
+      span(className={labelClass}) Ticket
+      input(
+        ~ type='number'
+        ~ inputMode='numeric'
+        ~ min={MIN_TICKET_COST}
+        ~ max={MAX_TICKET_COST}
+        ~ step={1}
+        ~ value={costDraft}
+        ~ disabled={isBusy}
+        ~ className={inputClass}
+        ~ aria-label={`Ticket cost for ${betTypeLabel(bet.betType)} on ${gameId}`}
+        ~ onInput={(event: Event) => setCostDraft((event.currentTarget as HTMLInputElement).value)}
+        ~ onBlur={commitCost}
+        ~ onKeyDown={handleKey(commitCost, () => setCostDraft(String(bet.ticketCost)))}
+        ~ )
+
+    label(className='flex items-center gap-2')
+      span(className={labelClass}) Stakes
+      input(
+        ~ type='text'
+        ~ value={stakesDraft}
+        ~ disabled={isBusy}
+        ~ className={stakesInputClass}
+        ~ placeholder='20, 24, 25'
+        ~ aria-label={`Stakes offered for ${betTypeLabel(bet.betType)} on ${gameId}`}
+        ~ onInput={(event: Event) => setStakesDraft((event.currentTarget as HTMLInputElement).value)}
+        ~ onBlur={commitStakes}
+        ~ onKeyDown={handleKey(commitStakes, () => setStakesDraft(stakesText(bet.stakes)))}
+        ~ )
+
+    if isBusy
+      Icon(name='spinner' size={12} className='animate-spin text-muted-foreground')
+
+component GameCard
+  props { row, pendingKeys, onToggleGame, onToggleBetType, onCost, onStakes }: GameCardProps
+  setup
+    const enabledCount = countEnabledBetTypes(row)
+    const isGameBusy = pendingKeys.has(row.gameId)
+
+  section(className={cn('rounded-xl border border-border/60 p-3', !row.enabled && 'bg-muted/20')})
+    header(className='flex flex-wrap items-center justify-between gap-3 pb-3')
+      div(className='flex min-w-0 items-center gap-3')
+        Toggle(
+          ~ isOn={row.enabled}
+          ~ disabled={isGameBusy}
+          ~ label={`${row.enabled ? 'Take' : 'Put'} ${row.name} ${row.enabled ? 'off' : 'on'} sale`}
+          ~ onToggle={() => onToggleGame(row.gameId)}
+          ~ )
+        span(aria-hidden={true} className='size-2 shrink-0 rounded-full' style={{ background: row.accent }})
+        div(className='min-w-0')
+          p(className='truncate font-sans text-sm text-foreground') #{row.name}
+          p(className='truncate font-mono text-2xs uppercase tracking-wider text-muted-foreground')
+            | #{row.gameId}
+            | #{' · pool 1-'}
+            | #{row.pool}
+            | #{' · '}
+            | #{row.drawDayLabel}
+      div(className='flex shrink-0 items-center gap-3')
+        span(className={labelClass})
+          | #{enabledCount}
+          | #{'/6 bet types'}
+        span(className={labelClass}) #{formatConfiguredAt(row.updatedAt)}
+        if isGameBusy
+          Icon(name='spinner' size={12} className='animate-spin text-muted-foreground')
+
+    div(className='grid gap-2')
+      each bet in row.betTypes key bet.betType
+        BetTypeCell(
+          ~ gameId={row.gameId}
+          ~ bet={bet}
+          ~ isBusy={isGameBusy || pendingKeys.has(cellKey(row.gameId, bet.betType))}
+          ~ onToggle={(betType: BetType) => onToggleBetType(row.gameId, betType)}
+          ~ onCost={(betType: BetType, ticketCost: number) => onCost(row.gameId, betType, ticketCost)}
+          ~ onStakes={(betType: BetType, stakes: number[]) => onStakes(row.gameId, betType, stakes)}
+          ~ )
+
+setup
+  const [games, setGames] = useState<GameRow[]>([])
+  const [status, setStatus] = useState<GridStatus>('loading')
+  const [error, setError] = useState<string | null>(null)
+  const [pendingKeys, setPendingKeys] = useState<ReadonlySet<PendingKey>>(new Set())
+  const [isSeeding, setIsSeeding] = useState(false)
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    setStatus('loading')
+    fetchGames(controller.signal)
+      .then((response) => {
+        setGames(response.games)
+        setError(null)
+        setStatus('ready')
+      })
+      .catch((caught: unknown) => {
+        if (isAbortError(caught)) return
+        setError(readErrorMessage(caught, 'Could not load the games.'))
+        setStatus('error')
+      })
+
+    return () => controller.abort()
+  }, [])
+
+  const withPending = (key: PendingKey, next: boolean) =>
+    setPendingKeys((current) => {
+      const keys = new Set(current)
+      if (next) keys.add(key)
+      else keys.delete(key)
+      return keys
+    })
+
+  /**
+   * Every write answers with the whole grid, re-read server-side, so the panel
+   * replaces its copy rather than patching it: the stored stakes are normalized
+   * and ordered there, and a cell must show what was actually stored.
+   */
+  const run = async (key: PendingKey, write: () => Promise<{ games: GameRow[] }>, fallback: string) => {
+    withPending(key, true)
+    try {
+      const response = await write()
+      setGames(response.games)
+      setError(null)
+      setStatus('ready')
+    } catch (caught: unknown) {
+      setError(readErrorMessage(caught, fallback))
+    } finally {
+      withPending(key, false)
+    }
+  }
+
+  const toggleGame = (gameId: GameId) => {
+    const row = games.find((game) => game.gameId === gameId)
+    if (!row) return
+    void run(gameId, () => setGameEnabled(gameId, !row.enabled), 'Could not change that game.')
+  }
+
+  const toggleBetType = (gameId: GameId, betType: BetType) => {
+    const bet = games.find((game) => game.gameId === gameId)?.betTypes.find((cell) => cell.betType === betType)
+    if (!bet) return
+    void run(
+      cellKey(gameId, betType),
+      () => updateBetType(gameId, betType, { enabled: !bet.enabled }),
+      'Could not change that bet type.'
+    )
+  }
+
+  const changeCost = (gameId: GameId, betType: BetType, ticketCost: number) =>
+    void run(cellKey(gameId, betType), () => updateBetType(gameId, betType, { ticketCost }), 'Could not set that price.')
+
+  const changeStakes = (gameId: GameId, betType: BetType, stakes: number[]) =>
+    void run(cellKey(gameId, betType), () => updateBetType(gameId, betType, { stakes }), 'Could not set those stakes.')
+
+  const seed = async () => {
+    setIsSeeding(true)
+    try {
+      const response = await seedGames()
+      setGames(response.games)
+      setError(null)
+      setStatus('ready')
+    } catch (caught: unknown) {
+      setError(readErrorMessage(caught, 'Could not seed the games.'))
+    } finally {
+      setIsSeeding(false)
+    }
+  }
+
+  // A game with no row has never been configured, so it is playing at the
+  // code's own defaults. Seeding writes those defaults down, which is what makes
+  // them editable; it never touches a game that already has a row.
+  const unconfigured = GAME_IDS.filter((gameId) => !games.some((game) => game.gameId === gameId))
+
+div(className='w-full')
+  header(className='flex h-12 items-center justify-between gap-3')
+    div(className='flex items-center gap-3')
+      h2(className='font-sans font-[400] tracking-tight') Price grid
+      h3(className='flex size-7 aspect-square items-center justify-center rounded-full bg-foreground/5 font-mono text-xs')
+        if status === 'ready'
+          span #{games.length}
+        else
+          Icon(name='spinner' size={12} className='animate-spin')
+    if unconfigured.length > 0 && status !== 'loading'
+      Button(type='button' size='sm' variant='secondary' disabled={isSeeding} onClick={() => void seed()})
+        span #{isSeeding ? 'Seeding…' : `Seed ${unconfigured.length} game${unconfigured.length === 1 ? '' : 's'}`}
+        Icon(name='sparkle' size={14})
+
+  if error
+    p(
+      ~ role='alert'
+      ~ className='mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive'
+      ~ ) #{error}
+
+  if status === 'loading'
+    div(className='flex items-center gap-3 py-10')
+      Icon(name='spinner' size={16} className='animate-spin text-muted-foreground')
+      p(className='text-sm text-muted-foreground') Reading the price grid…
+  else
+    div(className='grid gap-3')
+      each row in games key row.gameId
+        GameCard(
+          ~ row={row}
+          ~ pendingKeys={pendingKeys}
+          ~ onToggleGame={toggleGame}
+          ~ onToggleBetType={toggleBetType}
+          ~ onCost={changeCost}
+          ~ onStakes={changeStakes}
+          ~ )
+
+      each gameId in unconfigured key gameId
+        div(className='flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-border/60 px-3 py-3')
+          div(className='min-w-0')
+            p(className='truncate text-sm text-foreground') #{GAMES[gameId].name}
+            p(className='truncate font-mono text-2xs uppercase tracking-wider text-muted-foreground')
+              | #{gameId}
+              | #{` · not configured · playing at ₱${DEFAULT_TICKET_COST} with every bet type on`}
+
+      p(className='pt-1 font-mono text-2xs uppercase tracking-wider text-muted-foreground')
+        | #{`A ticket costs ₱${MIN_TICKET_COST}–₱${MAX_TICKET_COST}; a bet type offers up to ${MAX_STAKE_OPTIONS} stakes.`}

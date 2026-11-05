@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from 'convex/server'
 import { v } from 'convex/values'
 import { accountSchema } from './accounts/d'
 import { creditsFields } from './credits/d'
+import { gameFields } from './games/d'
 import { ledgerEntryFields, ledgerTransactionFields, walletFields } from './ledger/d'
 import { topupRequestFields } from './money/d'
 import { notificationFields } from './notifications/d'
@@ -28,6 +29,9 @@ export default defineSchema({
     .index('by_primaryContact_tokenIdentifier', ['primaryContact.tokenIdentifier'])
     .index('by_primaryContact_email', ['primaryContact.email'])
     .index('by_primaryContact_firebaseUid', ['primaryContact.firebaseUid']),
+  // One row per game, seeded from `src/lib/games.ts`. `by_gameId` is the row's
+  // identity: the console and the app both look a game up by the id they use.
+  games: defineTable(gameFields).index('by_gameId', ['gameId']).index('by_order', ['order']),
   credits: defineTable(creditsFields)
     .index('by_accountId', ['accountId'])
     .index('by_accountId_and_userId', ['accountId', 'userId'])

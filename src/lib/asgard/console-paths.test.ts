@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
-import { asgardAccountPath, asgardAccountsPath, asgardConsoleBase, asgardConsolePath } from './console-paths'
+import { asgardAccountPath, asgardAccountsPath, asgardConsoleBase, asgardConsolePath, asgardGamesPath } from './console-paths'
 
 describe('Asgard console base', () => {
   test('roots the console at / on its own subdomain', () => {
@@ -25,6 +25,11 @@ describe('Asgard console paths', () => {
   test('builds the roster path for either host', () => {
     assert.equal(asgardAccountsPath('asgard.luckypick.com'), '/accounts')
     assert.equal(asgardAccountsPath('lucky-pick.phtn458.workers.dev'), '/asgard/accounts')
+  })
+
+  test('builds the games path for either host', () => {
+    assert.equal(asgardGamesPath('asgard.luckypick.com'), '/games')
+    assert.equal(asgardGamesPath('lucky-pick.phtn458.workers.dev'), '/asgard/games')
   })
 
   test('builds one account page path for either host', () => {

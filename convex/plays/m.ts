@@ -1,4 +1,5 @@
-import { v } from 'convex/values'
+import { ConvexError, v } from 'convex/values'
+import { MAX_TICKET_COST, MIN_TICKET_COST, isTicketCost } from '../../src/lib/game-settings'
 import { mutation } from '../_generated/server'
 import { getUserByTokenIdentifier } from '../users/q'
 import {
@@ -12,6 +13,19 @@ import {
 } from './d'
 
 const { userId: _userId, ...clientFields } = practicePlayFields
+
+/**
+ * A stake the house could actually have charged: whole pesos, within the bounds
+ * a configured ticket cost lives in. Unlike the arrays above this is refused
+ * rather than trimmed — a made-up price would misstate what a session spent.
+ */
+const readTicketCost = (cost: number) => {
+  if (!isTicketCost(cost)) {
+    throw new ConvexError(`A ticket cost must be a whole number of pesos between ${MIN_TICKET_COST} and ${MAX_TICKET_COST}.`)
+  }
+
+  return cost
+}
 
 /**
  * Stores one resolved draw for the signed-in user, then prunes their history
@@ -46,6 +60,7 @@ export const record = mutation({
             },
       tickets: args.tickets.slice(0, TICKET_DETAIL_LIMIT).map((ticket) => ({
         ...ticket,
+        cost: readTicketCost(ticket.cost),
         numbers: ticket.numbers.slice(0, TICKET_NUMBER_LIMIT),
         playerName: ticket.playerName.slice(0, PLAYER_NAME_LIMIT)
       })),

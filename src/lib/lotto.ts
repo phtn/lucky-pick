@@ -1,10 +1,11 @@
 import { formatJackpot, formatPeso } from './format'
+import { BET_TYPE_VALUES } from './game-settings'
 import { formatOdds, matchAllOdds, tierOdds, type BetType, type GameConfig, type GameId } from './games'
 import type { DrawSeed } from './rng'
 
 export type { BetType } from './games'
 
-export const BET_TYPES: BetType[] = [1, 2, 3, 4, 5, 6]
+export const BET_TYPES: BetType[] = BET_TYPE_VALUES
 
 // One tap buys this many random tickets at once.
 export const BET_MULTIPLIERS = [1, 100, 50, 1000, 5000, 50_000, 250_000, 500_000, 1_000_000]
@@ -13,7 +14,13 @@ export const VISIBLE_TICKETS = 1000
 
 export type GameMode = 'solo' | 'party'
 
-export type BetCost = 20 | 24 | 25
+/**
+ * What one ticket cost. Whole pesos, not a fixed set: the house configures a
+ * price per game per bet type in Asgard (see `game-settings.ts`), so 20, 24 and
+ * 25 are only the defaults the code ships with. `BET_COSTS` below still names
+ * those three, which is what the console seeds a cell's stakes from.
+ */
+export type BetCost = number
 
 export type PrizeMode = 'official' | 'barkada'
 

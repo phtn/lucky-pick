@@ -10,14 +10,22 @@ module
     jackpots: Record<GameId, number>;
     /** A draw in flight locks the switcher. */
     isDrawing: boolean;
+    /**
+     * The games on sale, in rail order. Absent means every game the code knows,
+     * which is what a surface with no configuration behind it shows.
+     */
+    gameIds?: GameId[];
     onSwitchGame?: (next: GameId) => void;
   }
 
-props { game, gameId, jackpots, isDrawing, onSwitchGame }: GameSwitcherProps
+props { game, gameId, jackpots, isDrawing, gameIds, onSwitchGame }: GameSwitcherProps
+
+setup
+  const rail = gameIds ?? GAME_IDS;
 
 div(className="game-switcher hidden! xl:flex!")
   div(className="game-rail scale-80" aria-label="Choose a lottery game")
-    each g in GAME_IDS key g
+    each g in rail key g
       button(
         ~ onClick={() => onSwitchGame && onSwitchGame(g)}
         ~ disabled={isDrawing}

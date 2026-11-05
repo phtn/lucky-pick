@@ -61,8 +61,14 @@ export const practiceSeedSchema = v.object({
   rolls: v.number()
 })
 
-/** The game's fixed ticket prices (`BetCost` in `src/lib/lotto.ts`); anything else is not a real stake. */
-export const practiceBetCostSchema = v.union(v.literal(20), v.literal(24), v.literal(25))
+/**
+ * What one ticket cost, in pesos. No longer a fixed set of three: the house
+ * configures a price per game per bet type in the `games` table, so any whole
+ * amount within the bounds of `isTicketCost` (`src/lib/game-settings.ts`) is a
+ * real stake. `record` is what refuses the rest — a fractional or out-of-range
+ * cost is not a price anything charged.
+ */
+export const practiceBetCostSchema = v.number()
 
 export const practiceTicketSchema = v.object({
   numbers: v.array(v.number()),

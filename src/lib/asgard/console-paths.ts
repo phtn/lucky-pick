@@ -25,3 +25,5 @@ export const asgardAccountsPath = (hostname: string) => asgardConsolePath(hostna
 
 export const asgardAccountPath = (hostname: string, slug: string) =>
   asgardConsolePath(hostname, `/accounts/${slug}`)
+
+export const asgardGamesPath = (hostname: string) => asgardConsolePath(hostname, '/games')
