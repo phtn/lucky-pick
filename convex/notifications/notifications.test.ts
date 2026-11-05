@@ -306,3 +306,14 @@ test("markAllRead marks only the caller's rows", async () => {
   expect(typeof (await read(a2))!.readAt).toBe('number')
   expect((await read(b1))!.readAt).toBeNull()
 })
+
+test('markRead and markAllRead keep an existing readAt', async () => {
+  const t = makeT()
+  const anaId = await userIdOf(t, ana)
+  const id = await seed(t, anaId, 1)
+  await t.run((ctx) => ctx.db.patch('notifications', id, { readAt: 1234 }))
+  await t.withIdentity(ana).mutation(api.notifications.m.markRead, { notificationId: id })
+  expect((await t.run((ctx) => ctx.db.get('notifications', id)))!.readAt).toBe(1234)
+  await t.withIdentity(ana).mutation(api.notifications.m.markAllRead, {})
+  expect((await t.run((ctx) => ctx.db.get('notifications', id)))!.readAt).toBe(1234)
+})
