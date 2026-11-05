@@ -1,0 +1,93 @@
+module "use client";
+import { useCallback } from 'octane'
+import DropdownMenu, { DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu.btsx'
+import Button from '@/components/ui/button.btsx'
+import { Icon } from '@/lib/icons'
+import { cn } from '@/lib/utils'
+import { navigate } from '@/lib/navigation'
+import { useConvexQuery } from '@/hooks/use-convex-query'
+import { convexClient } from '@/lib/convex-client'
+import { countUnread, toNotificationItems, type NotificationItem } from '@/lib/notifications/notifications'
+import { useFirebaseUser } from '@/lib/firebase/auth'
+import { api } from '../../../convex/_generated/api'
+import type { Id } from '../../../convex/_generated/dataModel'
+
+module
+  interface NotificationBellProps {
+    /** Surfaces a failed mark-read through the app's existing toast. */
+    onNotify?: (message: string) => void
+  }
+
+props { onNotify }: NotificationBellProps
+
+setup
+  const { user } = useFirebaseUser()
+  const enabled = user !== null
+  // `undefined` is no answer yet (loading, a failed first read), never "nothing
+  // to read": only an empty array says that, and it is shown inside the menu so
+  // the bell does not come and go among its neighbours.
+  const rows = useConvexQuery(api.notifications.q.mine, {}, { enabled })
+
+  const loading = rows === undefined
+  const items = rows === undefined ? [] : toNotificationItems(rows)
+  const unread = rows === undefined ? 0 : countUnread(rows)
+  const trigger = <Button/>
+
+  const reportFailure = useCallback((error: unknown) => {
+    // A ConvexError carries a sentence meant for the player; anything else
+    // (offline, a server fault) gets a generic one.
+    const data = (error as { data?: unknown }).data
+    onNotify?.(typeof data === 'string' ? data : 'Could not update notifications. Try again.')
+  }, [onNotify])
+
+  const handleSelect = useCallback(async (item: NotificationItem) => {
+    // Follow the link first: the read mark is bookkeeping, not a gate on going there.
+    if (item.href !== null) navigate(item.href)
+    if (!item.isUnread) return
+    try {
+      await convexClient.mutation(api.notifications.m.markRead, { notificationId: item.id as Id<'notifications'> })
+    } catch (error) {
+      reportFailure(error)
+    }
+  }, [reportFailure])
+
+  const handleMarkAll = useCallback(async () => {
+    try {
+      await convexClient.mutation(api.notifications.m.markAllRead, {})
+    } catch (error) {
+      reportFailure(error)
+    }
+  }, [reportFailure])
+
+if user !== null
+  DropdownMenu
+    DropdownMenuTrigger(
+      ~ render={trigger}
+      ~ className='relative h-12 px-3 md:rounded-lg rounded-xl dark:bg-muted/80 hover:dark:bg-muted light:bg-panel light:text-neutral-100'
+      ~ disabled={loading}
+      ~ aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+      ~ )
+      div(className="flex aspect-square size-6 items-center justify-center")
+        Icon(name='message' className={cn('size-9 md:size-4.5', loading && 'opacity-50')})
+      if unread > 0
+        span(className="absolute right-1.5 top-1.5 flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 font-mono text-[10px] font-bold leading-4 text-white") #{unread > 99 ? '99+' : unread}
+    DropdownMenuContent(className="min-w-64 max-w-80 bg-background" align="end" side="bottom" sideOffset={4})
+      DropdownMenuGroup
+        DropdownMenuLabel(className="font-normal text-xs text-muted-foreground opacity-80") Notifications
+        DropdownMenuSeparator
+        each item in items key item.id
+          DropdownMenuItem(onClick={() => void handleSelect(item)} className="items-start gap-2 p-2 hover:bg-foreground/10!")
+            span(className={cn('mt-1.5 size-2 shrink-0 rounded-full', item.isUnread ? 'bg-accent' : 'bg-transparent')} aria-hidden="true")
+            div(className='min-w-0 flex-1')
+              span(className={cn('block text-sm', item.isUnread ? 'font-medium' : 'text-muted-foreground')}) #{item.title}
+              if item.detail !== null
+                span(className='block text-xs text-muted-foreground') #{item.detail}
+        empty
+          DropdownMenuItem(disabled className='p-2 text-xs text-muted-foreground') Nothing to read yet
+      if unread > 0
+        DropdownMenuGroup
+          DropdownMenuSeparator
+          DropdownMenuItem(onClick={() => void handleMarkAll()} className="gap-1 p-2 text-muted-foreground hover:bg-muted-foreground/10! hover:text-accent")
+            div(className="flex size-6 items-center justify-center rounded-md")
+              Icon(name='check' className='size-3.5')
+            span(className="font-sans text-sm -tracking-[0.02em]") Mark all read

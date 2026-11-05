@@ -1,5 +1,6 @@
 import AccountSwitcher from './AccountSwitcher.btsx';
 import BankerSwitcher from './BankerSwitcher.btsx';
+import NotificationBell from './NotificationBell.btsx';
 import GameSwitcher from './GameSwitcher.btsx';
 import { DropdownMenuItem, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu.btsx';
 import { Icon } from '@/lib/icons';
@@ -81,6 +82,7 @@ header(className="app-header")
         ~ )
 
     div(className="app-header__account flex items-start gap-2")
+      NotificationBell(onNotify={onNotify})
       BankerSwitcher(onNotify={onNotify})
       AccountSwitcher(onNotify={onNotify} footer={AnalyticsLink})
         DropdownMenuSeparator
