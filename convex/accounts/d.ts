@@ -67,6 +67,10 @@ export const accountSchema = v.object({
   closedAt: v.union(v.number(), v.null()),
   closedBy: v.union(v.string(), v.null()),
   closeReason: v.union(v.string(), v.null()),
+  // When the primary contact accepted the house. Optional: accounts that predate confirmation have neither field.
+  confirmedAt: v.optional(v.number()),
+  // The tokenIdentifier of whoever confirmed it, which is the linked primary contact.
+  confirmedBy: v.optional(v.string()),
   createdAt: v.number(),
   createdBy: v.string(),
   updatedAt: v.number(),

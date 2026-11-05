@@ -92,7 +92,36 @@ export const requireAccountManager = async (ctx: QueryCtx | MutationCtx, account
   return { identity, account }
 }
 
-export const normalizeAccountName = (name: string) => {
+/**
+ * Authorizes the linked primary contact of a house that has not yet been
+ * confirmed. This cannot reuse `requireAccountManager`: that requires a usable
+ * account, and a pending one is not usable until its contact accepts it.
+ *
+ * The match is on `primaryContact.tokenIdentifier` only, never on email. Being
+ * named as a contact is not proof of being one; sign-in linking is what turns a
+ * name into a credential, and it only does so for a verified email or an
+ * operator-chosen `firebaseUid`. An unlinked contact has a null
+ * `tokenIdentifier`, which never equals a real identity's. Any other status
+ * fails too, so one refusal covers "not yours", "not linked" and "not pending"
+ * without telling the caller which.
+ */
+export const requirePendingAccountContact = async (ctx: QueryCtx | MutationCtx, accountId: Id<'accounts'>) => {
+  const identity = await ctx.auth.getUserIdentity()
+  const account = identity ? await ctx.db.get(accountId) : null
+
+  if (
+    !identity ||
+    !account ||
+    account.primaryContact.tokenIdentifier !== identity.tokenIdentifier ||
+    account.status !== 'pending'
+  ) {
+    throw new ConvexError('Unauthorized.')
+  }
+
+  return { identity, account }
+}
+
+export const normalizeAccountName =(name: string) => {
   const trimmed = trimOrNull(name)
 
   if (!trimmed) {

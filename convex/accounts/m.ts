@@ -16,6 +16,7 @@ import {
   normalizePrimaryContact,
   normalizeTestCredits,
   requireGodIdentity,
+  requirePendingAccountContact,
   requireStaffIdentity,
   requireTopgIdentity
 } from './helpers'
@@ -111,6 +112,30 @@ export const create = mutation({
     }
 
     return accountId
+  }
+})
+
+/**
+ * The linked primary contact accepts their house, moving it from pending to
+ * confirmed. The guard refuses everyone else and any account that is not
+ * pending, so a repeat call cannot rewrite `confirmedAt`.
+ */
+export const confirmAsContact = mutation({
+  args: { accountId: v.id('accounts') },
+  returns: v.null(),
+  handler: async (ctx, { accountId }) => {
+    const { identity } = await requirePendingAccountContact(ctx, accountId)
+    const now = Date.now()
+
+    await ctx.db.patch(accountId, {
+      status: 'confirmed',
+      confirmedAt: now,
+      confirmedBy: identity.tokenIdentifier,
+      updatedAt: now,
+      updatedBy: identity.tokenIdentifier
+    })
+
+    return null
   }
 })
 
