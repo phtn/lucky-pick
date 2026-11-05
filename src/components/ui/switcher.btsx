@@ -71,7 +71,7 @@ component SwitcherRoot
     // that nothing is selected, which is what drops the trigger to `emptyLabel`.
     const activeItem = activeId === undefined ? items[0] : items.find(item => item.id === activeId);
     const trigger = <Button/>;
-    const triggerColour = tone ? `_border` : 'dark:bg-muted/40 hover:dark:bg-muted dark:text-fg dark:data-pressed:bg-panel light:bg-transparent'
+    const triggerColour = tone ? `border ${tone}` : 'dark:bg-muted/40 hover:dark:bg-muted hover:bg-[#57ccf2] dark:text-fg dark:data-pressed:bg-panel data-pressed:bg-muted light:bg-transparent'
     const isMobile = useMobile()
     // A Google avatar is served from `lh3.googleusercontent.com`, which refuses
     // some requests outright; the refused URL is remembered so the icon takes
@@ -82,7 +82,7 @@ component SwitcherRoot
       activeItem?.imageUrl && activeItem.imageUrl !== brokenPhotoUrl ? activeItem.imageUrl : null
 
   DropdownMenu
-    DropdownMenuTrigger(render={trigger} className={cn('h-11', triggerColour, 'bg-transparent rounded-full overflow-hidden')} disabled={busy})
+    DropdownMenuTrigger(render={trigger} className={cn('size-10', triggerColour, 'bg-transparent rounded-full overflow-hidden')} disabled={busy})
       div(className="flex aspect-square _size-6 items-center justify-center")
         if avatarUrl
           img(
@@ -90,7 +90,7 @@ component SwitcherRoot
             ~ alt=''
             ~ referrerPolicy='no-referrer'
             ~ onError={() => setBrokenPhotoUrl(avatarUrl)}
-            ~ className='size-6 shrink-0 rounded-full object-cover md:size-6'
+            ~ className='size-6 shrink-0 rounded-full object-cover md:size-8 drop-shadow'
             ~ )
         else
           Icon(name={isMobile && !keepIcon ? 'user-settings' : activeItem?.icon ?? icon ?? 'circle-plus'} className={cn('size-9 md:size-5', !tone && 'dark:text-foreground/70')})
