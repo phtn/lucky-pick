@@ -1,3 +1,4 @@
+import { readEnvSecret } from '@/lib/env/env-secret'
 import { getFirebaseAdminAuth } from './admin'
 
 /**
@@ -23,7 +24,10 @@ interface CachedIdToken {
 
 const idTokenCache = new Map<string, CachedIdToken>()
 
-const getWebApiKey = () => process.env.FIREBASE_API_KEY?.trim() || process.env.PUBLIC_FIREBASE_API_KEY?.trim() || null
+// Read through `readEnvSecret`, not `process.env` directly: a key stored with
+// the quotes from an env line is rejected by Identity Toolkit as simply
+// invalid, and `.dev.vars` hides that by stripping them in dev.
+const getWebApiKey = () => readEnvSecret('FIREBASE_API_KEY') ?? readEnvSecret('PUBLIC_FIREBASE_API_KEY') ?? null
 
 export class AdminIdTokenError extends Error {
   constructor(message: string) {

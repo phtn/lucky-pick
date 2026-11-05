@@ -1,5 +1,6 @@
 import { cert, getApp, getApps, initializeApp, type ServiceAccount } from 'firebase-admin/app'
 import { type Auth, getAuth, type ListUsersResult, type UserRecord } from 'firebase-admin/auth'
+import { readEnvSecret } from '@/lib/env/env-secret'
 import { type FirebaseCustomClaims, isFirebaseCustomClaims } from './custom-claims'
 
 type FirebaseServiceAccountInput = {
@@ -14,26 +15,6 @@ type FirebaseServiceAccountInput = {
 let cachedAuth: Auth | null | undefined
 
 const PRIVATE_KEY_PEM_MARKER = 'BEGIN PRIVATE KEY'
-const SURROUNDING_QUOTES = /^(['"])([\s\S]*)\1$/
-
-/**
- * A secret copied out of a `.env` line keeps the quotes that made it one line,
- * and `wrangler secret put` stores whatever it is handed — so on the Worker the
- * value arrives as `"{...}"` or `"-----BEGIN PRIVATE KEY-----\n..."`, quotes and
- * all. Both the JSON parser and the PEM parser reject that, so strip the wrapper
- * before anything else looks at the value.
- */
-function readEnvSecret(name: string): string | undefined {
-  const value = process.env[name]?.trim()
-
-  if (!value) {
-    return undefined
-  }
-
-  const unquoted = value.replace(SURROUNDING_QUOTES, '$2').trim()
-
-  return unquoted.length > 0 ? unquoted : undefined
-}
 
 function normalizePrivateKey(privateKey: string) {
   return privateKey.replace(/\\n/g, '\n')

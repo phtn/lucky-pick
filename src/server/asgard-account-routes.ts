@@ -173,6 +173,11 @@ function readConvexErrorMessage(error: unknown) {
 function handleRouteError(error: unknown, fallback: string) {
   if (error instanceof RequestError) return json({ error: error.message }, error.status)
   if (error instanceof AdminIdTokenError) {
+    // The operator sees one message for every way the ID token mint can fail —
+    // a missing API key, a restricted one, a refused exchange — so log the real
+    // reason. Worker observability is on, so this is where a deploy that cannot
+    // reach Convex is diagnosed from.
+    console.error('Asgard ID token mint failed:', error.message)
     return json({ error: 'The Asgard session could not be authenticated.' }, 500)
   }
 
@@ -183,6 +188,9 @@ function handleRouteError(error: unknown, fallback: string) {
     return json({ error: 'God access is required.' }, 403)
   }
 
+  // Nothing above recognised it, so the operator gets `fallback` — which says
+  // what failed, not why. Log the error itself for the same reason as above.
+  console.error('Asgard account route failed:', error)
   return json({ error: fallback }, 500)
 }
 
