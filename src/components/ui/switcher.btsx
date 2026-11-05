@@ -1,4 +1,5 @@
 module "use client";
+import { useState } from 'octane'
 import DropdownMenu, { DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu.btsx";
 import Button from '@/components/ui/button.btsx'
 import { Icon, type IconName } from "@/lib/icons";
@@ -70,17 +71,32 @@ component SwitcherRoot
     // that nothing is selected, which is what drops the trigger to `emptyLabel`.
     const activeItem = activeId === undefined ? items[0] : items.find(item => item.id === activeId);
     const trigger = <Button/>;
-    const triggerColour = tone ? `border ${tone}` : 'dark:bg-muted/80 hover:dark:bg-muted light:text-neutral-100 dark:text-fg dark:data-pressed:bg-panel light:bg-panel'
-    const label = busy ? 'Loading…' : activeItem?.label ?? emptyLabel;
+    const triggerColour = tone ? `_border` : 'dark:bg-muted/40 hover:dark:bg-muted dark:text-fg dark:data-pressed:bg-panel light:bg-transparent'
     const isMobile = useMobile()
+    // A Google avatar is served from `lh3.googleusercontent.com`, which refuses
+    // some requests outright; the refused URL is remembered so the icon takes
+    // over instead of the browser's broken-image glyph. The URL is kept rather
+    // than a flag, so another account's photo is still tried.
+    const [brokenPhotoUrl, setBrokenPhotoUrl] = useState<string | null>(null)
+    const avatarUrl =
+      activeItem?.imageUrl && activeItem.imageUrl !== brokenPhotoUrl ? activeItem.imageUrl : null
 
   DropdownMenu
-    DropdownMenuTrigger(render={trigger} className={cn('h-12', triggerColour, 'md:px-4 px-3 gap-1 md:rounded-lg rounded-xl overflow-hidden')} disabled={busy})
-      div(className="flex aspect-square size-6 items-center justify-center")
-        Icon(name={isMobile && !keepIcon ? 'user-settings' : activeItem?.icon ?? icon ?? 'circle-plus'} className={cn('size-9 md:size-4.5', !tone && 'dark:text-foreground/70')})
-      div(className=' min-w-0 h-6 flex items-center max-[760px]:hidden')
-        span(className={cn('font-sans font-[450] text-sm tracking-tight truncate', !fullLabel && 'capitalize', !tone && 'dark:text-muted-foreground')} title={label}) #{fullLabel ? label : label.split(' ').shift()}
-      Icon(name='select-caret' className='size-2.75 ml-1 opacity-70 dark:text-foreground/40 hidden md:flex')
+    DropdownMenuTrigger(render={trigger} className={cn('h-11', triggerColour, 'bg-transparent rounded-full overflow-hidden')} disabled={busy})
+      div(className="flex aspect-square _size-6 items-center justify-center")
+        if avatarUrl
+          img(
+            ~ src={avatarUrl}
+            ~ alt=''
+            ~ referrerPolicy='no-referrer'
+            ~ onError={() => setBrokenPhotoUrl(avatarUrl)}
+            ~ className='size-6 shrink-0 rounded-full object-cover md:size-6'
+            ~ )
+        else
+          Icon(name={isMobile && !keepIcon ? 'user-settings' : activeItem?.icon ?? icon ?? 'circle-plus'} className={cn('size-9 md:size-5', !tone && 'dark:text-foreground/70')})
+      // div(className=' min-w-0 h-6 flex items-center max-[760px]:hidden')
+        // span(className={cn('font-sans font-[450] text-sm tracking-tight truncate', !fullLabel && 'capitalize', !tone && 'dark:text-muted-foreground')} title={label}) #{fullLabel ? label : label.split(' ').shift()}
+      // Icon(name='select-caret' className='size-2.75 ml-1 opacity-70 dark:text-foreground/40 hidden md:flex')
     DropdownMenuContent(className="min-w-54 max-w-72 bg-background" align="start" side="bottom" sideOffset={4})
       DropdownMenuGroup
         if !items

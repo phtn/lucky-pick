@@ -6,7 +6,6 @@ import { useTrxBalance } from '@/hooks/use-trx-balance'
 import { isFirebaseConfigured } from '@/lib/firebase'
 import { forgetAllAccounts, getAccountLabel } from '@/lib/firebase/accounts'
 import { describeAuthError, signInWithGoogle, signOutUser, useFirebaseUser, useRememberedAccounts } from '@/lib/firebase/auth'
-import type { IconName } from '@/lib/icons'
 import { canOpenAsgard } from '@/lib/asgard/access'
 import { navigate } from '@/lib/navigation'
 import { asgardHandoffPath } from '@/lib/routing/asgard-subdomain'
@@ -64,13 +63,27 @@ setup
     }
   }, [notify])
 
+  // The live user's photo wins over the roster's remembered copy for their own
+  // row: the saved one is whatever was current at the last sign-in.
   const items: SwitcherItem[] = accounts.map(account => ({
     id: account.uid,
     label: getAccountLabel(account),
     icon: 'user-settings',
     description: account.email ?? undefined,
-    imageUrl: account.photoURL
+    imageUrl: account.uid === user?.uid ? user.photoURL ?? account.photoURL : account.photoURL
   }))
+
+  // A signed-in account the roster has not caught up with still gets a row, so
+  // the trigger shows that user's avatar rather than falling back to the
+  // generic icon.
+  if (user && !items.some(item => item.id === user.uid))
+    items.push({
+      id: user.uid,
+      label: user.displayName ?? user.email ?? 'Your account',
+      icon: 'user-settings',
+      description: user.email ?? undefined,
+      imageUrl: user.photoURL
+    })
 
   // Asgard is only offered to the accounts that can open it; the handoff page
   // mints the ID token this origin holds and leaves for the console's own host.

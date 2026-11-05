@@ -35,7 +35,7 @@ setup
 
   const handleSelect = useCallback(async (accountId: string) => {
     try {
-      await convexClient.mutation(api.users.m.selectBanker, { accountId: accountId as Id<'accounts'> })
+      await convexClient?.mutation(api.users.m.selectBanker, { accountId: accountId as Id<'accounts'> })
     } catch (error) {
       // A ConvexError carries a sentence meant for the player; anything else
       // (offline, a server fault) gets a generic one.
