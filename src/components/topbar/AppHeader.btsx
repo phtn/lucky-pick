@@ -82,7 +82,6 @@ header(className="app-header")
         ~ )
 
     div(className="app-header__account flex items-start gap-2")
-      NotificationBell(onNotify={onNotify})
       BankerSwitcher(onNotify={onNotify})
       AccountSwitcher(onNotify={onNotify} footer={AnalyticsLink})
         DropdownMenuSeparator
@@ -116,3 +115,5 @@ header(className="app-header")
               Icon(name="theme" className="size-3.25 opacity-70")
           span(className="truncate") #{themeMode === 'dark' ? 'Light' : 'Dark'}
         DropdownMenuSeparator
+
+      NotificationBell(onNotify={onNotify})

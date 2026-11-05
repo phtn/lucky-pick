@@ -137,6 +137,9 @@ function readCreateAccountBody(body: unknown) {
     input: {
       name,
       slug: asOptionalString(payload.slug),
+      // `null` is "no logo", which the switcher reads as "fall back to the
+      // contact's avatar". The mutation is what rejects a non-https address.
+      logoUrl: asOptionalString(payload.logoUrl) ?? null,
       initialCredits,
       testCredits,
       payoutDetails: {

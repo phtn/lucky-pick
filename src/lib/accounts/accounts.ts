@@ -51,6 +51,7 @@ export const ACCOUNT_PHONE_MAX_LENGTH = 32
 export const ACCOUNT_TITLE_MAX_LENGTH = 120
 export const ACCOUNT_NOTES_MAX_LENGTH = 2_000
 export const ACCOUNT_CLOSE_REASON_MAX_LENGTH = 500
+export const ACCOUNT_LOGO_URL_MAX_LENGTH = 2_048
 
 export const ACCOUNT_PAYOUT_PROVIDER_MAX_LENGTH = 120
 export const ACCOUNT_PAYOUT_ACCOUNT_NAME_MAX_LENGTH = 160
@@ -61,6 +62,22 @@ const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 export const isAccountEmailAddress = (value: string) =>
   value.length <= ACCOUNT_EMAIL_MAX_LENGTH && EMAIL_ADDRESS_PATTERN.test(value)
+
+/**
+ * A logo is fetched by the browser from wherever this points, so only `https:`
+ * is accepted: `http:` would be blocked as mixed content on the deployed app,
+ * and a `data:`/`javascript:` URL has no business in an `img src` an operator
+ * typed. A relative path is refused for the same reason — it would resolve
+ * against whichever page happened to render it.
+ */
+export const isAccountLogoUrl = (value: string) => {
+  if (value.length > ACCOUNT_LOGO_URL_MAX_LENGTH) return false
+  try {
+    return new URL(value).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
 
 export const isAccountSlug = (value: string) =>
   value.length > 0 && value.length <= ACCOUNT_SLUG_MAX_LENGTH && SLUG_PATTERN.test(value)

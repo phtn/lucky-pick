@@ -81,6 +81,26 @@ describe('toBankerItems', () => {
     )
   })
 
+  test("falls back to the contact's photo when the house has no logo", () => {
+    const [item] = toBankerItems([row('A', 'active', { contactImageUrl: 'https://images.example.com/ada.jpg' })])
+    assert.equal(item?.imageUrl, 'https://images.example.com/ada.jpg')
+  })
+
+  test("prefers the house's own logo over the contact's photo", () => {
+    const [item] = toBankerItems([
+      row('A', 'active', {
+        logoUrl: 'https://cdn.example.com/house.png',
+        contactImageUrl: 'https://images.example.com/ada.jpg'
+      })
+    ])
+    assert.equal(item?.imageUrl, 'https://cdn.example.com/house.png')
+  })
+
+  test('yields a null imageUrl with neither a logo nor a photo', () => {
+    const [item] = toBankerItems([row('A', 'active')])
+    assert.equal(item?.imageUrl, null)
+  })
+
   test('shows the balance as meta via formatAccountCredits', () => {
     const [item] = toBankerItems([row('A', 'active', { balance: 250_000 })])
     assert.equal(item?.meta, formatAccountCredits(250_000))

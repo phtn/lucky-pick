@@ -102,7 +102,13 @@ export const listBankers = query({
       slug: v.string(),
       name: v.string(),
       status: accountStatusSchema,
-      balance: v.number()
+      balance: v.number(),
+      // The house's own logo, `null` until one is set.
+      logoUrl: v.union(v.string(), v.null()),
+      // The primary contact's avatar, which stands in for a house with no logo
+      // of its own. It is the only field of theirs this validator lets out:
+      // their name, email and phone stay in, as the note on `myHouses` requires.
+      contactImageUrl: v.union(v.string(), v.null())
     })
   ),
   handler: async (ctx) => {
@@ -132,13 +138,39 @@ export const listBankers = query({
       )
     ).flat()
 
+    // The contact's photo is read from their live `users` row rather than from
+    // `primaryContact.imageUrl`: that snapshot is taken when the account is
+    // created, before the contact has ever signed in, and linking them later
+    // deliberately rewrites only their identity fields. So the snapshot is
+    // frozen at whatever the console was told — usually nothing — while the
+    // `users` row is refreshed on every sign-in. Only fetched for a house with
+    // no logo of its own, so a fully-branded roster reads no extra documents.
+    const contactPhotos = new Map<Id<'users'>, string | null>()
+    await Promise.all(
+      accounts
+        .filter((account) => !account.logoUrl && account.primaryContact.userId !== null)
+        .map(async (account) => {
+          const contactId = account.primaryContact.userId as Id<'users'>
+          if (contactPhotos.has(contactId)) return
+          const contact = await ctx.db.get(contactId)
+          contactPhotos.set(contactId, contact?.imageUrl ?? null)
+        })
+    )
+
     return accounts
       .map((account) => ({
         accountId: account._id,
         slug: account.slug,
         name: account.name,
         status: account.status,
-        balance: balances.get(account._id) ?? 0
+        balance: balances.get(account._id) ?? 0,
+        logoUrl: account.logoUrl ?? null,
+        contactImageUrl:
+          (account.primaryContact.userId === null
+            ? null
+            : contactPhotos.get(account.primaryContact.userId) ?? null) ??
+          account.primaryContact.imageUrl ??
+          null
       }))
       .sort(compareBankerRows)
   }

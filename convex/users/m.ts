@@ -2,13 +2,23 @@ import type { UserIdentity } from 'convex/server'
 import { ConvexError, v } from 'convex/values'
 import type { Id } from '../_generated/dataModel'
 import { type MutationCtx, mutation } from '../_generated/server'
-import { canUseAccount } from '../../src/lib/accounts/accounts'
+import { canUseAccount, isAccountLogoUrl } from '../../src/lib/accounts/accounts'
 import { linkAccountsToUser } from '../accounts/contacts'
 import { isTronAddressShape, trimOrNull } from '../utils'
 import { getUserByTokenIdentifier } from './q'
 
-function identityToUserData(identity: UserIdentity, now: number) {
+/**
+ * The photo the client read off its own verified Firebase user, used only when
+ * the ID token carries no `picture` claim of its own — which is what Firebase
+ * does for several sign-in paths, leaving `identity.pictureUrl` empty even for
+ * an account that plainly has an avatar. It is the caller's own row and a
+ * photo is not an authorization credential, so accepting it impersonates
+ * nothing; `https:` only, for the same reason the account logo is.
+ */
+function identityToUserData(identity: UserIdentity, now: number, fallbackImageUrl?: string) {
   const trimOrUndefined = (value: string | undefined) => trimOrNull(value) ?? undefined
+  const fallback = trimOrNull(fallbackImageUrl)
+  const imageUrl = trimOrUndefined(identity.pictureUrl) ?? (fallback && isAccountLogoUrl(fallback) ? fallback : undefined)
 
   return {
     tokenIdentifier: identity.tokenIdentifier,
@@ -18,7 +28,7 @@ function identityToUserData(identity: UserIdentity, now: number) {
     name: trimOrUndefined(identity.name),
     nickname: trimOrNull(identity.nickname),
     preferredUsername: trimOrNull(identity.preferredUsername),
-    imageUrl: trimOrUndefined(identity.pictureUrl),
+    imageUrl,
     email: trimOrUndefined(identity.email),
     phone: trimOrNull(identity.phoneNumber),
     emailVerified: identity.emailVerified ?? null,
@@ -27,7 +37,7 @@ function identityToUserData(identity: UserIdentity, now: number) {
   }
 }
 
-async function upsertCurrentUser(ctx: MutationCtx) {
+async function upsertCurrentUser(ctx: MutationCtx, fallbackImageUrl?: string) {
   const identity = await ctx.auth.getUserIdentity()
   if (!identity) {
     throw new ConvexError('Unauthenticated.')
@@ -35,7 +45,7 @@ async function upsertCurrentUser(ctx: MutationCtx) {
 
   const existingUser = await getUserByTokenIdentifier(ctx, identity.tokenIdentifier)
   const now = Date.now()
-  const userData = identityToUserData(identity, now)
+  const userData = identityToUserData(identity, now, fallbackImageUrl)
 
   let userId: Id<'users'>
   if (existingUser) {
@@ -56,10 +66,10 @@ async function upsertCurrentUser(ctx: MutationCtx) {
 
 /** Creates or refreshes the signed-in user's row from their verified identity. */
 export const ensureCurrent = mutation({
-  args: {},
+  args: { imageUrl: v.optional(v.string()) },
   returns: v.id('users'),
-  handler: async (ctx) => {
-    return await upsertCurrentUser(ctx)
+  handler: async (ctx, args) => {
+    return await upsertCurrentUser(ctx, args.imageUrl)
   }
 })
 

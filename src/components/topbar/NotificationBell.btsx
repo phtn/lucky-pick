@@ -53,7 +53,7 @@ setup
 
   const handleMarkAll = useCallback(async () => {
     try {
-      await convexClient.mutation(api.notifications.m.markAllRead, {})
+      await convexClient?.mutation(api.notifications.m.markAllRead, {})
     } catch (error) {
       reportFailure(error)
     }
@@ -63,12 +63,12 @@ if user !== null
   DropdownMenu
     DropdownMenuTrigger(
       ~ render={trigger}
-      ~ className='relative h-12 px-3 md:rounded-lg rounded-xl dark:bg-muted/80 hover:dark:bg-muted light:bg-panel light:text-neutral-100'
+      ~ className='relative size-10 bg-transparent rounded-full dark:bg-muted/80 dark:text-white text-fg hover:dark:bg-muted hover:bg-muted light:bg-panel'
       ~ disabled={loading}
       ~ aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
       ~ )
-      div(className="flex aspect-square size-6 items-center justify-center")
-        Icon(name='message' className={cn('size-9 md:size-4.5', loading && 'opacity-50')})
+      div(className={cn("flex aspect-square size-6 items-center justify-center", {'opacity-50': loading || unread < 1})})
+        Icon(name='bell' className={cn('size-9 md:size-4.5')})
       if unread > 0
         span(className="absolute right-1.5 top-1.5 flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 font-mono text-[10px] font-bold leading-4 text-white") #{unread > 99 ? '99+' : unread}
     DropdownMenuContent(className="min-w-64 max-w-80 bg-background" align="end" side="bottom" sideOffset={4})

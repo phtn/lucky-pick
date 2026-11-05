@@ -103,7 +103,10 @@ if (convexClient && auth) {
       // A failed upsert must not block sign-in; clearing the marker lets the
       // next auth callback retry it.
       convexClient
-        .mutation(api.users.m.ensureCurrent, {})
+        // Firebase leaves `picture` out of the ID token on several sign-in
+        // paths, so the row would hold no photo at all; the client has one from
+        // the same verified user and passes it as the fallback.
+        .mutation(api.users.m.ensureCurrent, user?.photoURL ? { imageUrl: user.photoURL } : {})
         // Strictly after the upsert: provisioning reads the row that mutation
         // writes, and on a first-ever sign-in there is nothing to read before it.
         .then(() => provisionTrxAddress(convexClient))

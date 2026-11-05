@@ -51,7 +51,7 @@ if user !== null
     ~ activeId={selected?.accountId ?? null}
     ~ emptyLabel={rows !== undefined && rows.length === 0 ? 'No houses yet' : 'Choose house'}
     ~ busy={rows === undefined || profile === undefined}
-    ~ icon='cash'
+    ~ icon='bank'
     ~ fullLabel
     ~ keepIcon
     ~ onSelect={(item) => void handleSelect(item.id)}

@@ -51,14 +51,127 @@ const giveCredits = (t: T, accountId: Id<'accounts'>, userId: Id<'users'>, balan
 
 const signIn = (t: T, who: ReturnType<typeof ana>) => t.withIdentity(who).mutation(api.users.m.ensureCurrent, {})
 
-test('listBankers returns exactly the five player-safe keys', async () => {
+test('listBankers returns exactly the seven player-safe keys', async () => {
   const t = makeT()
   await house(t, 'Casa Uno')
   await signIn(t, ana())
 
   const rows = await t.withIdentity(ana()).query(api.accounts.q.listBankers, {})
   expect(rows).toHaveLength(1)
-  expect(Object.keys(rows[0]).sort()).toEqual(['accountId', 'balance', 'name', 'slug', 'status'])
+  expect(Object.keys(rows[0]).sort()).toEqual([
+    'accountId',
+    'balance',
+    'contactImageUrl',
+    'logoUrl',
+    'name',
+    'slug',
+    'status'
+  ])
+})
+
+test('listBankers reports the house logo and leaves it null when unset', async () => {
+  const t = makeT()
+  await house(t, 'No Logo')
+  const withLogo = await house(t, 'Has Logo')
+  await t.run((ctx) => ctx.db.patch(withLogo, { logoUrl: 'https://cdn.example.com/house.png' }))
+  await signIn(t, ana())
+
+  const rows = await t.withIdentity(ana()).query(api.accounts.q.listBankers, {})
+  expect(rows.map((r) => [r.name, r.logoUrl]).sort()).toEqual([
+    ['Has Logo', 'https://cdn.example.com/house.png'],
+    ['No Logo', null]
+  ])
+})
+
+test("listBankers reports the contact's photo as the logo's stand-in", async () => {
+  const t = makeT()
+  const accountId = await house(t, 'Casa Uno')
+  await t.run(async (ctx) => {
+    const account = (await ctx.db.get(accountId))!
+    await ctx.db.patch(accountId, {
+      primaryContact: { ...account.primaryContact, imageUrl: 'https://images.example.com/ada.jpg' }
+    })
+  })
+  await signIn(t, ana())
+
+  const rows = await t.withIdentity(ana()).query(api.accounts.q.listBankers, {})
+  expect(rows[0].contactImageUrl).toBe('https://images.example.com/ada.jpg')
+})
+
+test("listBankers reads the contact's photo from their live users row", async () => {
+  const t = makeT()
+  const accountId = await house(t, 'Casa Uno')
+  // The account is created before the contact signs in, so its `primaryContact`
+  // snapshot holds no photo — exactly the state a real house is left in.
+  const anaId = await signIn(t, ana())
+  await t.run(async (ctx) => {
+    await ctx.db.patch(anaId, { imageUrl: 'https://images.example.com/live.jpg' })
+    const account = (await ctx.db.get(accountId))!
+    expect(account.primaryContact.imageUrl).toBeUndefined()
+    await ctx.db.patch(accountId, { primaryContact: { ...account.primaryContact, userId: anaId } })
+  })
+
+  const rows = await t.withIdentity(ana()).query(api.accounts.q.listBankers, {})
+  expect(rows[0].contactImageUrl).toBe('https://images.example.com/live.jpg')
+})
+
+test("listBankers prefers the house logo over the contact's live photo", async () => {
+  const t = makeT()
+  const accountId = await house(t, 'Casa Uno')
+  const anaId = await signIn(t, ana())
+  await t.run(async (ctx) => {
+    await ctx.db.patch(anaId, { imageUrl: 'https://images.example.com/live.jpg' })
+    const account = (await ctx.db.get(accountId))!
+    await ctx.db.patch(accountId, {
+      logoUrl: 'https://cdn.example.com/house.png',
+      primaryContact: { ...account.primaryContact, userId: anaId }
+    })
+  })
+
+  const rows = await t.withIdentity(ana()).query(api.accounts.q.listBankers, {})
+  expect(rows[0].logoUrl).toBe('https://cdn.example.com/house.png')
+})
+
+test('ensureCurrent stores the photo the client supplies when the token has none', async () => {
+  const t = makeT()
+  const userId = await t
+    .withIdentity(ana())
+    .mutation(api.users.m.ensureCurrent, { imageUrl: 'https://images.example.com/ada.jpg' })
+
+  const user = await t.run((ctx) => ctx.db.get(userId))
+  expect(user?.imageUrl).toBe('https://images.example.com/ada.jpg')
+})
+
+test('ensureCurrent ignores a supplied photo that is not an https address', async () => {
+  const t = makeT()
+  const userId = await t.withIdentity(ana()).mutation(api.users.m.ensureCurrent, { imageUrl: 'javascript:alert(1)' })
+
+  const user = await t.run((ctx) => ctx.db.get(userId))
+  expect(user?.imageUrl).toBeUndefined()
+})
+
+test('create refuses a logo that is not an https address', async () => {
+  const t = makeT()
+  await expect(
+    t.withIdentity(god).mutation(api.accounts.m.create, {
+      name: 'Casa Uno',
+      primaryContact: { name: 'Owner', email: 'owner@example.com' },
+      logoUrl: 'javascript:alert(1)'
+    })
+  ).rejects.toThrow('Logo URL must be a valid https:// address.')
+})
+
+test('update stores a logo and clears it back to null', async () => {
+  const t = makeT()
+  const accountId = await house(t, 'Casa Uno')
+
+  const set = await t
+    .withIdentity(god)
+    .mutation(api.accounts.m.update, { id: accountId, logoUrl: 'https://cdn.example.com/house.png' })
+  expect(set.logoUrl).toBe('https://cdn.example.com/house.png')
+
+  const cleared = await t.withIdentity(god).mutation(api.accounts.m.update, { id: accountId, logoUrl: '' })
+  expect(cleared.logoUrl).toBeNull()
 })
 
 test('listBankers excludes closed houses', async () => {

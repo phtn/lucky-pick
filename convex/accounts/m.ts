@@ -10,6 +10,7 @@ import { accountDocumentSchema, createAccountSchema, updateAccountSchema } from 
 import {
   getAccountBySlug,
   normalizeAccountName,
+  normalizeAccountLogoUrl,
   normalizeAccountNotes,
   normalizeAccountSlug,
   normalizeInitialCredits,
@@ -51,6 +52,7 @@ export const create = mutation({
       // An account is invoiced on the billing address when it has one and the
       // contact's own address otherwise, so this is never left blank.
       billingEmail: normalizeOptionalAccountEmail(args.billingEmail, 'Billing email') ?? primaryContact.email,
+      logoUrl: normalizeAccountLogoUrl(args.logoUrl),
       ownerTokenIdentifier: args.ownerTokenIdentifier ?? identity.tokenIdentifier,
       notes: normalizeAccountNotes(args.notes),
       closedAt: null,
@@ -190,6 +192,7 @@ export const update = mutation({
     if (args.billingEmail !== undefined) {
       patch.billingEmail = normalizeOptionalAccountEmail(args.billingEmail, 'Billing email')
     }
+    if (args.logoUrl !== undefined) patch.logoUrl = normalizeAccountLogoUrl(args.logoUrl)
     if (args.notes !== undefined) patch.notes = normalizeAccountNotes(args.notes)
 
     await ctx.db.patch(id, patch)

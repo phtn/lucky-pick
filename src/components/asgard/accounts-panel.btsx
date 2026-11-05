@@ -77,6 +77,8 @@ module
   const OPENING_GRANT_HINT = 'Minted into the float wallet the moment the account exists, so it opens with this balance.'
   const TEST_CREDITS_HINT =
     'Minted alongside the opening grant and memoed as test money to test transactions.'
+  const LOGO_URL_HINT =
+    "Shown in the player's house switcher. Left blank, the contact's own photo stands in."
 
   type SlugAvailabilityState =
     | { status: 'idle'; slug: string; message: null }
@@ -515,6 +517,15 @@ component CreateAccountForm
             ~ feedback={slugAvailability.message}
             ~ feedbackTone={slugFeedbackTone}
             ~ )
+          div(className='md:col-span-2')
+            TextField(
+              ~ form={accountForm}
+              ~ name='logoUrl'
+              ~ label='Logo URL'
+              ~ type='url'
+              ~ placeholder='https://cdn.example.com/northwind.png'
+              ~ feedback={LOGO_URL_HINT}
+              ~ )
 
       Step(
         ~ icon='person'

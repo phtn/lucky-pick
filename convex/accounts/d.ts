@@ -53,6 +53,13 @@ export const accountSchema = v.object({
   name: v.string(),
   status: accountStatusSchema,
   /**
+   * The house's own logo, shown wherever the account has a face to show — the
+   * banker switcher first. Optional in both senses: accounts that predate it
+   * have no field, and an account that has one may still carry `null` for "no
+   * logo", which falls back to the primary contact's avatar.
+   */
+  logoUrl: v.optional(v.union(v.string(), v.null())),
+  /**
    * The grant the account was opened with, kept as a record of what it started
    * from. It is not itself a balance — the ledger holds that — but it is the
    * amount minted into the partner's float at creation, so a new account is
@@ -111,6 +118,7 @@ export const createAccountSchema = v.object({
   payoutDetails: v.optional(accountPayoutDetailsSchema),
   primaryContact: accountPrimaryContactInputSchema,
   billingEmail: v.optional(v.union(v.string(), v.null())),
+  logoUrl: v.optional(v.union(v.string(), v.null())),
   notes: v.optional(v.union(v.string(), v.null())),
   ownerTokenIdentifier: v.optional(v.string())
 })
@@ -126,6 +134,7 @@ export const updateAccountSchema = v.object({
   payoutDetails: v.optional(accountPayoutDetailsSchema),
   primaryContact: v.optional(accountPrimaryContactInputSchema),
   billingEmail: v.optional(v.union(v.string(), v.null())),
+  logoUrl: v.optional(v.union(v.string(), v.null())),
   notes: v.optional(v.union(v.string(), v.null()))
 })
 

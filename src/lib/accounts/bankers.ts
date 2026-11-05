@@ -11,6 +11,10 @@ export interface BankerRow {
   name: string
   status: AccountStatus
   balance: number
+  /** The house's own logo, when one is set. */
+  logoUrl?: string | null
+  /** The primary contact's avatar, which stands in when there is no logo. */
+  contactImageUrl?: string | null
 }
 
 export interface BankerItem {
@@ -20,6 +24,7 @@ export interface BankerItem {
   description?: string
   meta?: string
   disabled?: boolean
+  imageUrl?: string | null
 }
 
 /** Usable houses first, then by name; slug breaks name ties so order never depends on read order. */
@@ -46,15 +51,21 @@ export function toBankerItems(rows: BankerRow[]): BankerItem[] {
   return [...rows].sort(compareBankerRows).map((row) => ({
     id: row.accountId,
     label: row.name,
-    icon: 'cash',
+    icon: 'bank',
     description: describeBankerStatus(row.status) ?? undefined,
     // A balance only means something at a house the player can play at.
     meta: canUseAccount(row.status) ? formatAccountCredits(row.balance) : undefined,
-    disabled: !canUseAccount(row.status)
+    disabled: !canUseAccount(row.status),
+    // The logo is the house's own face and wins; the contact's avatar is the
+    // stand-in for a house that has not set one.
+    imageUrl: row.logoUrl ?? row.contactImageUrl ?? null
   }))
 }
 
-export function resolveSelectedBanker(rows: BankerRow[], selectedAccountId: string | null | undefined): BankerRow | null {
+export function resolveSelectedBanker(
+  rows: BankerRow[],
+  selectedAccountId: string | null | undefined
+): BankerRow | null {
   if (!selectedAccountId) return null
   return rows.find((row) => row.accountId === selectedAccountId) ?? null
 }

@@ -1,6 +1,6 @@
 import { debounce, parseAsInteger, parseAsString, type SetValues, useQueryStates } from '@octanejs/nuqs'
 import { useForm } from '@octanejs/tanstack-form'
-import { ACCOUNT_NAME_MAX_LENGTH, ACCOUNT_NOTES_MAX_LENGTH, ACCOUNT_PAYOUT_ACCOUNT_NAME_MAX_LENGTH, ACCOUNT_PAYOUT_ACCOUNT_NUMBER_MAX_LENGTH, ACCOUNT_PAYOUT_PROVIDER_MAX_LENGTH, ACCOUNT_PHONE_MAX_LENGTH, DEFAULT_ACCOUNT_CREDITS, isAccountCreditAmount, isAccountEmailAddress, isAccountSlug, isPublicAccountSlug, RESERVED_ACCOUNT_SLUGS, toAccountSlug } from '@/lib/accounts/accounts'
+import { ACCOUNT_NAME_MAX_LENGTH, ACCOUNT_NOTES_MAX_LENGTH, ACCOUNT_PAYOUT_ACCOUNT_NAME_MAX_LENGTH, ACCOUNT_PAYOUT_ACCOUNT_NUMBER_MAX_LENGTH, ACCOUNT_PAYOUT_PROVIDER_MAX_LENGTH, ACCOUNT_PHONE_MAX_LENGTH, DEFAULT_ACCOUNT_CREDITS, isAccountCreditAmount, isAccountEmailAddress, isAccountLogoUrl, isAccountSlug, isPublicAccountSlug, RESERVED_ACCOUNT_SLUGS, toAccountSlug } from '@/lib/accounts/accounts'
 import { MAX_TOPUP_CREDITS } from '@/lib/money/credits'
 import type { CreateAccountInput } from '@/lib/asgard/accounts'
 import { readErrorMessage } from '@/lib/asgard/errors'
@@ -12,6 +12,8 @@ import { readErrorMessage } from '@/lib/asgard/errors'
 export interface AccountFormValues {
   name: string
   slug: string
+  /** The house's logo, shown in the player's banker switcher. Blank for none. */
+  logoUrl: string
   /** The opening credit grant: a rung of `ACCOUNT_CREDIT_OPTIONS` or a custom amount. */
   initialCredits: number
   /**
@@ -43,6 +45,7 @@ export type AccountCreditField = 'initialCredits' | 'testCredits'
 export const ACCOUNT_FORM_DEFAULTS: AccountFormValues = {
   name: '',
   slug: '',
+  logoUrl: '',
   initialCredits: DEFAULT_ACCOUNT_CREDITS,
   testCredits: DEFAULT_ACCOUNT_CREDITS,
   contactName: '',
@@ -64,6 +67,7 @@ export const ACCOUNT_FORM_DEFAULTS: AccountFormValues = {
 const ACCOUNT_DRAFT_PARSERS = {
   name: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.name),
   slug: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.slug),
+  logoUrl: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.logoUrl),
   initialCredits: parseAsInteger.withDefault(ACCOUNT_FORM_DEFAULTS.initialCredits),
   testCredits: parseAsInteger.withDefault(ACCOUNT_FORM_DEFAULTS.testCredits),
   contactName: parseAsString.withDefault(ACCOUNT_FORM_DEFAULTS.contactName),
@@ -116,6 +120,12 @@ export function validateAccountForm(values: AccountFormValues) {
   const slugMessage = validateAccountSlug(resolveAccountSlug(values))
   if (slugMessage) fields.slug = slugMessage
 
+  // Blank is "no logo", not an error: a house falls back to its contact's
+  // avatar. Only a value that is there and unusable is reported.
+  const logoUrl = values.logoUrl.trim()
+  if (logoUrl.length > 0 && !isAccountLogoUrl(logoUrl))
+    fields.logoUrl = 'Enter an https:// image address, or leave this blank.'
+
   if (values.contactName.trim().length === 0) fields.contactName = 'A contact name is required.'
 
   const contactEmail = values.contactEmail.trim()
@@ -162,6 +172,7 @@ export function toCreateAccountInput(values: AccountFormValues): CreateAccountIn
   return {
     name: values.name.trim(),
     slug: trimmed(values.slug),
+    logoUrl: trimmed(values.logoUrl),
     initialCredits: values.initialCredits,
     testCredits: values.testCredits,
     payoutDetails: {

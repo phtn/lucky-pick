@@ -21,6 +21,8 @@ export type AccountTopup = AccountDetail['topups'][number]
 export type CreateAccountInput = {
   name: string
   slug?: string
+  /** An https:// image address, or absent for a house with no logo of its own. */
+  logoUrl?: string
   initialCredits?: number
   /** Minted into the float on creation, with no approval, so transfers can be tested. */
   testCredits?: number

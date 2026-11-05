@@ -11,6 +11,7 @@ import {
   canUseAccount,
   isAccountCreditAmount,
   isAccountEmailAddress,
+  isAccountLogoUrl,
   isPublicAccountSlug,
   toAccountSlug
 } from '../../src/lib/accounts/accounts'
@@ -168,6 +169,20 @@ export const normalizeAccountNotes = (notes: string | null | undefined) => {
 
   if (trimmed && trimmed.length > ACCOUNT_NOTES_MAX_LENGTH) {
     throw new ConvexError(`Notes must be ${ACCOUNT_NOTES_MAX_LENGTH} characters or fewer.`)
+  }
+
+  return trimmed
+}
+
+/**
+ * An empty value is `null`, "this house has no logo", which is what makes the
+ * contact's avatar the fallback rather than a broken image.
+ */
+export const normalizeAccountLogoUrl = (logoUrl: string | null | undefined) => {
+  const trimmed = trimOrNull(logoUrl)
+
+  if (trimmed !== null && !isAccountLogoUrl(trimmed)) {
+    throw new ConvexError('Logo URL must be a valid https:// address.')
   }
 
   return trimmed
