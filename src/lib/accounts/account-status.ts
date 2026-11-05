@@ -1,3 +1,7 @@
+// Kept apart from `accounts.ts` on purpose. Convex modules import `accounts.ts`
+// and `convex/tsconfig.json` has no `paths` mapping, while `ACCOUNT_STATUS_ICON`
+// needs `IconName`. Merging the two would pull the icons barrel into Convex's
+// typecheck graph and bring back the TS2307 that broke this repo (f705041).
 import type { AccountStatus } from './accounts'
 import type { IconName } from '../icons/icons'
 

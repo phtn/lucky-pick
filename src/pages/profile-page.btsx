@@ -182,21 +182,32 @@ setup
   // array does: most players contact no house, and neither state is a fact to
   // print. Only a non-empty list is shown.
   const houseItems = myHouses === undefined ? [] : toMyHouseItems(myHouses)
-  const [confirmingHouseId, setConfirmingHouseId] = useState<string | null>(null)
+  // A set, not one id: with two pending houses the second click must not
+  // overwrite the first's busy state or have the first's `finally` clear it.
+  const [confirmingHouseIds, setConfirmingHouseIds] = useState<ReadonlySet<string>>(new Set())
   const [houseError, setHouseError] = useState<string | null>(null)
 
   const confirmHouse = useCallback(async (accountId: string) => {
-    setConfirmingHouseId(accountId)
+    setConfirmingHouseIds((ids) => new Set(ids).add(accountId))
     setHouseError(null)
     try {
       await convexClient.mutation(api.accounts.m.confirmAsContact, { accountId: accountId as Id<'accounts'> })
     } catch (error) {
-      // A ConvexError carries a sentence meant for the player; anything else
-      // (offline, a server fault) gets a generic one.
+      // The guard refuses a stranger, an unlinked contact, a house that is no
+      // longer pending and a missing house with one identical message, so the
+      // server cannot say which; this sentence is true of all four.
       const data = (error as { data?: unknown }).data
-      setHouseError(typeof data === 'string' ? data : 'Could not confirm that house. Try again.')
+      setHouseError(
+        data === 'Unauthorized.'
+          ? 'That house is no longer waiting on you. Reload to see its current status.'
+          : 'Could not confirm that house. Try again.'
+      )
     } finally {
-      setConfirmingHouseId(null)
+      setConfirmingHouseIds((ids) => {
+        const next = new Set(ids)
+        next.delete(accountId)
+        return next
+      })
     }
   }, [])
 
@@ -358,11 +369,11 @@ section(className='relative overview-page pb-16')
                     button(
                       ~ type='button'
                       ~ onClick={() => void confirmHouse(house.id)}
-                      ~ disabled={confirmingHouseId === house.id}
-                      ~ aria-busy={confirmingHouseId === house.id}
+                      ~ disabled={confirmingHouseIds.has(house.id)}
+                      ~ aria-busy={confirmingHouseIds.has(house.id) || undefined}
                       ~ className='inline-flex h-9 items-center rounded-full bg-foreground px-4 text-xs font-medium text-background transition-opacity disabled:opacity-60'
                       ~ )
-                      span #{confirmingHouseId === house.id ? 'Confirming…' : 'Confirm'}
+                      span #{confirmingHouseIds.has(house.id) ? 'Confirming…' : 'Confirm'}
             if houseError
               p(className='mt-4 text-xs text-destructive') #{houseError}
         Panel(title='Credits' description='What you hold, and how it has moved.' meta={!hasReadMovements ? 'Not read yet' : entries.length === 0 ? 'No movements' : `Newest ${formatCount(entries.length)}`})

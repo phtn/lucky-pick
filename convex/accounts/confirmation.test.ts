@@ -181,3 +181,16 @@ test('after confirmAsContact the house appears in listBankers as confirmed', asy
   expect(house!.status).toBe('confirmed')
   expect(typeof house!.confirmedAt).toBe('number')
 })
+
+// `myHouses` deliberately applies no status filter, unlike `listBankers`: a
+// contact must see their own house whatever state it is in.
+test.each(['suspended', 'closed'] as const)('myHouses still lists a %s house for its own contact', async (status) => {
+  const t = makeT()
+  const accountId = await provision(t)
+  await signIn(t, ana)
+  await setStatus(t, accountId, status)
+
+  const houses = await t.withIdentity(ana).query(api.accounts.q.myHouses, {})
+
+  expect(houses.map((h) => h.status)).toEqual([status])
+})

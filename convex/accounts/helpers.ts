@@ -121,7 +121,7 @@ export const requirePendingAccountContact = async (ctx: QueryCtx | MutationCtx, 
   return { identity, account }
 }
 
-export const normalizeAccountName =(name: string) => {
+export const normalizeAccountName = (name: string) => {
   const trimmed = trimOrNull(name)
 
   if (!trimmed) {

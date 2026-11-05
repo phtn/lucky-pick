@@ -19,7 +19,7 @@ export interface MyHouseItem {
 }
 
 /** Houses awaiting confirmation first, then by name; slug breaks name ties so order never depends on read order. */
-export function compareMyHouseRows(a: MyHouseRow, b: MyHouseRow): number {
+function compareMyHouseRows(a: MyHouseRow, b: MyHouseRow): number {
   const awaiting = Number(b.status === 'pending') - Number(a.status === 'pending')
   if (awaiting !== 0) return awaiting
   return a.name.localeCompare(b.name) || a.slug.localeCompare(b.slug)
