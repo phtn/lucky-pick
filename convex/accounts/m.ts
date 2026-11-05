@@ -199,6 +199,9 @@ export const update = mutation({
 
     // The patch is arbitrary (a name fix, a payout edit), so only a real status
     // change is news. `confirmed` is the player's own act and is never announced.
+    // The guard compares against `existing` (pre-patch): `updated` already holds the new status, so
+    // comparing against it would never differ. The recipient and name are read from `updated`, the
+    // document as it now stands.
     if (args.status !== undefined && args.status !== existing.status) {
       const kind = STATUS_NOTIFICATION_KIND[args.status]
       if (kind) {

@@ -102,3 +102,13 @@ describe('countUnread', () => {
     assert.equal(countUnread([]), 0)
   })
 })
+
+describe('unknown kinds', () => {
+  test('renders a plain, non-clickable row for a kind this bundle does not know', () => {
+    const item = only(row('mystery-kind' as NotificationKind))
+    assert.equal(item.title, 'Something happened')
+    assert.equal(item.detail, null)
+    assert.equal(item.href, null)
+    assert.equal(item.isUnread, true)
+  })
+})

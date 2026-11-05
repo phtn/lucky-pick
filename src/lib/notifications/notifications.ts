@@ -71,6 +71,13 @@ function copyFor(row: NotificationRow): Copy {
         detail: 'Check the ledger for the correction.',
         href: null
       }
+    default: {
+      // Compile time: adding a kind to the union without a case above fails here.
+      const unhandled: never = row.kind
+      void unhandled
+      // Run time: an older bundle can receive a kind newer than itself over the live subscription.
+      return { title: 'Something happened', detail: null, href: null }
+    }
   }
 }
 
