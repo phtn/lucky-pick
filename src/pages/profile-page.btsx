@@ -4,6 +4,8 @@ import { Distribution, Masthead, Panel, StatTile } from '@/components/overview'
 import { useConvexQuery } from '@/hooks/use-convex-query'
 import { usePendingTronAccount } from '@/hooks/use-pending-tron-account'
 import { formatLedgerAmount, formatLedgerLabel } from '@/lib/asgard/account-detail'
+import { toMyHouseItems } from '@/lib/accounts/my-houses'
+import { convexClient } from '@/lib/convex-client'
 import { isFirebaseConfigured } from '@/lib/firebase'
 import { describeAuthError, signInWithGoogle, useFirebaseUser } from '@/lib/firebase/auth'
 import { formatPeso } from '@/lib/format'
@@ -15,6 +17,7 @@ import { readPracticeStats } from '@/lib/profile/stats'
 import { clearPendingTronAccount } from '@/lib/tronweb/pending-account'
 import { cn } from '@/lib/utils'
 import { api } from '../../convex/_generated/api'
+import type { Id } from '../../convex/_generated/dataModel'
 import { MY_HISTORY_LIMIT } from '../../convex/ledger/d'
 import { DEFAULT_PLAY_PAGE, PLAY_HISTORY_LIMIT, TICKET_DETAIL_LIMIT } from '../../convex/plays/d'
 
@@ -111,6 +114,7 @@ setup
   const wallet = useConvexQuery(api.ledger.q.myWallet, {}, { enabled: isSignedIn })
   const movements = useConvexQuery(api.ledger.q.myLedgerHistory, MOVEMENT_ARGS, { enabled: isSignedIn })
   const plays = useConvexQuery(api.plays.q.mine, PLAYS_ARGS, { enabled: isSignedIn })
+  const myHouses = useConvexQuery(api.accounts.q.myHouses, {}, { enabled: isSignedIn })
 
   const now = Date.now()
   const entries = movements ?? EMPTY_MOVEMENTS
@@ -173,6 +177,28 @@ setup
   const avatarUrl = photoUrl !== null && photoUrl !== brokenPhotoUrl ? photoUrl : null
   const isVerified = user?.emailVerified === true || profile?.emailVerified === true
   const memberSince = profile?.createdAt ?? null
+
+  // `undefined` is no answer yet, so it yields no card, exactly as an empty
+  // array does: most players contact no house, and neither state is a fact to
+  // print. Only a non-empty list is shown.
+  const houseItems = myHouses === undefined ? [] : toMyHouseItems(myHouses)
+  const [confirmingHouseId, setConfirmingHouseId] = useState<string | null>(null)
+  const [houseError, setHouseError] = useState<string | null>(null)
+
+  const confirmHouse = useCallback(async (accountId: string) => {
+    setConfirmingHouseId(accountId)
+    setHouseError(null)
+    try {
+      await convexClient.mutation(api.accounts.m.confirmAsContact, { accountId: accountId as Id<'accounts'> })
+    } catch (error) {
+      // A ConvexError carries a sentence meant for the player; anything else
+      // (offline, a server fault) gets a generic one.
+      const data = (error as { data?: unknown }).data
+      setHouseError(typeof data === 'string' ? data : 'Could not confirm that house. Try again.')
+    } finally {
+      setConfirmingHouseId(null)
+    }
+  }, [])
 
   const startSignIn = useCallback(async () => {
     setIsSigningIn(true)
@@ -320,6 +346,25 @@ section(className='relative overview-page pb-16')
                   ~ className='inline-flex h-9 items-center gap-2 rounded-full bg-foreground px-4 text-xs font-medium text-background'
                   ~ )
                   span I have saved it
+        if houseItems.length > 0
+          Panel(title='Your houses' description='Houses you were named on as the contact.' meta={formatCount(houseItems.length)})
+            ul(className='overview-feed')
+              each house in houseItems key house.id
+                li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
+                  div(className='min-w-0 flex-1')
+                    p(className='truncate text-sm text-foreground') #{house.name}
+                    p(className='truncate text-xs text-muted-foreground') #{house.detail}
+                  if house.canConfirm
+                    button(
+                      ~ type='button'
+                      ~ onClick={() => void confirmHouse(house.id)}
+                      ~ disabled={confirmingHouseId === house.id}
+                      ~ aria-busy={confirmingHouseId === house.id}
+                      ~ className='inline-flex h-9 items-center rounded-full bg-foreground px-4 text-xs font-medium text-background transition-opacity disabled:opacity-60'
+                      ~ )
+                      span #{confirmingHouseId === house.id ? 'Confirming…' : 'Confirm'}
+            if houseError
+              p(className='mt-4 text-xs text-destructive') #{houseError}
         Panel(title='Credits' description='What you hold, and how it has moved.' meta={!hasReadMovements ? 'Not read yet' : entries.length === 0 ? 'No movements' : `Newest ${formatCount(entries.length)}`})
           div(className='grid gap-10 lg:grid-cols-5 lg:gap-8')
             div(className='lg:col-span-2')
