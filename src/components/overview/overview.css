@@ -129,7 +129,7 @@
 }
 
 .overview-panel-toggle[aria-expanded='true'] .overview-chevron {
-  transform: rotate(-180deg);
+  transform: rotate(90deg);
 }
 
 .overview-panel-toggle:is(:hover, :focus-visible) .overview-chevron {

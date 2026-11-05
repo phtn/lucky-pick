@@ -30,7 +30,7 @@ section(className={cn('overview-panel', bare && 'overview-panel--bare', classNam
         button(type='button' className='overview-panel-toggle' aria-expanded={isOpen} aria-controls={contentId} onClick={() => setExpanded((value) => !value)})
           span #{title}
           span(className='overview-chevron' aria-hidden={true})
-            Icon(name='chevron-right' size={16} className='rotate-90')
+            Icon(name='chevron-right' size={16} className='')
       else
         span #{title}
     if meta
