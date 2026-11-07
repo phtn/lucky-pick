@@ -8,7 +8,7 @@ export type { BetType } from './games'
 export const BET_TYPES: BetType[] = BET_TYPE_VALUES
 
 // One tap buys this many random tickets at once.
-export const BET_MULTIPLIERS = [1, 100, 50, 1000, 5000, 50_000, 250_000, 500_000, 1_000_000]
+export const BET_MULTIPLIERS = [1, 5, 10]
 export const MAX_TICKETS = 2_000_000
 export const VISIBLE_TICKETS = 1000
 

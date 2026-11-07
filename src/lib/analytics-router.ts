@@ -29,7 +29,7 @@ const trxPage = lazyRouteComponent(() => import('../pages/trx-page.btsx'))
 // it brings its own `app-shell`, frame and header, so it hangs off the root
 // rather than the landing page's `Outlet`. Lazy, so arriving at the landing
 // page does not pay for the whole game up front.
-const gamePage = lazyRouteComponent(() => import('../App.btsx'))
+const gamePage = lazyRouteComponent(() => import('../Tickets.btsx'))
 
 const adminShell = lazyRouteComponent(() => import('../pages/admin-page.btsx'))
 const adminOverview = lazyRouteComponent(() => import('../pages/admin-overview-page.btsx'))

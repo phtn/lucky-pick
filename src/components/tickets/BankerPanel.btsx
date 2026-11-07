@@ -1,0 +1,15 @@
+
+div(className='bg-[#303030] rounded-[3rem] size-full')
+  div(className='h-20 border-b border-border/20 w-full flex items-center justify-center')
+    h2(className='font-sans font-[450] text-white text-base tracking-tight') My Banker
+
+  div(className='hidden')
+    ul(className='')
+      li(className='px-6 h-24 flex items-center justify-between hover:bg-muted/10')
+        div(className='flex items-center gap-2')
+          span(className='rounded-full size-10 flex items-center justify-center bg-muted font-[550] text-sm ') X
+          div
+            p(className='font-sans font-[450] text-white text-base') Name
+            p(className='font-mono font-[300] text-white text-xs') Winners
+        div
+          span(className='rounded-full size-6 flex items-center justify-center bg-[#FCD95D] font-[550] text-sm ') Y

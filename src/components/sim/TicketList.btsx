@@ -25,17 +25,17 @@ setup
   const ranked = useMemo(() => rankTickets(tickets, drawnBalls, drawGame), [tickets, drawnBalls, drawGame]);
   const liveDrawn = useMemo(() => new Set(drawnBalls), [drawnBalls]);
 
-div(className="px-5 py-3")
+div(className="p-2")
   div(className="flex items-center justify-between mb-1")
     h2(className="select-none text-xs font-bold tracking-[0.12em] flex items-center gap-2")
       | #{" MY TICKETS"}
     div(className="flex items-center gap-2")
-      span(className="flex items-center justify-center aspect-square size-6 rounded-full bg-elevated/40 text-xs font-bold")
+      span(className="size-8 flex items-center justify-center aspect-square size-6 rounded-full bg-elevated/40 font-[500] text-sm")
         | #{tickets.length}
       if tickets.length > 0
         button(
           ~ onClick={onClear}
-          ~ className="w-8 h-8 rounded-full bg-raised flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/15 transition"
+          ~ className="w-8 h-8 rounded-full bg-raised flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-destructive/15 transition"
           ~ )
           Icon(name="trash" className="w-3.5 h-3.5")
   if tickets.length === 0
@@ -43,7 +43,7 @@ div(className="px-5 py-3")
       p(className="text-[13px] text-muted-foreground font-medium")
         | No bets yet
   else
-    div(className="space-y-2.5 max-h-[520px] overflow-y-auto custom-scroll p-1")
+    div(className="space-y-2.5 max-h-[520px] overflow-y-auto custom-scroll py-1")
       if tickets.length > VISIBLE_TICKETS
         p(className="text-[10px] text-muted-foreground text-center py-1")
           | #{"Showing top "}
@@ -52,7 +52,7 @@ div(className="px-5 py-3")
           | #{tickets.length}
           | #{" tickets. All settles after draw."}
       each r, idx in ranked.slice(0, VISIBLE_TICKETS) key r.ticket.id
-        div(className={`flex items-center justify-between rounded-[16px] p-1.5 transition ${r.ticket.status === 'won' ? 'bg-gradient-to-br from-primary/5 to-primary/1' : r.ticket.status === 'lost' ? 'bg-raised opacity-70' : idx === 0 && r.hits > 0 ? 'bg-raised ring-1 ring-primary/50' : 'bg-raised'}`})
+        div(className={`flex items-center justify-between rounded-[16px] ps-1 pe-3 transition ${r.ticket.status === 'won' ? 'bg-gradient-to-br from-primary/5 to-primary/1' : r.ticket.status === 'lost' ? 'bg-raised opacity-70' : idx === 0 && r.hits > 0 ? 'bg-raised ring-1 ring-primary/50' : 'bg-raised'}`})
           div(className="flex flex-wrap gap-0.5")
             each n in r.ticket.numbers key n
               span(className={`w-7 h-7 rounded-full text-[11px] font-black flex items-center justify-center transition ${(r.ticket.game === drawGame && liveDrawn.has(n)) || ((r.ticket.status !== 'pending') && (draws.find(d => d.game === r.ticket.game)?.sorted.includes(n))) ? 'bg-primary text-primary-foreground' : (r.ticket.status !== 'pending') ? 'bg-elevated/60 text-muted-foreground' : 'bg-ball text-ball-ink'}`})
@@ -67,7 +67,7 @@ div(className="px-5 py-3")
                 span(className='text-rose-400 font-bold text-xs') LOST
               span(className="px-1.5 py-0.5 rounded-full bg-elevated text-foreground/70 font-bold")
                 | #{BET_LABELS[r.ticket.betType] + '' + r.ticket.game}
-              | #{r.ticket.time}
+              | #{r.ticket.cost}
 
           if r.ticket.status !== 'pending'
             div(className="hidden mt-2 _flex items-center gap-2 text-[11px]")

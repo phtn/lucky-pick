@@ -121,6 +121,7 @@
      a colour means the same thing on every theme. */
   --active: var(--mac-blue);
   --surface: var(--card);
+  --sunken: var(--card);
   --control-line: color-mix(in oklab, var(--foreground) 10%, transparent);
   --chart-good: #1cc375;
   --chart-info: #0086ff;
@@ -553,6 +554,9 @@
 
   .number-grid__matrix {
     gap: 8px;
+  }
+  .number-grid__new {
+    gap: 28px;
   }
 
   .number-grid__matrix > button {

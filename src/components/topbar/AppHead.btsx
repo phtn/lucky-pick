@@ -1,0 +1,141 @@
+import Topbar from "./Topbar.btsx";
+import { useState } from "octane/server";
+import { readStoredTheme, ThemeId, ThemeMode } from "@/lib/theme";
+import { BetType, GAME_IDS, GameId, GAMES } from "@/lib/games";
+import { useGameSettings } from "@/hooks/use-game-settings";
+import { enabledBetTypes, enabledGameIds, stakesFor, ticketCostFor } from "@/lib/game-settings";
+import { BetCost, GameMode, OFFICIAL_RESULTS } from "@/lib/lotto";
+import { applyTheme } from "../../lib/theme.ts";
+import { useRef } from "octane";
+props {}: {}
+setup
+  const stored = readStoredTheme();
+  const [theme, setTheme] = useState<ThemeId>(stored.theme);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(stored.mode);
+  const [betType, setBetType] = useState<BetType>(3);
+  const [gameId, setGameId, getGameId] = useState<GameId>('6/42');
+  const [stakeChoice, setStakeChoice] = useState<BetCost | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [mode, setMode] = useState<GameMode>('solo');
+  const [soundOn, setSoundOn] = useState(true);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const timersRef = useRef(new Set<number>());
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null);
+  const voiceIdRef = useRef(0);
+  const voiceMapRef = useRef<Map<number, { osc: OscillatorNode; gain: GainNode }>>(new Map());
+
+  const themeKey = `${theme}:${themeMode}`;
+  const required = betType;
+  const game = GAMES[gameId];
+  const pool = game.pool;
+
+  // What the house currently sells, from the `games` table in Convex. An
+  // unconfigured deployment resolves to the static config, so every game and
+  // every bet type is on sale at the code's own price.
+  const gameSettings = useGameSettings();
+  const sellableGames = enabledGameIds(gameSettings);
+  const sellableBetTypes = enabledBetTypes(gameSettings[gameId]);
+  const stakes = stakesFor(gameSettings, gameId, betType);
+  // The configured price is what a ticket costs unless the player picked
+  // another stake this cell actually offers.
+  const betCost: BetCost = stakeChoice !== null && stakes.includes(stakeChoice) ? stakeChoice : ticketCostFor(gameSettings, gameId, betType);
+  const [jackpots, setJackpots, getJackpots] = useState<Record<GameId, number>>(() => {
+    const seed = {} as Record<GameId, number>;
+    for (const id of GAME_IDS) seed[id] = OFFICIAL_RESULTS[id][0]?.jackpot ?? GAMES[id].baseJackpot;
+    return seed;
+  });
+  const schedule = (callback: VoidFunction, delay: number) => {
+    const timer = window.setTimeout(() => {
+      timersRef.current.delete(timer);
+      callback();
+    }, delay);
+    timersRef.current.add(timer);
+    return timer;
+  };
+  const getAudio = () => {
+    if (!audioCtxRef.current) {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const master = ctx.createGain();
+      master.gain.value = 0.45;
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -18; comp.knee.value = 30; comp.ratio.value = 12; comp.attack.value = 0.003; comp.release.value = 0.25;
+      master.connect(comp).connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      masterGainRef.current = master;
+    }
+    const ctx = audioCtxRef.current!;
+    if (ctx.state !== 'running') ctx.resume();
+    try { if ((navigator as any).audioSession) (navigator as any).audioSession.type = 'playback'; } catch {}
+    return ctx;
+  };
+  const playTone = (freq: number, dur = 0.35, type: OscillatorType='sine', peak=0.18) => {
+    if(!soundOn) return;
+    try{
+      const ctx=getAudio();
+      const id=voiceIdRef.current++;
+      const osc=ctx.createOscillator(); const g=ctx.createGain();
+      osc.type=type; osc.frequency.value=freq;
+      const now=ctx.currentTime;
+      g.gain.setValueAtTime(0.0001,now); g.gain.exponentialRampToValueAtTime(peak,now+0.02); g.gain.exponentialRampToValueAtTime(0.0001,now+dur);
+      osc.connect(g); g.connect(masterGainRef.current!);
+      voiceMapRef.current.set(id,{osc,gain:g});
+      osc.start(now); osc.stop(now+dur+0.05);
+      schedule(()=>{ if(voiceMapRef.current.get(id)?.osc===osc) voiceMapRef.current.delete(id); },(dur+0.15)*1000);
+    }catch{}
+  };
+  const playMixRumble=()=>{
+    if(!soundOn) return;
+    try{
+      const ctx=getAudio(); const osc=ctx.createOscillator(); const g=ctx.createGain();
+      osc.type='sawtooth'; osc.frequency.setValueAtTime(90,ctx.currentTime); osc.frequency.linearRampToValueAtTime(60,ctx.currentTime+2.8);
+      g.gain.setValueAtTime(0.0001,ctx.currentTime); g.gain.linearRampToValueAtTime(0.08,ctx.currentTime+0.2); g.gain.linearRampToValueAtTime(0.04,ctx.currentTime+2.8); g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+3);
+      osc.connect(g).connect(masterGainRef.current!); osc.start(); osc.stop(ctx.currentTime+3.1);
+    }catch{}
+  };
+  const playWinSeq=()=>{
+    if(!soundOn) return;
+    [261,329,392,523,659,784,1046].forEach((f,i)=> schedule(()=>playTone(f,0.8,i%2?'triangle':'sine',0.22), i*100));
+  };
+  const switchGame = (next: GameId) => {
+    if (next === gameId || isDrawing || !sellableGames.includes(next)) return;
+    const nextPool = GAMES[next].pool;
+    setGameId(next);
+    // setSelected(prev => prev.filter(n => n <= nextPool));
+    // setDrawnBalls([]); setDrawGameId(null); setCurrentBallAnim(null); setWinnerJackpot(null); setWinList([]); setShowMoneyRain(false);
+    // setOfficialInput('');
+    playTone(760,0.18,'triangle',0.13);
+    showToast(`${GAMES[next].name} • ${GAMES[next].drawDayLabel} 9PM`);
+  };
+  const showToast = (msg: string) => {
+    setToast(msg);
+    schedule(()=>setToast(null), 2400);
+  };
+  const toggleMode = () => {
+    const next: ThemeMode = themeMode === 'dark' ? 'light' : 'dark';
+    applyTheme({ theme, mode: next });
+    setThemeMode(next);
+    playTone(next==='dark'?520:900,0.16,'sine',0.12);
+  };
+  const selectMode = (next: GameMode) => {
+    setMode(next);
+    // showToast(next === 'party' ? `Party mode • Room ${roomCode} • ${players.length} players` : 'Solo mode • Your tickets');
+  };
+Topbar(
+  ~ pool={pool}
+  ~ gameName={game.name}
+  ~ game={game}
+  ~ gameId={gameId}
+  ~ jackpots={jackpots}
+  ~ isDrawing={isDrawing}
+  ~ gameIds={sellableGames}
+  ~ onSwitchGame={switchGame}
+  ~ mode={mode}
+  ~ soundOn={soundOn}
+  ~ onToggleSound={() => setSoundOn(v => !v)}
+  ~ theme={theme}
+  ~ themeMode={themeMode}
+  ~ onToggleThemeMode={toggleMode}
+  ~ onNotify={showToast}
+  ~ )

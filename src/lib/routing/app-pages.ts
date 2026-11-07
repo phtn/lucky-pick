@@ -4,7 +4,7 @@
  * Kept as data so the grid-visibility check in App.btsx does not need a
  * hardcoded path each time a new page is added.
  */
-export const APP_PAGE_PATHS: readonly string[] = ['/me', '/analytics', '/trx']
+export const APP_PAGE_PATHS: readonly string[] = ['/me', '/analytics', '/trx', '/tickets']
 
 /**
  * Matches the normalization in `usePathname` (src/lib/navigation.ts), so a

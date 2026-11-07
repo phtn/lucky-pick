@@ -1,10 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from 'octane';
-import AppHeader from '@/components/topbar/AppHeader.btsx';
 import { Outlet } from '@octanejs/tanstack-router';
 import { AnalyticsSessionContext } from '@/lib/analytics-session';
 import { usePathname } from '@/lib/navigation';
 import { isAppPagePath } from '@/lib/routing/app-pages';
-import BetPanel from '@/components/sim/BetPanel.btsx';
 import DrawHistory from '@/components/sim/DrawHistory.btsx';
 import DrawStage from '@/components/sim/DrawStage.btsx';
 import HowItWorks from '@/components/sim/HowItWorks.btsx';
@@ -29,6 +27,10 @@ import { auth } from './lib/firebase';
 import { api } from '../convex/_generated/api';
 import { useGameSettings } from './hooks/use-game-settings';
 import { enabledBetTypes, enabledGameIds, stakesFor, ticketCostFor } from './lib/game-settings';
+import NewBetPanel from "./components/sim/NewBetPanel.btsx";
+import AppHead from "./components/topbar/AppHead.btsx";
+import BankerPanel from "./components/tickets/BankerPanel.btsx";
+import NewTicketList from "./components/sim/NewTicketList.btsx";
 
 setup
   const pathname = usePathname();
@@ -622,25 +624,26 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
     div(className="fixed inset-0 pointer-events-none z-[90]")
   div(className="app-frame relative z-10 w-full max-w-[1480px] mx-auto px-4 py-2 overflow-x-hidden")
     AnalyticsSessionContext(value={session})
-      AppHeader(
-        ~ pool={pool}
-        ~ gameName={game.name}
-        ~ game={game}
-        ~ gameId={gameId}
-        ~ jackpots={jackpots}
-        ~ isDrawing={isDrawing}
-        ~ gameIds={sellableGames}
-        ~ onSwitchGame={switchGame}
-        ~ mode={mode}
-        ~ onSelectMode={selectMode}
-        ~ soundOn={soundOn}
-        ~ onToggleSound={() => setSoundOn(v => !v)}
-        ~ theme={theme}
-        ~ themeMode={themeMode}
-        ~ onToggleThemeMode={toggleMode}
-        ~ onPickTheme={pickTheme}
-        ~ onNotify={showToast}
-        ~ )
+      AppHead
+        // AppHeader(
+        //   ~ pool={pool}
+        //   ~ gameName={game.name}
+        //   ~ game={game}
+        //   ~ gameId={gameId}
+        //   ~ jackpots={jackpots}
+        //   ~ isDrawing={isDrawing}
+        //   ~ gameIds={sellableGames}
+        //   ~ onSwitchGame={switchGame}
+        //   ~ mode={mode}
+        //   ~ onSelectMode={selectMode}
+        //   ~ soundOn={soundOn}
+        //   ~ onToggleSound={() => setSoundOn(v => !v)}
+        //   ~ theme={theme}
+        //   ~ themeMode={themeMode}
+        //   ~ onToggleThemeMode={toggleMode}
+        //   ~ onPickTheme={pickTheme}
+        //   ~ onNotify={showToast}
+        //   ~ )
       Outlet
     if !isAppPagePath(pathname)
       fragment
@@ -673,7 +676,10 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
                 ~ onNewPlayerName={setNewPlayerName}
                 ~ onAddPlayer={addPlayer}
                 ~ )
-            BetPanel(
+            BankerPanel
+
+          div(className="app-column app-column--draw order-1 xl:order-2")
+            NewBetPanel(
               ~ game={game}
               ~ jackpot={jackpot}
               ~ betType={betType}
@@ -694,27 +700,11 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
               ~ onBuyRandom={addRandomTickets}
               ~ onAddTicket={addTicket}
               ~ )
-          div(className="app-column app-column--draw order-1 xl:order-2")
-            DrawStage(
-              ~ game={game}
-              ~ jackpot={jackpot}
-              ~ themeKey={themeKey}
-              ~ isDrawing={isDrawing}
-              ~ isMixing={isMixing}
-              ~ drawnBalls={drawnBalls}
-              ~ currentBallAnim={currentBallAnim}
-              ~ draws={draws}
-              ~ winnerJackpot={winnerJackpot}
-              ~ onDismissJackpot={() => setWinnerJackpot(null)}
-              ~ winList={winList}
-              ~ onDismissWins={() => setWinList([])}
-              ~ onStartDraw={() => startDraw()}
-              ~ )
           div(className="app-column app-column--info order-3 space-y-4")
-            SessionStats(stats={stats})
-            PayoutReference(game={game} jackpot={jackpot} betType={betType} betCost={betCost})
+            // SessionStats(stats={stats})
+            // PayoutReference(game={game} jackpot={jackpot} betType={betType} betCost={betCost})
             if mode === 'solo'
-              TicketList(
+              NewTicketList(
                 ~ tickets={tickets}
                 ~ draws={draws}
                 ~ drawnBalls={drawnBalls}
@@ -742,8 +732,8 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
                   ~ onInput={setChatInput}
                   ~ onSend={handleSendChat}
                   ~ )
-            if mode === 'solo'
-              PrizeNote(game={game})
-            DrawHistory(draws={draws})
-            HowItWorks(game={game} jackpot={jackpot})
+            // if mode === 'solo'
+            //   PrizeNote(game={game})
+            // DrawHistory(draws={draws})
+            // HowItWorks(game={game} jackpot={jackpot})
     footer(className="flex items-center justify-end app-footer mt-6 font-mono font-light text-foreground/50 text-[8px] tracking-wide space-x-1")

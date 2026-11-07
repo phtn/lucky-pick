@@ -31,11 +31,9 @@ div(className="mb-1 rounded-[14px] overflow-hidden")
       | #{betType === 6 ? formatCompactPeso(game.baseJackpot) + '+ BASE' : Math.round(PAYOUT_RTP * 1000) / 10 + '% RETURN'}
   div(className="divide-y divide-[var(--lp-divider)]")
     each r in rows key r.m
-      div(className={`flex items-center justify-between h-10 px-4 text-sm ${r.m === selectedMatch ? 'bg-primary/10' : ''}`})
+      div(className={`flex flex-col justify-center items-center h-14 px-3 text-base ${r.m === selectedMatch ? 'bg-primary/10' : ''}`})
         span(className={`font-bold ${r.m === selectedMatch ? 'text-primary' : 'text-foreground'}`})
           | #{r.prize}
         span(className="flex flex-col leading-tight")
           span(className="text-[9px] text-muted-foreground")
             | #{r.sub}
-        span(className="text-right text-[10px] text-muted-foreground font-mono")
-          | #{r.odds}

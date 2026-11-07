@@ -1,7 +1,7 @@
 
 import {ClassValue} from 'octane'
 import { AnalyticsSessionContext } from "../../lib/analytics-session.ts";
-import AppHeader from "../topbar/AppHeader.btsx";
+// import AppHeader from "../topbar/AppHeader.btsx";
 import { Outlet } from '@octanejs/tanstack-router';
 import { GAME_IDS, GameId, GAMES } from "@/lib/games.ts";
 import { useState } from "octane/server";
@@ -13,6 +13,7 @@ import { gameRoutePath } from "@/lib/routing/app-pages.ts";
 import Button from "@/components/ui/button.btsx";
 import { applyTheme } from "../../lib/theme.ts";
 import { cn } from '@/lib/utils.ts';
+import AppHead from "../topbar/AppHead.btsx";
 
 component HeroImage
   props {className}: {className?: ClassValue}
@@ -61,24 +62,25 @@ setup
 div(className='app-shell')
   div(className="app-frame relative z-10 w-full max-w-[1480px] mx-auto px-4 py-4 md:py-2 overflow-x-hidden")
       AnalyticsSessionContext(value={session})
-        AppHeader(
-          ~ pool={pool}
-          ~ gameName={game.name}
-          ~ game={game}
-          ~ gameId={gameId}
-          ~ jackpots={jackpots}
-          ~ isDrawing={isDrawing}
-          ~ onSwitchGame={undefined}
-          ~ mode={mode}
-          ~ onSelectMode={undefined}
-          ~ soundOn={true}
-          ~ onToggleSound={undefined}
-          ~ theme={theme}
-          ~ themeMode={undefined}
-          ~ onToggleThemeMode={toggleTheme}
-          ~ onPickTheme={undefined}
-          ~ onNotify={undefined}
-          ~ )
+        AppHead
+        // AppHead(
+        //   ~ pool={pool}
+        //   ~ gameName={game.name}
+        //   ~ game={game}
+        //   ~ gameId={gameId}
+        //   ~ jackpots={jackpots}
+        //   ~ isDrawing={isDrawing}
+        //   ~ onSwitchGame={undefined}
+        //   ~ mode={mode}
+        //   ~ onSelectMode={undefined}
+        //   ~ soundOn={true}
+        //   ~ onToggleSound={undefined}
+        //   ~ theme={theme}
+        //   ~ themeMode={undefined}
+        //   ~ onToggleThemeMode={toggleTheme}
+        //   ~ onPickTheme={undefined}
+        //   ~ onNotify={undefined}
+        //   ~ )
         Outlet
       if !isAppPagePath(pathname)
         fragment
@@ -109,18 +111,3 @@ div(className='app-shell')
                     span Enter Game
 
             HeroImage(className='hidden md:flex [--hero-delay:160ms]')
-
-//             div(className='hidden col-span-1 bg-[#303030] rounded-[3rem] size-full')
-//               div(className='h-20 border-b border-border/20 w-full flex items-center justify-center')
-//                 h2(className='font-sans font-[450] text-white text-lg tracking-tight') House Accounts
-//
-//               div(className='')
-//                 ul(className='')
-//                   li(className='px-6 h-24 flex items-center justify-between hover:bg-muted/10')
-//                     div(className='flex items-center gap-2')
-//                       span(className='rounded-full size-10 flex items-center justify-center bg-muted font-[550] text-sm ') X
-//                       div
-//                         p(className='font-sans font-[450] text-white text-base') Name
-//                         p(className='font-mono font-[300] text-white text-xs') Winners
-//                     div
-//                       span(className='rounded-full size-6 flex items-center justify-center bg-[#FCD95D] font-[550] text-sm ') Y

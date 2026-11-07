@@ -1,0 +1,77 @@
+import { useMemo } from 'octane';
+import { formatPeso } from '@/lib/format';
+import { BET_LABELS, VISIBLE_TICKETS, rankTickets, type Draw, type Ticket } from '@/lib/lotto';
+import type { GameId } from '@/lib/games';
+import {Icon} from '@/lib/icons';
+
+module
+  // Solo mode's ticket stack. Every open ticket still settles on a draw; only
+  // the top VISIBLE_TICKETS of the live ranking are rendered.
+  interface TicketListProps {
+    tickets: Ticket[];
+    /** Used to mark which numbers a settled ticket actually hit. */
+    draws: Draw[];
+    /** Balls revealed so far in the running draw; drives the live ordering. */
+    drawnBalls: number[];
+    /** Which game those balls belong to, or null when no draw has started. */
+    drawGame: GameId | null;
+    onClear: () => void;
+  }
+
+props { tickets, draws, drawnBalls, drawGame, onClear }: TicketListProps
+setup
+  // Re-ranks on every revealed ball: the ticket holding the most drawn numbers
+  // rises to the top and is only displaced by one holding more.
+  const ranked = useMemo(() => rankTickets(tickets, drawnBalls, drawGame), [tickets, drawnBalls, drawGame]);
+  const liveDrawn = useMemo(() => new Set(drawnBalls), [drawnBalls]);
+
+div(className="p-2")
+  div(className="flex items-center justify-between mb-1")
+    h2(className="select-none text-xs font-bold tracking-[0.12em] flex items-center gap-2")
+      | #{" MY TICKETS"}
+    div(className="flex items-center gap-2")
+      span(className="size-8 flex items-center justify-center aspect-square size-6 rounded-full bg-elevated/40 font-[500] text-sm")
+        | #{tickets.length}
+      if tickets.length > 0
+        button(
+          ~ onClick={onClear}
+          ~ className="w-8 h-8 rounded-full bg-raised flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-destructive/15 transition"
+          ~ )
+          Icon(name="trash" className="size-4")
+  if tickets.length === 0
+    div(className="py-12 text-center ")
+      p(className="text-[13px] text-muted-foreground font-medium")
+        | No tickets yet
+  else
+    div(className="space-y-2.5 max-h-[520px] overflow-y-auto custom-scroll py-1")
+      if tickets.length > VISIBLE_TICKETS
+        p(className="text-[10px] text-muted-foreground text-center py-1")
+          | #{"Showing top "}
+          | #{VISIBLE_TICKETS}
+          | #{"/"}
+          | #{tickets.length}
+          | #{" tickets. All settles after draw."}
+      each r, idx in ranked.slice(0, VISIBLE_TICKETS) key r.ticket.id
+        div(className={`flex items-center justify-between rounded-full p-1.5 transition ${r.ticket.status === 'won' ? 'bg-gradient-to-br from-primary/5 to-primary/1' : r.ticket.status === 'lost' ? 'bg-raised opacity-70' : idx === 0 && r.hits > 0 ? 'bg-raised ring-1 ring-primary/50' : 'bg-raised'}`})
+          div(className="flex flex-wrap gap-1.5")
+            each n in r.ticket.numbers key n
+              span(className={`w-7 h-7 rounded-full font-sans font-[550] text-base flex items-center justify-center transition ${(r.ticket.game === drawGame && liveDrawn.has(n)) || ((r.ticket.status !== 'pending') && (draws.find(d => d.game === r.ticket.game)?.sorted.includes(n))) ? 'bg-primary text-primary-foreground' : (r.ticket.status !== 'pending') ? 'bg-elevated/60 text-muted-foreground' : 'bg-foreground text-background'}`})
+                | #{n}
+          div(className="flex items-center justify-between text-sm text-muted-foreground font-mono")
+            span(className="flex items-center gap-1.5")
+              if r.ticket.status === 'pending' && r.hits > 0
+                span(className='whitespace-nowrap font-bold text-xs text-blue-500 tracking-tight') #{r.hits}x
+              elseif r.ticket.status === 'won'
+                span(className='text-emerald-500 font-bold text-xs') WIN
+              elseif r.ticket.status === 'lost'
+                span(className='text-rose-400 font-bold text-xs') LOST
+              span(className="px-1.5 py-0.5 font-sans font-[500] text-foreground text-base")
+                // | #{BET_LABELS[r.ticket.betType] + '' + r.ticket.game}
+                | #{r.ticket.cost}
+
+          if r.ticket.status !== 'pending'
+            div(className="hidden mt-2 _flex items-center gap-2 text-[11px]")
+              span(className={`w-5 h-5 rounded-full flex items-center justify-center ${r.ticket.status === 'won' ? 'bg-primary text-primary-foreground' : 'bg-elevated text-muted-foreground'}`})
+                | #{r.ticket.status === 'won' ? '✓' : '✕'}
+              span(className={r.ticket.status === 'won' ? 'text-primary font-bold' : 'text-muted-foreground'})
+                | #{r.ticket.status === 'won' ? `Won ${formatPeso(r.ticket.prizeWon || 0)} — ${r.ticket.hits} hits` : `Only ${r.ticket.hits}/${r.ticket.required} matched`}

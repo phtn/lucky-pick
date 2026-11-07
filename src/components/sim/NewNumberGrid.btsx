@@ -1,0 +1,38 @@
+module
+  // The 1..pool board plus the three shortcuts that fill it.
+  interface NumberGridProps {
+    pool: number;
+    selected: number[];
+    onToggleNumber: (n: number) => void;
+    onQuickPick: () => void;
+    onEvenOddMix: () => void;
+    onClear: () => void;
+  }
+
+props { pool, selected, onToggleNumber, onQuickPick, onEvenOddMix, onClear }: NumberGridProps
+
+fragment
+  div(className="number-grid bg-sunken p-6")
+    div(className={`number-grid__new grid select-none gap-2 ${pool > 49 ? 'grid-cols-8' : 'grid-cols-7'}`})
+      each n in Array.from({ length: pool }, (_, i) => i + 1) key n
+        button(
+          ~ onClick={() => onToggleNumber(n)}
+          ~ className={`aspect-square rounded-full shadow-sm text-lg font-bold transition-all relative flex items-center justify-center ${(selected.includes(n)) ? 'bg-[color-mix(in_oklab,var(--destructive)_80%,transparent)] text-[#FFFFFF] z-10 scale-[1.15]' : 'hover:scale-[1.25]'}`}
+          ~ )
+          | #{n}
+  div(className="mt-2 grid grid-cols-3 gap-2 mt-4")
+    button(
+      ~ onClick={onQuickPick}
+      ~ className="pill--solid text-xs rounded-md h-8 font-bold px-1"
+      ~ )
+      | #{"LUCKY PICK"}
+    button(
+      ~ onClick={onEvenOddMix}
+      ~ className=" text-xs rounded-md h-8 font-bold px-1"
+      ~ )
+      | EVEN/ODD
+    button(
+      ~ onClick={onClear}
+      ~ className="pill--muted text-xs rounded-md h-8 font-bold px-1"
+      ~ )
+      | CLEAR
