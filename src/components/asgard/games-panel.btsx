@@ -17,9 +17,9 @@ module
 
   const cellKey = (gameId: GameId, betType: BetType) => `${gameId}:${betType}`
 
-  const labelClass = 'font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground'
+  const labelClass = 'font-mono text-sm capitalize tracking-tighter text-muted-foreground'
   const inputClass =
-    'h-7 w-20 rounded-xs border border-border/60 bg-sidebar font-mono text-sm text-foreground text-center focus-visible:bg-background focus-visible:outline-active focus-visible:outline-[1px] focus-visible:outline-offset-0 disabled:opacity-50'
+    'h-7 w-20 rounded-xs bg-sidebar font-mono text-sm text-foreground text-center focus-visible:bg-background focus-visible:outline-active focus-visible:outline-[1px] focus-visible:outline-offset-0 disabled:opacity-50'
   const stakesInputClass = `${inputClass} w-64`
 
   const betTypeLabel = (betType: BetType) => (betType === 6 ? '6/6' : `${betType}/6`)
@@ -76,6 +76,8 @@ module
     onCost: (gameId: GameId, betType: BetType, ticketCost: number) => void
     onStakes: (gameId: GameId, betType: BetType, stakes: number[]) => void
   }
+
+  const bannerMap: Record<number, string> = {642: 'v1794295772/642_wbe7yk', 645: 'v1794295772/645_suebpk', 649: 'v1794295772/649_hxkn6a', 655: 'v1794295772/655_zw8xup', 658: 'v1794295773/658_s1god0'}
 
 component Toggle
   props { isOn, label, disabled = false, onToggle }: ToggleProps
@@ -149,7 +151,7 @@ component BetTypeCell
         Squishy(ariaLabel={`${bet.enabled ? 'Disable' : 'Enable'} ${betTypeLabel(bet.betType)} on ${gameId}`} disabled={!isGameEnabled || isBusy} checked={bet.enabled && isGameEnabled} onChange={() => onToggle(bet.betType)} width={36} height={22} radius={13} stretch={80} trackOnColor="#079669" thumbOnColor="#ede9fe")
 
 
-    Scrubfield(label="Ticket" suffix="PHP" showFill={true} onChange={(v) => setCostDraft(String(v))} onCommit={commitCost} defaultValue={+costDraft} min={MIN_TICKET_COST} max={MAX_TICKET_COST} size="md" accent="#419cff" chipColor="#dedede40" className="text-zinc-100" disabled={!bet.enabled || !isGameEnabled})
+    Scrubfield(label="Ticket" suffix="PHP" showFill={true} onChange={(v) => setCostDraft(String(v))} onCommit={commitCost} defaultValue={+costDraft} min={MIN_TICKET_COST} max={MAX_TICKET_COST} size="md" accent="#419cff" chipColor="#dedede40" className="dark:text-zinc-100" disabled={!bet.enabled || !isGameEnabled})
 
     label(className='flex items-center gap-4 relative ml-8 ')
       span(className={labelClass}) Stakes
@@ -175,8 +177,9 @@ component GameCard
     const enabledCount = countEnabledBetTypes(row)
     const isGameBusy = pendingKeys.has(row.gameId)
 
-  section(className={cn('rounded-xl border border-border/60 p-3 flex items-center gap-8', !row.enabled && 'bg-muted/20')})
-    img(src={'https://res.cloudinary.com/dx0heqhhe/image/upload/v1794295772/642_wbe7yk.webp'} alt='' className='size-96')
+  section(className={cn('rounded-4xl border border-border/60 p-3 flex items-center gap-8', !row.enabled && 'bg-muted/20')})
+    img(src={`https://res.cloudinary.com/dx0heqhhe/image/upload/${bannerMap[+row.gameId.replace('/', '')]}.webp`} alt='' className='size-116 rounded-3xl')
+
     div(className='flex flex-col ')
       header(className='flex flex-wrap items-center justify-between gap-3 pb-3')
         div(className="flex items-center justify-between w-full")
