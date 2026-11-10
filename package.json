@@ -34,6 +34,7 @@
     "@octanejs/day-picker": "0.0.25",
     "@octanejs/dnd-kit": "0.1.53",
     "@octanejs/lucide": "0.1.53",
+    "@octanejs/motion": "^0.1.54",
     "@octanejs/nuqs": "^0.1.49",
     "@octanejs/resizable-panels": "^0.0.26",
     "@octanejs/select": "0.1.9",

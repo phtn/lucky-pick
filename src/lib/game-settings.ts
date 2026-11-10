@@ -16,7 +16,7 @@ export const BET_TYPE_VALUES: BetType[] = [1, 2, 3, 4, 5, 6]
 
 /** A ticket price is whole pesos: nothing here charges centavos. */
 export const MIN_TICKET_COST = 1
-export const MAX_TICKET_COST = 100_000
+export const MAX_TICKET_COST = 50
 
 /** How many stakes one cell may offer. Enough for the PCSO history, not a menu. */
 export const MAX_STAKE_OPTIONS = 8

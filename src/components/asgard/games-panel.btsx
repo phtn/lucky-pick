@@ -6,6 +6,8 @@ import { isAbortError, readErrorMessage } from '@/lib/asgard/errors'
 import { countEnabledBetTypes, fetchGames, formatConfiguredAt, seedGames, setGameEnabled, updateBetType, type GameBetTypeRow, type GameRow } from '@/lib/asgard/games'
 import { DEFAULT_TICKET_COST, MAX_STAKE_OPTIONS, MAX_TICKET_COST, MIN_TICKET_COST, isTicketCost } from '@/lib/game-settings'
 import { GAMES, GAME_IDS, type BetType, type GameId } from '@/lib/games'
+import Squishy from "../ui/squishy.btsx";
+import Scrubfield from "../ui/scrubfield.btsx";
 
 module
   type GridStatus = 'loading' | 'ready' | 'error'
@@ -17,10 +19,10 @@ module
 
   const labelClass = 'font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground'
   const inputClass =
-    'h-7 w-20 rounded-xs border border-border/60 bg-sidebar px-2 font-mono text-xs text-foreground focus-visible:bg-background focus-visible:outline-active focus-visible:outline-[1px] focus-visible:outline-offset-0 disabled:opacity-50'
-  const stakesInputClass = `${inputClass} w-36`
+    'h-7 w-20 rounded-xs border border-border/60 bg-sidebar font-mono text-sm text-foreground text-center focus-visible:bg-background focus-visible:outline-active focus-visible:outline-[1px] focus-visible:outline-offset-0 disabled:opacity-50'
+  const stakesInputClass = `${inputClass} w-64`
 
-  const betTypeLabel = (betType: BetType) => (betType === 6 ? '6/6 · jackpot' : `${betType}/6`)
+  const betTypeLabel = (betType: BetType) => (betType === 6 ? '6/6' : `${betType}/6`)
 
   /** `20, 24, 25` — how a stake list is typed and read back. */
   const stakesText = (stakes: readonly number[]) => stakes.join(', ')
@@ -62,6 +64,7 @@ module
     onToggle: (betType: BetType) => void
     onCost: (betType: BetType, ticketCost: number) => void
     onStakes: (betType: BetType, stakes: number[]) => void
+    isGameEnabled: boolean
   }
 
   /** One game: whether it is on sale, and the six cells beneath it. */
@@ -97,7 +100,7 @@ component Toggle
       ~ )
 
 component BetTypeCell
-  props { gameId, bet, isBusy, onToggle, onCost, onStakes }: BetTypeCellProps
+  props { gameId, bet, isBusy, onToggle, onCost, onStakes, isGameEnabled }: BetTypeCellProps
   setup
     const [costDraft, setCostDraft] = useState(String(bet.ticketCost))
     const [stakesDraft, setStakesDraft] = useState(stakesText(bet.stakes))
@@ -135,52 +138,36 @@ component BetTypeCell
 
   div(
     ~ className={cn(
-    ~   'flex flex-wrap items-center gap-3 rounded-lg border border-border/50 px-3 py-2 transition-opacity',
+    ~   'flex items-center justify-evenly gap-6 rounded-lg border border-border px-3 py-2 transition-opacity',
     ~   !bet.enabled && 'opacity-60'
     ~ )}
     ~ )
-    div(className='flex w-28 shrink-0 items-center gap-2')
-      Toggle(
-        ~ isOn={bet.enabled}
-        ~ disabled={isBusy}
-        ~ label={`${bet.enabled ? 'Disable' : 'Enable'} ${betTypeLabel(bet.betType)} on ${gameId}`}
-        ~ onToggle={() => onToggle(bet.betType)}
-        ~ )
-      span(className='font-mono text-xs text-foreground') #{betTypeLabel(bet.betType)}
+    div(className='flex w-72 shrink-0 items-center gap-2')
+      div(className="flex items-center justify-between gap-4")
+        div
+          p(className=" font-[500] text-base tracking-widest") #{betTypeLabel(bet.betType)}
+        Squishy(ariaLabel={`${bet.enabled ? 'Disable' : 'Enable'} ${betTypeLabel(bet.betType)} on ${gameId}`} disabled={!isGameEnabled || isBusy} checked={bet.enabled && isGameEnabled} onChange={() => onToggle(bet.betType)} width={36} height={22} radius={13} stretch={80} trackOnColor="#079669" thumbOnColor="#ede9fe")
 
-    label(className='flex items-center gap-2')
-      span(className={labelClass}) Ticket
-      input(
-        ~ type='number'
-        ~ inputMode='numeric'
-        ~ min={MIN_TICKET_COST}
-        ~ max={MAX_TICKET_COST}
-        ~ step={1}
-        ~ value={costDraft}
-        ~ disabled={isBusy}
-        ~ className={inputClass}
-        ~ aria-label={`Ticket cost for ${betTypeLabel(bet.betType)} on ${gameId}`}
-        ~ onInput={(event: Event) => setCostDraft((event.currentTarget as HTMLInputElement).value)}
-        ~ onBlur={commitCost}
-        ~ onKeyDown={handleKey(commitCost, () => setCostDraft(String(bet.ticketCost)))}
-        ~ )
 
-    label(className='flex items-center gap-2')
+    Scrubfield(label="Ticket" suffix="PHP" showFill={true} onChange={(v) => setCostDraft(String(v))} onCommit={commitCost} defaultValue={+costDraft} min={MIN_TICKET_COST} max={MAX_TICKET_COST} size="md" accent="#419cff" chipColor="#dedede40" className="text-zinc-100" disabled={!bet.enabled || !isGameEnabled})
+
+    label(className='flex items-center gap-4 relative ml-8 ')
       span(className={labelClass}) Stakes
       input(
         ~ type='text'
         ~ value={stakesDraft}
         ~ disabled={isBusy}
         ~ className={stakesInputClass}
-        ~ placeholder='20, 24, 25'
+        ~ placeholder='25, 50, 75'
         ~ aria-label={`Stakes offered for ${betTypeLabel(bet.betType)} on ${gameId}`}
         ~ onInput={(event: Event) => setStakesDraft((event.currentTarget as HTMLInputElement).value)}
         ~ onBlur={commitStakes}
         ~ onKeyDown={handleKey(commitStakes, () => setStakesDraft(stakesText(bet.stakes)))}
         ~ )
+      if isBusy
+        Icon(name='spinner' size={12} className='animated-spin text-orange-400/80 absolute right-0')
 
-    if isBusy
-      Icon(name='spinner' size={12} className='animate-spin text-muted-foreground')
+
 
 component GameCard
   props { row, pendingKeys, onToggleGame, onToggleBetType, onCost, onStakes }: GameCardProps
@@ -188,42 +175,52 @@ component GameCard
     const enabledCount = countEnabledBetTypes(row)
     const isGameBusy = pendingKeys.has(row.gameId)
 
-  section(className={cn('rounded-xl border border-border/60 p-3', !row.enabled && 'bg-muted/20')})
-    header(className='flex flex-wrap items-center justify-between gap-3 pb-3')
-      div(className='flex min-w-0 items-center gap-3')
-        Toggle(
-          ~ isOn={row.enabled}
-          ~ disabled={isGameBusy}
-          ~ label={`${row.enabled ? 'Take' : 'Put'} ${row.name} ${row.enabled ? 'off' : 'on'} sale`}
-          ~ onToggle={() => onToggleGame(row.gameId)}
-          ~ )
-        span(aria-hidden={true} className='size-2 shrink-0 rounded-full' style={{ background: row.accent }})
-        div(className='min-w-0')
-          p(className='truncate font-sans text-sm text-foreground') #{row.name}
-          p(className='truncate font-mono text-2xs uppercase tracking-wider text-muted-foreground')
-            | #{row.gameId}
-            | #{' · pool 1-'}
-            | #{row.pool}
-            | #{' · '}
-            | #{row.drawDayLabel}
-      div(className='flex shrink-0 items-center gap-3')
-        span(className={labelClass})
-          | #{enabledCount}
-          | #{'/6 bet types'}
-        span(className={labelClass}) #{formatConfiguredAt(row.updatedAt)}
-        if isGameBusy
-          Icon(name='spinner' size={12} className='animate-spin text-muted-foreground')
+  section(className={cn('rounded-xl border border-border/60 p-3 flex items-center gap-8', !row.enabled && 'bg-muted/20')})
+    img(src={'https://res.cloudinary.com/dx0heqhhe/image/upload/v1794295772/642_wbe7yk.webp'} alt='' className='size-96')
+    div(className='flex flex-col ')
+      header(className='flex flex-wrap items-center justify-between gap-3 pb-3')
+        div(className="flex items-center justify-between w-full")
+          div
+            p(className=" font-[500] text-base tracking-widest flex items-center gap-3")
+              span #{row.name}
+              if isGameBusy
+                Icon(name='spinner' size={12} className='animate-spin text-muted-foreground')
+            p(className="mt-1 text-xs text-muted-foreground space-x-4")
+              span(className={labelClass})
+                | #{enabledCount}
+                | #{'/6 bet types'}
+              span(className={labelClass}) #{formatConfiguredAt(row.updatedAt)}
+          Squishy(ariaLabel={`${row.enabled ? 'Take' : 'Put'} ${row.name} ${row.enabled ? 'off' : 'on'} sale`} checked={row.enabled} onChange={() => onToggleGame(row.gameId)} width={44} height={26} radius={13} stretch={80} trackOnColor="#079669" thumbOnColor="#ede9fe" disabled={isGameBusy})
+        div(className='hidden _flex min-w-0 items-center gap-3')
+          Toggle(
+            ~ isOn={row.enabled}
+            ~ disabled={isGameBusy}
+            ~ label={`${row.enabled ? 'Take' : 'Put'} ${row.name} ${row.enabled ? 'off' : 'on'} sale`}
+            ~ onToggle={() => onToggleGame(row.gameId)}
+            ~ )
+          span(aria-hidden={true} className='size-2 shrink-0 rounded-full' style={{ background: row.accent }})
+          div(className='min-w-0')
+            p(className='truncate font-sans text-sm text-foreground') #{row.name}
+            p(className='truncate font-mono text-2xs uppercase tracking-wider text-muted-foreground')
+              | #{row.gameId}
+              | #{' · pool 1-'}
+              | #{row.pool}
+              | #{' · '}
+              | #{row.drawDayLabel}
+        div(className='flex shrink-0 items-center gap-3')
 
-    div(className='grid gap-2')
-      each bet in row.betTypes key bet.betType
-        BetTypeCell(
-          ~ gameId={row.gameId}
-          ~ bet={bet}
-          ~ isBusy={isGameBusy || pendingKeys.has(cellKey(row.gameId, bet.betType))}
-          ~ onToggle={(betType: BetType) => onToggleBetType(row.gameId, betType)}
-          ~ onCost={(betType: BetType, ticketCost: number) => onCost(row.gameId, betType, ticketCost)}
-          ~ onStakes={(betType: BetType, stakes: number[]) => onStakes(row.gameId, betType, stakes)}
-          ~ )
+
+      div(className='grid gap-3')
+        each bet in row.betTypes key bet.betType
+          BetTypeCell(
+            ~ isGameEnabled={row.enabled}
+            ~ gameId={row.gameId}
+            ~ bet={bet}
+            ~ isBusy={isGameBusy || pendingKeys.has(cellKey(row.gameId, bet.betType))}
+            ~ onToggle={(betType: BetType) => onToggleBetType(row.gameId, betType)}
+            ~ onCost={(betType: BetType, ticketCost: number) => onCost(row.gameId, betType, ticketCost)}
+            ~ onStakes={(betType: BetType, stakes: number[]) => onStakes(row.gameId, betType, stakes)}
+            ~ )
 
 setup
   const [games, setGames] = useState<GameRow[]>([])
