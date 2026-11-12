@@ -1,8 +1,9 @@
 import { ConvexError, v } from 'convex/values'
+import { canUseAccount } from '../../src/lib/accounts/accounts'
 import { CREDIT_CURRENCY, isTopupAmount } from '../../src/lib/money/credits'
 import type { Doc, Id } from '../_generated/dataModel'
 import { mutation, query, type MutationCtx, type QueryCtx } from '../_generated/server'
-import { requireGodIdentity, requireStaffIdentity } from '../accounts/helpers'
+import { requireAccountManager, requireGodIdentity, requireStaffIdentity } from '../accounts/helpers'
 import { isTopGod } from '../lib/auth'
 import { post } from '../ledger/post'
 import { notify } from '../notifications/helpers'
@@ -13,8 +14,9 @@ import { TOPUP_POLICY_CHANGE_LIMIT, topupStatusSchema } from './d'
 
 /**
  * Top-ups are the only way credits come into existence, so they are
- * maker-checker: one god records that money arrived (`request`), a different
- * god confirms it (`approve`), and only approval mints. Nothing here moves a
+ * maker-checker: one god records that money arrived (`request`) and a different
+ * god confirms it (`approve`). Approval tells the house's contact, who then
+ * takes the credits (`claim`), and only that claim mints. Nothing here moves a
  * balance except through `post()`.
  *
  * "A different god" is the default, not a constant: a top god can switch that
@@ -24,6 +26,9 @@ import { TOPUP_POLICY_CHANGE_LIMIT, topupStatusSchema } from './d'
  */
 
 const DEFAULT_LIST_LIMIT = 100
+// Bounds on `claimable`: a contact fronts a handful of houses, each with few requests waiting.
+const CLAIMABLE_ACCOUNT_LIMIT = 50
+const CLAIMABLE_PER_ACCOUNT_LIMIT = 50
 const MAX_LIST_LIMIT = 250
 const PAYMENT_REFERENCE_MAX_LENGTH = 120
 const NOTE_MAX_LENGTH = 2_000
@@ -181,6 +186,52 @@ export const approve = mutation({
       throw new ConvexError('This account is closed.')
     }
 
+    // Approval mints nothing. It marks the request as the house's to claim and
+    // tells its contact; the credits move when they claim it.
+    const now = Date.now()
+    await ctx.db.patch('topupRequests', id, {
+      status: 'approved',
+      checkerTokenIdentifier: identity.tokenIdentifier,
+      decisionNote: note,
+      decidedAt: now,
+      updatedAt: now
+    })
+
+    await notify(ctx, {
+      userId: account.primaryContact.userId,
+      kind: 'topup-approved',
+      accountId: account._id,
+      accountName: account.name,
+      amount: topup.amount
+    })
+
+    return null
+  }
+})
+
+/**
+ * The house's contact takes an approved top-up into the float. Only the linked
+ * primary contact of a usable account may: `requireAccountManager` refuses a
+ * god, a stranger and a suspended or closed house alike.
+ */
+export const claim = mutation({
+  args: { id: v.id('topupRequests') },
+  returns: v.null(),
+  handler: async (ctx, { id }) => {
+    const topup = await ctx.db.get('topupRequests', id)
+    // One refusal for a missing request and for someone else's, so an id tells a stranger nothing.
+    if (!topup) throw new ConvexError('Unauthorized.')
+
+    const { identity } = await requireAccountManager(ctx, topup.accountId)
+
+    // A `txnId` means it has minted already: claimed, or approved before claiming existed.
+    if (topup.status === 'claimed' || topup.txnId !== null) {
+      throw new ConvexError('This top-up has already been claimed.')
+    }
+    if (topup.status !== 'approved') {
+      throw new ConvexError(`This top-up is ${topup.status} and cannot be claimed.`)
+    }
+
     const issuance = await getSystemWallet(ctx, 'issuance')
     const { float } = await getPartnerWallets(ctx, topup.accountId)
 
@@ -200,23 +251,68 @@ export const approve = mutation({
 
     const now = Date.now()
     await ctx.db.patch('topupRequests', id, {
-      status: 'approved',
-      checkerTokenIdentifier: identity.tokenIdentifier,
-      decisionNote: note,
-      decidedAt: now,
+      status: 'claimed',
       txnId,
+      claimedAt: now,
+      claimedBy: identity.tokenIdentifier,
       updatedAt: now
     })
 
-    await notify(ctx, {
-      userId: account.primaryContact.userId,
-      kind: 'topup-approved',
-      accountId: account._id,
-      accountName: account.name,
-      amount: topup.amount
-    })
-
     return null
+  }
+})
+
+/**
+ * The approved top-ups the caller can claim, across every house they are the
+ * linked contact of, oldest first. Narrow on purpose: the payment reference and
+ * the gods' identifiers are the console's business, not the house's.
+ */
+export const claimable = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      id: v.id('topupRequests'),
+      accountId: v.id('accounts'),
+      accountName: v.string(),
+      amount: v.number(),
+      approvedAt: v.number()
+    })
+  ),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new ConvexError('Unauthorized.')
+
+    const accounts = await ctx.db
+      .query('accounts')
+      .withIndex('by_primaryContact_tokenIdentifier', (q) =>
+        q.eq('primaryContact.tokenIdentifier', identity.tokenIdentifier)
+      )
+      .take(CLAIMABLE_ACCOUNT_LIMIT)
+
+    const rows = []
+    for (const account of accounts) {
+      // A suspended or closed house could not claim, so it is not offered one.
+      if (!canUseAccount(account.status)) continue
+
+      const requests = await ctx.db
+        .query('topupRequests')
+        .withIndex('by_accountId_and_status', (q) => q.eq('accountId', account._id).eq('status', 'approved'))
+        .take(CLAIMABLE_PER_ACCOUNT_LIMIT)
+
+      for (const request of requests) {
+        // Approved before claiming existed: already minted, nothing left to take.
+        if (request.txnId !== null) continue
+        rows.push({
+          id: request._id,
+          accountId: account._id,
+          accountName: account.name,
+          amount: request.amount,
+          approvedAt: request.decidedAt ?? request.updatedAt
+        })
+      }
+    }
+
+    return rows.sort((a, b) => a.approvedAt - b.approvedAt)
   }
 })
 

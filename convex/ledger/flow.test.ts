@@ -43,6 +43,8 @@ test('opening grant to partner reads to legacy migration', async () => {
     .withIdentity(god)
     .mutation(api.money.topups.request, { accountId, amount: 25_000, paymentReference: 'MPESA-1' })
   await t.withIdentity(godB).mutation(api.money.topups.approve, { id: requestId })
+  // Approval only makes it Ana's to take; the float moves when she claims it.
+  await asAna.mutation(api.money.topups.claim, { id: requestId })
 
   const { float } = await asAna.query(api.ledger.q.partnerWallets, { accountId })
   expect(float).toMatchObject({ kind: 'partnerFloat', available: 75_000 })

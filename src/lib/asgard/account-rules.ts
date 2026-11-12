@@ -39,6 +39,11 @@ export const topupApprovalRules = (requireSecondGod: boolean): AccountRule[] => 
         value: 'Any god, including the one who filed it',
         detail: 'A rejection needs a reason. The record still names who filed and who decided.'
       },
+  {
+    label: 'Credits reach the float',
+    value: 'When the account’s contact claims it',
+    detail: 'Approval notifies the contact. Only a linked contact of a confirmed or active account can claim.'
+  },
   { label: 'Cancel', value: 'Only the god who filed it' },
   { label: 'Closed accounts', value: 'Cannot be topped up' },
   { label: 'Switch the second-god check', value: 'Top god only', detail: 'Every switch is logged in Activity.' }

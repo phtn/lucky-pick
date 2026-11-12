@@ -82,6 +82,23 @@ describe('buildAccountActivity', () => {
     )
   })
 
+  test('a claimed top-up shows its filing, its approval and its claim', () => {
+    const { events, pending } = buildAccountActivity(
+      [account('a')],
+      [topup('t1', 'a', { status: 'claimed', decidedAt: 500, claimedAt: 650 } as Partial<AccountTopup>)]
+    )
+
+    assert.equal(pending.length, 0)
+    assert.deepEqual(
+      events.slice(0, 3).map((event) => [event.kind, event.at]),
+      [
+        ['topup-claimed', 650],
+        ['topup-approved', 500],
+        ['topup-filed', 200]
+      ]
+    )
+  })
+
   test('waiting requests are ordered oldest first', () => {
     const { pending } = buildAccountActivity(
       [account('a')],

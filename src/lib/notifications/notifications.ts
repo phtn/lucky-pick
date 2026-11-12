@@ -59,9 +59,10 @@ function copyFor(row: NotificationRow): Copy {
     case 'topup-approved':
       return {
         title: `Top-up approved for ${name}`,
+        // Approval adds nothing by itself: the contact claims it on /me, which is where this leads.
         // A null amount is omitted rather than shown as "0 CR", which would contradict "approved".
-        detail: row.amount === null ? null : `${formatAccountCredits(row.amount)} CR was added.`,
-        href: null
+        detail: row.amount === null ? null : `${formatAccountCredits(row.amount)} CR is ready to claim.`,
+        href: '/me'
       }
     case 'topup-rejected':
       return { title: `Top-up rejected for ${name}`, detail: 'No credits were added.', href: null }

@@ -1,13 +1,19 @@
 import { v } from 'convex/values'
 
 /**
- * A top-up is maker-checker: one god records the payment, another approves it,
- * and only approval mints. `rejected` and `cancelled` are separate so the
- * history says whether a checker refused it or the maker withdrew it.
+ * A top-up is maker-checker, then claimed: one god records the payment, another
+ * approves it, and the house's own contact claims it. Only the claim mints, so
+ * `approved` means "waiting to be claimed" and `claimed` means the credits are
+ * in the float. `rejected` and `cancelled` are separate so the history says
+ * whether a checker refused it or the maker withdrew it.
+ *
+ * Requests approved before claiming existed minted on approval. They are still
+ * `approved`, and are told apart by already having a `txnId`.
  */
 export const topupStatusSchema = v.union(
   v.literal('pending'),
   v.literal('approved'),
+  v.literal('claimed'),
   v.literal('rejected'),
   v.literal('cancelled')
 )
@@ -24,8 +30,13 @@ export const topupRequestFields = {
   checkerTokenIdentifier: v.union(v.string(), v.null()),
   decisionNote: v.union(v.string(), v.null()),
   decidedAt: v.union(v.number(), v.null()),
-  // Set on approval: the mint this request produced, so the two can be traced both ways.
+  // Set when the credits are minted, which is the claim: the mint this request
+  // produced, so the two can be traced both ways.
   txnId: v.union(v.id('ledgerTransactions'), v.null()),
+  // When the house's contact claimed it, and their tokenIdentifier. Optional:
+  // requests from before claiming existed have neither.
+  claimedAt: v.optional(v.number()),
+  claimedBy: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number()
 }

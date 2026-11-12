@@ -22,19 +22,33 @@ export const LEDGER_KIND_LABEL: Record<LedgerKind, string> = {
   migration: 'Migration'
 }
 
+/**
+ * `approved` is not the end of a top-up: the credits move only when the house's
+ * contact claims it, so the chip says what it is still waiting for.
+ */
 export const TOPUP_STATUS_LABEL: Record<TopupStatus, string> = {
   pending: 'Pending',
-  approved: 'Approved',
+  approved: 'Awaiting claim',
+  claimed: 'Claimed',
   rejected: 'Rejected',
   cancelled: 'Cancelled'
 }
 
 export const TOPUP_STATUS_TONE: Record<TopupStatus, string> = {
   pending: 'border-orange-400/25 bg-orange-500/8 text-orange-700 dark:text-orange-300',
-  approved: 'border-emerald-500/25 bg-emerald-500/8 text-emerald-600 dark:text-emerald-400',
+  approved: 'border-sky-500/25 bg-sky-500/8 text-sky-700 dark:text-sky-300',
+  claimed: 'border-emerald-500/25 bg-emerald-500/8 text-emerald-600 dark:text-emerald-400',
   rejected: 'border-destructive/25 bg-destructive/8 text-destructive',
   cancelled: 'border-border/60 bg-foreground/5 text-muted-foreground'
 }
+
+/**
+ * The status a top-up reads as. Requests approved before claiming existed
+ * minted on approval: they are stored as `approved` but already carry the mint,
+ * so they read as claimed rather than as waiting on a claim that cannot happen.
+ */
+export const topupDisplayStatus = (topup: { status: TopupStatus; txnId: string | null }): TopupStatus =>
+  topup.status === 'approved' && topup.txnId !== null ? 'claimed' : topup.status
 
 const groupedNumber = (value: number) => value.toLocaleString('en-US')
 

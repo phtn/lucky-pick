@@ -68,16 +68,16 @@ if user !== null
       ~ aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
       ~ )
       div(className={cn("flex aspect-square size-6 items-center justify-center", {'opacity-50': loading || unread < 1})})
-        Icon(name='bell' className={cn('size-9 md:size-4.5')})
+        Icon(name='bell' className={cn('size-9 md:size-5')})
       if unread > 0
-        span(className="absolute right-1.5 top-1.5 flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 font-mono text-[10px] font-bold leading-4 text-white") #{unread > 99 ? '99+' : unread}
+        span(className="absolute right-1 top-0.75 flex min-w-3 items-center justify-center rounded-full bg-destructive px-1 font-mono text-[10px] font-bold leading-3.5 text-white") #{unread > 99 ? '99+' : unread}
     DropdownMenuContent(className="min-w-64 max-w-80 bg-background" align="end" side="bottom" sideOffset={4})
       DropdownMenuGroup
         DropdownMenuLabel(className="font-normal text-xs text-muted-foreground opacity-80") Notifications
         DropdownMenuSeparator
         each item in items key item.id
           DropdownMenuItem(onClick={() => void handleSelect(item)} className="items-start gap-2 p-2 hover:bg-foreground/10!")
-            span(className={cn('mt-1.5 size-2 shrink-0 rounded-full', item.isUnread ? 'bg-accent' : 'bg-transparent')} aria-hidden="true")
+            span(className={cn('mt-1.5 size-2 shrink-0 rounded-full', item.isUnread ? 'bg-destructive' : 'bg-transparent')} aria-hidden="true")
             div(className='min-w-0 flex-1')
               span(className={cn('block text-sm', item.isUnread ? 'font-medium' : 'text-muted-foreground')}) #{item.title}
               if item.detail !== null

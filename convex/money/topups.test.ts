@@ -4,21 +4,32 @@ import { expect, test } from 'vitest'
 import { api } from '../_generated/api'
 import type { Id } from '../_generated/dataModel'
 import { auditWallets } from '../ledger/audit'
-import { god, godB, staff, topg } from '../lib/testIdentities'
+import { god, godB, member, staff, topg } from '../lib/testIdentities'
 import schema from '../schema'
 import { createTopupRequest } from './topups'
 
 // A root-absolute glob: `../**/*.ts` keys this directory's own files as `./x.ts`, which convex-test cannot place.
 const modules = import.meta.glob('/convex/**/*.ts')
 
+const ana = member('ana', 'ana@example.com')
+const bo = member('bo', 'bo@example.com')
+
 const setup = async () => {
   const t = convexTest(schema, modules)
   const accountId = await t
     .withIdentity(god)
     .mutation(api.accounts.m.create, { name: 'Ana Store', primaryContact: { name: 'Ana', email: 'ana@example.com' } })
+  // Signing in links Ana to the house by her verified email, which is what lets her claim.
+  await t.withIdentity(ana).mutation(api.users.m.ensureCurrent, {})
   await t.run((ctx) => ctx.db.patch(accountId, { status: 'active' }))
   return { t, accountId }
 }
+
+const claim = (t: ReturnType<typeof convexTest>, id: Id<'topupRequests'>, who = ana) =>
+  t.withIdentity(who).mutation(api.money.topups.claim, { id })
+
+const floatOf = (t: ReturnType<typeof convexTest>) =>
+  t.run(async (ctx) => (await ctx.db.query('wallets').collect()).find((w) => w.kind === 'partnerFloat')!.available)
 
 const request = (
   t: ReturnType<typeof convexTest>,
@@ -35,11 +46,17 @@ const counts = (t: ReturnType<typeof convexTest>) =>
     entries: (await ctx.db.query('ledgerEntries').collect()).length
   }))
 
-test('approving mints into the partner float', async () => {
+test('approving mints nothing; the contact claiming it mints into the partner float', async () => {
   const { t, accountId } = await setup()
   const id = await request(t, accountId, 5_000)
 
   await t.withIdentity(godB).mutation(api.money.topups.approve, { id, decisionNote: 'Seen in the bank.' })
+
+  expect(await floatOf(t)).toBe(0)
+  expect(await counts(t)).toMatchObject({ txns: 0, entries: 0 })
+  expect(await t.run((ctx) => ctx.db.get('topupRequests', id))).toMatchObject({ status: 'approved', txnId: null })
+
+  await claim(t, id)
 
   const state = await t.run(async (ctx) => {
     const wallets = await ctx.db.query('wallets').collect()
@@ -53,12 +70,14 @@ test('approving mints into the partner float', async () => {
   expect(state.float).toBe(5_000)
   expect(state.issuance).toBe(-5_000)
   expect(state.doc).toMatchObject({
-    status: 'approved',
+    status: 'claimed',
     currency: 'PHP',
     makerTokenIdentifier: god.tokenIdentifier,
     checkerTokenIdentifier: godB.tokenIdentifier,
-    decisionNote: 'Seen in the bank.'
+    decisionNote: 'Seen in the bank.',
+    claimedBy: ana.tokenIdentifier
   })
+  expect(state.doc.claimedAt).toBeTypeOf('number')
   expect(state.doc.txnId).not.toBeNull()
   expect(state.doc.decidedAt).not.toBeNull()
   expect(state.audit).toEqual({ total: 0, mismatched: [] })
@@ -78,7 +97,7 @@ test('maker cannot approve own request', async () => {
   expect(await counts(t)).toMatchObject({ txns: 0, entries: 0 })
 })
 
-test('approving twice mints once', async () => {
+test('approving twice and claiming twice mints once', async () => {
   const { t, accountId } = await setup()
   const id = await request(t, accountId)
   await t.withIdentity(godB).mutation(api.money.topups.approve, { id })
@@ -86,6 +105,8 @@ test('approving twice mints once', async () => {
   await expect(t.withIdentity(godB).mutation(api.money.topups.approve, { id })).rejects.toThrow(
     'This top-up is already approved.'
   )
+  await claim(t, id)
+  await expect(claim(t, id)).rejects.toThrow('This top-up has already been claimed.')
   const mints = await t.run(async (ctx) =>
     (await ctx.db.query('ledgerTransactions').collect()).filter((txn) => txn.kind === 'mint')
   )
@@ -265,6 +286,7 @@ test('with the rule off the maker may approve or reject their own request', asyn
 
   await t.withIdentity(god).mutation(api.money.topups.approve, { id: approved })
   await t.withIdentity(god).mutation(api.money.topups.reject, { id: rejected, decisionNote: 'Typo.' })
+  await claim(t, approved)
 
   const state = await t.run(async (ctx) => ({
     float: (await ctx.db.query('wallets').collect()).find((w) => w.kind === 'partnerFloat')!.available,
@@ -275,7 +297,7 @@ test('with the rule off the maker may approve or reject their own request', asyn
   expect(state.float).toBe(5_000)
   // The record still names the same god twice, which is what marks a self-approval.
   expect(state.approved).toMatchObject({
-    status: 'approved',
+    status: 'claimed',
     makerTokenIdentifier: god.tokenIdentifier,
     checkerTokenIdentifier: god.tokenIdentifier
   })
@@ -307,4 +329,51 @@ test('every flip of the rule is logged, newest first, and a no-op is not', async
   const changes = await t.withIdentity(staff).query(api.money.topups.policyChanges, {})
   expect(changes.map((change) => change.requireSecondGod)).toEqual([true, false])
   expect(changes[0]).toMatchObject({ actorTokenIdentifier: topg.tokenIdentifier, actorLabel: 'topg' })
+})
+
+test('only the house’s linked contact can claim, and only what was approved', async () => {
+  const { t, accountId } = await setup()
+  const pending = await request(t, accountId, 100)
+  const approved = await request(t, accountId, 5_000)
+  await t.withIdentity(godB).mutation(api.money.topups.approve, { id: approved })
+  await t.withIdentity(bo).mutation(api.users.m.ensureCurrent, {})
+
+  // Neither a stranger nor the gods who made and checked it may take the credits.
+  for (const who of [bo, god, godB]) {
+    await expect(t.withIdentity(who).mutation(api.money.topups.claim, { id: approved })).rejects.toThrow('Unauthorized.')
+  }
+  await expect(t.mutation(api.money.topups.claim, { id: approved })).rejects.toThrow('Unauthorized.')
+  await expect(claim(t, pending)).rejects.toThrow('This top-up is pending and cannot be claimed.')
+  expect(await floatOf(t)).toBe(0)
+
+  // A suspended house cannot claim until it is usable again.
+  await t.run((ctx) => ctx.db.patch(accountId, { status: 'suspended' }))
+  await expect(claim(t, approved)).rejects.toThrow('Unauthorized.')
+  await t.run((ctx) => ctx.db.patch(accountId, { status: 'active' }))
+
+  await claim(t, approved)
+  expect(await floatOf(t)).toBe(5_000)
+})
+
+test('claimable lists a contact’s approved, unminted top-ups and nobody else’s', async () => {
+  const { t, accountId } = await setup()
+  await request(t, accountId, 100)
+  const approved = await request(t, accountId, 5_000)
+  const taken = await request(t, accountId, 900)
+  await t.withIdentity(godB).mutation(api.money.topups.approve, { id: approved })
+  await t.withIdentity(godB).mutation(api.money.topups.approve, { id: taken })
+  await claim(t, taken)
+  // A request approved before claiming existed: still `approved`, but already minted.
+  const legacy = await request(t, accountId, 300)
+  const txnId = (await t.run((ctx) => ctx.db.get('topupRequests', taken)))!.txnId
+  await t.run((ctx) => ctx.db.patch('topupRequests', legacy, { status: 'approved', decidedAt: 1, txnId }))
+
+  expect(await t.withIdentity(ana).query(api.money.topups.claimable, {})).toMatchObject([
+    { id: approved, accountId, accountName: 'Ana Store', amount: 5_000 }
+  ])
+  expect(await t.withIdentity(bo).query(api.money.topups.claimable, {})).toEqual([])
+  await expect(claim(t, legacy)).rejects.toThrow('This top-up has already been claimed.')
+
+  await t.run((ctx) => ctx.db.patch(accountId, { status: 'suspended' }))
+  expect(await t.withIdentity(ana).query(api.money.topups.claimable, {})).toEqual([])
 })

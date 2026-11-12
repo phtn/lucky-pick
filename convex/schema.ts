@@ -55,7 +55,8 @@ export default defineSchema({
     .index('by_txnId', ['txnId']),
   topupRequests: defineTable(topupRequestFields)
     .index('by_status_and_createdAt', ['status', 'createdAt'])
-    .index('by_accountId_and_createdAt', ['accountId', 'createdAt']),
+    .index('by_accountId_and_createdAt', ['accountId', 'createdAt'])
+    .index('by_accountId_and_status', ['accountId', 'status']),
   // A single row; see `topupPolicyFields`.
   topupPolicy: defineTable(topupPolicyFields),
   topupPolicyChanges: defineTable(topupPolicyChangeFields),

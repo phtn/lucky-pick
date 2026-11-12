@@ -8,7 +8,7 @@ import type { TabItem } from '@/components/ui/Tabs.btsx'
 import { Icon } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { formatAccountCredits } from '@/lib/accounts/accounts'
-import { LEDGER_KIND_LABEL, TOPUP_STATUS_LABEL, TOPUP_STATUS_TONE, formatLedgerAmount, formatLedgerLabel, formatWalletAvailable } from '@/lib/asgard/account-detail'
+import { LEDGER_KIND_LABEL, TOPUP_STATUS_LABEL, TOPUP_STATUS_TONE, formatLedgerAmount, formatLedgerLabel, formatWalletAvailable, topupDisplayStatus } from '@/lib/asgard/account-detail'
 import { fetchAccount, formatAccountDate, formatContactName, getAccountInitials, submitTopupAction, type AccountDetail, type TopupAction } from '@/lib/asgard/accounts'
 import { asgardAccountsPath } from '@/lib/asgard/console-paths'
 import { isAbortError, readErrorMessage } from '@/lib/asgard/errors'
@@ -176,7 +176,7 @@ component TopupsTab
     form(className={cn(panelClass, 'grid gap-3 px-3.5 py-3')} onSubmit={file})
       div(className='flex flex-wrap items-baseline justify-between gap-2')
         h2(className={readingLabelClass}) Add credits
-        p(className='font-mono text-2xs text-muted-foreground') #{detail.requireSecondGod ? 'Credits reach the float once a different god approves the request.' : 'Credits reach the float once the request is approved.'}
+        p(className='font-mono text-2xs text-muted-foreground') #{detail.requireSecondGod ? 'A different god approves the request, then the account’s contact claims the credits.' : 'Once the request is approved, the account’s contact claims the credits.'}
       if isClosed
         p(className='text-sm text-muted-foreground') This account is closed, so it cannot be topped up.
       else
@@ -227,7 +227,7 @@ component TopupsTab
             div(className='flex flex-wrap items-center gap-x-3 gap-y-1')
               span(className='w-24 shrink-0 font-mono text-2xs text-muted-foreground') #{formatAccountDate(topup.createdAt)}
               span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{topup.paymentReference || topup.note || 'No reference'}
-              span(className={cn(chipClass, 'shrink-0', TOPUP_STATUS_TONE[topup.status])}) #{TOPUP_STATUS_LABEL[topup.status]}
+              span(className={cn(chipClass, 'shrink-0', TOPUP_STATUS_TONE[topupDisplayStatus(topup)])}) #{TOPUP_STATUS_LABEL[topupDisplayStatus(topup)]}
               span(className='w-24 shrink-0 text-right font-mono text-sm text-foreground') #{topup.amount.toLocaleString('en-US')}
             if topup.status === 'pending'
               div(className='flex flex-wrap items-center justify-end gap-2')
@@ -253,7 +253,7 @@ component TopupsTab
                   fragment
                     Button(type='button' size='xs' variant='destructive' disabled={busy !== null} onClick={() => startReject(topup._id)}) Reject
                     Button(type='button' size='xs' disabled={busy !== null} onClick={() => run(topup._id, { action: 'approve', id: topup._id })})
-                      | #{busy === topup._id ? 'Working…' : `Approve +${topup.amount.toLocaleString('en-US')}`}
+                      | #{busy === topup._id ? 'Working…' : `Approve ${topup.amount.toLocaleString('en-US')}`}
 
 setup
   // `strict: false` because this console builds its route tree by hand rather

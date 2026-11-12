@@ -12,6 +12,7 @@ export type AccountActivityKind =
   | 'account-closed'
   | 'topup-filed'
   | 'topup-approved'
+  | 'topup-claimed'
   | 'topup-rejected'
   | 'topup-cancelled'
   | 'rule-on'
@@ -45,6 +46,7 @@ export const ACCOUNT_ACTIVITY_LABEL: Record<AccountActivityKind, string> = {
   'account-closed': 'Account closed',
   'topup-filed': 'Top-up filed',
   'topup-approved': 'Top-up approved',
+  'topup-claimed': 'Top-up claimed',
   'topup-rejected': 'Top-up rejected',
   'topup-cancelled': 'Top-up cancelled',
   'rule-on': 'Second god required',
@@ -56,15 +58,18 @@ export const ACCOUNT_ACTIVITY_TONE: Record<AccountActivityKind, string> = {
   'account-confirmed': 'bg-emerald-500',
   'account-closed': 'bg-muted-foreground/50',
   'topup-filed': 'bg-orange-400',
-  'topup-approved': 'bg-emerald-500',
+  'topup-approved': 'bg-sky-500',
+  'topup-claimed': 'bg-emerald-500',
   'topup-rejected': 'bg-destructive',
   'topup-cancelled': 'bg-muted-foreground/50',
   'rule-on': 'bg-emerald-500',
   'rule-off': 'bg-destructive'
 }
 
+// A claimed top-up was approved first, so its decision still reads as an approval.
 const DECISION_KIND: Record<Exclude<AccountTopup['status'], 'pending'>, AccountActivityKind> = {
   approved: 'topup-approved',
+  claimed: 'topup-approved',
   rejected: 'topup-rejected',
   cancelled: 'topup-cancelled'
 }
@@ -124,10 +129,21 @@ export function buildAccountActivity(
     } else if (topup.decidedAt !== null) {
       events.push({
         ...base,
-        id: `${topup._id}:${topup.status}`,
+        id: `${topup._id}:decided`,
         kind: DECISION_KIND[topup.status],
         at: topup.decidedAt,
         detail: topup.decisionNote ?? topup.paymentReference
+      })
+    }
+
+    // The claim is its own moment: it is when the credits reached the float.
+    if (topup.claimedAt !== undefined) {
+      events.push({
+        ...base,
+        id: `${topup._id}:claimed`,
+        kind: 'topup-claimed',
+        at: topup.claimedAt,
+        detail: topup.paymentReference
       })
     }
   }

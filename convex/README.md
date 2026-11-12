@@ -18,7 +18,7 @@ An arrow points from the table that stores an id to the table it refers to.
 | `wallets` | A balance, split into `available` and `held`. | `ledger/d.ts` |
 | `ledgerTransactions` | The immutable header of one money movement. | `ledger/d.ts` |
 | `ledgerEntries` | One signed leg of a transaction, in one wallet bucket. | `ledger/d.ts` |
-| `topupRequests` | A request to buy credits for an account, recorded by one god and approved by another. | `money/d.ts` |
+| `topupRequests` | A request to buy credits for an account: filed by one god, approved by another, then claimed by the account's contact, which is what mints. | `money/d.ts` |
 | `topupPolicy` | The single row holding the switchable top-up rule: whether a different god must decide a request. | `money/d.ts` |
 | `topupPolicyChanges` | One logged switch of that rule, with who made it. Never trimmed. | `money/d.ts` |
 | `games` | One of the five games as the house configures it: price grid, stakes, prizes. | `games/d.ts` |
@@ -50,7 +50,7 @@ An arrow points from the table that stores an id to the table it refers to.
 - `ledgerTransactions.accountId` → `accounts` (nullable): the house the movement concerns.
 - `ledgerTransactions.reversesTxnId` → `ledgerTransactions`: set on a reversal, pointing at the transaction it undoes.
 - `ledgerTransactions.ref` is a tagged pointer to the business record behind the movement. Today that is `{ type: 'topup', id }` → `topupRequests`, or `{ type: 'migration', id }` with the id of a retired `credits` row as a string.
-- `topupRequests.accountId` → `accounts`, and `topupRequests.txnId` → `ledgerTransactions` once approved. Together with `ref`, a top-up and its mint can be traced in both directions.
+- `topupRequests.accountId` → `accounts`, and `topupRequests.txnId` → `ledgerTransactions` once claimed (`approved` only means it is waiting to be claimed; requests approved before claiming existed minted on approval and already carry a `txnId`). Together with `ref`, a top-up and its mint can be traced in both directions.
 - `topupPolicy` and `topupPolicyChanges` reference no other table. No `topupPolicy` row means the rule is on. Only a top god can switch it (`money.topups.setSecondGodRule`), and each switch adds a `topupPolicyChanges` row.
 
 ### Per-user activity
@@ -84,7 +84,7 @@ An arrow points from the table that stores an id to the table it refers to.
 | `wallets` | `by_accountId_and_kind`, `by_accountId_and_userId`, `by_userId`, `by_systemKey` |
 | `ledgerTransactions` | `by_idempotencyKey`, `by_accountId_and_createdAt`, `by_reversesTxnId` |
 | `ledgerEntries` | `by_walletId_and_createdAt`, `by_txnId` |
-| `topupRequests` | `by_status_and_createdAt`, `by_accountId_and_createdAt` |
+| `topupRequests` | `by_status_and_createdAt`, `by_accountId_and_createdAt`, `by_accountId_and_status` |
 | `topupPolicy`, `topupPolicyChanges` | none; read in creation order |
 | `games` | `by_gameId`, `by_order` |
 | `practicePlays` | `by_userId_and_drawnAt` |

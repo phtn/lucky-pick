@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
-import { formatLedgerAmount, formatLedgerLabel, formatWalletAvailable } from './account-detail'
+import { formatLedgerAmount, formatLedgerLabel, formatWalletAvailable, topupDisplayStatus } from './account-detail'
 
 describe('Ledger amounts', () => {
   test('carries the sign, because a float row reads as a movement', () => {
@@ -38,5 +38,21 @@ describe('Wallet balances', () => {
     // A missing wallet and an empty one are different facts, and an account
     // page that shows 0 for both hides one of them.
     assert.equal(formatWalletAvailable(null), '—')
+  })
+})
+
+describe('Top-up status as shown', () => {
+  test('an approved top-up that has not minted is still waiting on its claim', () => {
+    assert.equal(topupDisplayStatus({ status: 'approved', txnId: null }), 'approved')
+  })
+
+  test('one approved before claiming existed already minted, so it reads as claimed', () => {
+    assert.equal(topupDisplayStatus({ status: 'approved', txnId: 'txn1' }), 'claimed')
+  })
+
+  test('every other status reads as itself', () => {
+    assert.equal(topupDisplayStatus({ status: 'pending', txnId: null }), 'pending')
+    assert.equal(topupDisplayStatus({ status: 'claimed', txnId: 'txn1' }), 'claimed')
+    assert.equal(topupDisplayStatus({ status: 'rejected', txnId: null }), 'rejected')
   })
 })

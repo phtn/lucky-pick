@@ -255,7 +255,8 @@ export const remove = mutation({
     }
 
     // What is left is unfunded: empty wallets and requests that never minted
-    // (an approved request would have left entries, so it was refused above).
+    // (a claimed request would have left entries, so it was refused above; one
+    // approved but never claimed minted nothing and goes with the rest).
     for (const wallet of [float, earnings]) {
       if (wallet) await ctx.db.delete(wallet._id)
     }

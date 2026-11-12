@@ -115,6 +115,7 @@ setup
   const movements = useConvexQuery(api.ledger.q.myLedgerHistory, MOVEMENT_ARGS, { enabled: isSignedIn })
   const plays = useConvexQuery(api.plays.q.mine, PLAYS_ARGS, { enabled: isSignedIn })
   const myHouses = useConvexQuery(api.accounts.q.myHouses, {}, { enabled: isSignedIn })
+  const claimableTopups = useConvexQuery(api.money.topups.claimable, {}, { enabled: isSignedIn })
 
   const now = Date.now()
   const entries = movements ?? EMPTY_MOVEMENTS
@@ -186,6 +187,36 @@ setup
   // overwrite the first's busy state or have the first's `finally` clear it.
   const [confirmingHouseIds, setConfirmingHouseIds] = useState<ReadonlySet<string>>(new Set())
   const [houseError, setHouseError] = useState<string | null>(null)
+
+  // Approved top-ups for the caller's houses. Like the houses above, no answer
+  // and an empty answer both show nothing: most players front no house.
+  const topupsToClaim = claimableTopups ?? []
+  const [claimingTopupIds, setClaimingTopupIds] = useState<ReadonlySet<string>>(new Set())
+  const [claimError, setClaimError] = useState<string | null>(null)
+
+  const claimTopup = useCallback(async (id: string) => {
+    setClaimingTopupIds((ids) => new Set(ids).add(id))
+    setClaimError(null)
+    try {
+      // The list is a live query, so a claimed top-up leaves it without a refetch here.
+      await convexClient?.mutation(api.money.topups.claim, { id: id as Id<'topupRequests'> })
+    } catch (error) {
+      const data = (error as { data?: unknown }).data
+      setClaimError(
+        data === 'Unauthorized.'
+          ? 'That top-up cannot be claimed from this account right now. Check that the house is active.'
+          : typeof data === 'string'
+            ? data
+            : 'Could not claim that top-up. Try again.'
+      )
+    } finally {
+      setClaimingTopupIds((ids) => {
+        const next = new Set(ids)
+        next.delete(id)
+        return next
+      })
+    }
+  }, [])
 
   const confirmHouse = useCallback(async (accountId: string) => {
     setConfirmingHouseIds((ids) => new Set(ids).add(accountId))
@@ -317,7 +348,7 @@ section(className='relative overview-page pb-16')
         if signInError
           p(className='mt-4 text-xs text-destructive') #{signInError}
     else
-      div(className='overview-sections px-10')
+      div#profile-panel(className='overview-sections px-10')
         // Not collapsible, and first: this is the only moment the key exists,
         // and a panel that can be folded away is one that can be missed.
         if pendingTronAccount
@@ -373,6 +404,24 @@ section(className='relative overview-page pb-16')
                       span #{confirmingHouseIds.has(house.id) ? 'Confirming…' : 'Confirm'}
             if houseError
               p(className='mt-4 text-xs text-destructive') #{houseError}
+        if topupsToClaim.length > 0
+          Panel(title='Top-ups to claim' description='Approved credits waiting for you to take them into your house.' meta={formatCount(topupsToClaim.length)})
+            ul(className='overview-feed')
+              each topup in topupsToClaim key topup.id
+                li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
+                  div(className='min-w-0 flex-1')
+                    p(className='truncate text-sm text-foreground') #{topup.amount.toLocaleString('en-US')} CR
+                    p(className='truncate text-xs text-muted-foreground') #{topup.accountName}
+                  button(
+                    ~ type='button'
+                    ~ onClick={() => void claimTopup(topup.id)}
+                    ~ disabled={claimingTopupIds.has(topup.id)}
+                    ~ aria-busy={claimingTopupIds.has(topup.id) || undefined}
+                    ~ className='inline-flex h-9 items-center rounded-full bg-foreground px-4 text-xs font-medium text-background transition-opacity disabled:opacity-60'
+                    ~ )
+                    span #{claimingTopupIds.has(topup.id) ? 'Claiming…' : 'Claim'}
+            if claimError
+              p(className='mt-4 text-xs text-destructive') #{claimError}
         Panel(title='Credits' description='What you hold, and how it has moved.' meta={!hasReadMovements ? 'Not read yet' : entries.length === 0 ? 'No movements' : `Newest ${formatCount(entries.length)}`})
           div(className='grid gap-10 lg:grid-cols-5 lg:gap-8')
             div(className='lg:col-span-2')

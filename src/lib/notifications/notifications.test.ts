@@ -32,7 +32,7 @@ describe('toNotificationItems', () => {
     const activated = only(row('house-activated'))
     assert.deepEqual([activated.title, activated.detail], ['Lucky Hall is active', 'Players can choose it again.'])
     const approved = only(row('topup-approved', { amount: 2_000_000 }))
-    assert.deepEqual([approved.title, approved.detail], ['Top-up approved for Lucky Hall', '2M CR was added.'])
+    assert.deepEqual([approved.title, approved.detail], ['Top-up approved for Lucky Hall', '2M CR is ready to claim.'])
     const rejected = only(row('topup-rejected'))
     assert.deepEqual([rejected.title, rejected.detail], ['Top-up rejected for Lucky Hall', 'No credits were added.'])
     const reversed = only(row('transaction-reversed'))
@@ -47,15 +47,15 @@ describe('toNotificationItems', () => {
   })
 
   test('formats the amount with formatAccountCredits', () => {
-    assert.equal(only(row('topup-approved', { amount: 500_000 })).detail, '500K CR was added.')
-    assert.equal(only(row('topup-approved', { amount: 1_234 })).detail, `${(1_234).toLocaleString()} CR was added.`)
+    assert.equal(only(row('topup-approved', { amount: 500_000 })).detail, '500K CR is ready to claim.')
+    assert.equal(only(row('topup-approved', { amount: 1_234 })).detail, `${(1_234).toLocaleString()} CR is ready to claim.`)
   })
 
   test('omits the detail of an approved top-up with no amount rather than claiming 0 CR', () => {
     assert.equal(only(row('topup-approved', { amount: null })).detail, null)
   })
 
-  test('links house kinds to /me and leaves the rest null', () => {
+  test('links house kinds and a claimable top-up to /me and leaves the rest null', () => {
     const kinds: NotificationKind[] = [
       'house-awaiting-confirmation',
       'house-suspended',
@@ -70,7 +70,7 @@ describe('toNotificationItems', () => {
       'house-suspended': '/me',
       'house-closed': '/me',
       'house-activated': '/me',
-      'topup-approved': null,
+      'topup-approved': '/me',
       'topup-rejected': null,
       'transaction-reversed': null
     })

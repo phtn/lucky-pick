@@ -191,6 +191,7 @@ test("reversing a transaction notifies the account's contact", async () => {
   await setStatus(t, accountId, 'active')
   const id = await topupFor(t, accountId)
   await t.withIdentity(godB).mutation(api.money.topups.approve, { id })
+  await t.withIdentity(ana).mutation(api.money.topups.claim, { id })
   const txnId = (await t.run((ctx) => ctx.db.get('topupRequests', id)))!.txnId!
   await t.withIdentity(god).mutation(api.ledger.m.reverseTransaction, { txnId, memo: 'duplicate' })
   // A retry replays the reversal, so it must not tell the contact twice.

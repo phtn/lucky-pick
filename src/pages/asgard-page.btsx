@@ -33,7 +33,7 @@ module
   const navPages = [
     { to: '', label: 'Overview', icon: 'chart', exact: true },
     { to: '/accounts', label: 'Accounts', icon: 'account' },
-    { to: '/games', label: 'Games', icon: 'play' }
+    { to: '/games', label: 'Games', icon: 'dice' }
   ] as AsgardNavItem[]
 
   const toNavItems = (base: string): AsgardNavItem[] =>
