@@ -1,5 +1,7 @@
+import { Link } from '@octanejs/tanstack-router'
 import { Masthead, Panel } from '@/components/overview'
 import { useConvexQuery } from '@/hooks/use-convex-query'
+import { adminPlayerPath } from '@/lib/admin/console-paths'
 import { useFirebaseUser } from '@/lib/firebase/auth'
 import { Icon } from '@/lib/icons'
 import { formatCount } from '@/lib/overview/metrics'
@@ -15,6 +17,7 @@ module
 setup
   const { user, isLoading } = useFirebaseUser()
   const isSignedIn = user !== null
+  const hostname = typeof window === 'undefined' ? '' : window.location.hostname
   // The query answers from the caller's own identity: it lists the players of
   // the houses they are the linked contact of, and nothing for anyone else. So
   // this page is safe on a console that does not yet check a session itself.
@@ -59,17 +62,22 @@ section(className='relative overview-page px-4 pb-16 md:px-6')
                   span(className={`${headClass} w-28 shrink-0 text-right`}) Balance
                 ul(className='overview-feed')
                   each player in house.players key player.userId
-                    li(className='flex items-center gap-x-4')
-                      div(className='flex min-w-0 flex-1 items-center gap-3')
-                        if player.imageUrl
-                          img(src={player.imageUrl} alt='' referrerPolicy='no-referrer' className='size-7 shrink-0 rounded-full border object-cover')
-                        else
-                          div(className='grid size-7 shrink-0 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
-                            Icon(name='person' size={14})
-                        p(className='truncate text-sm text-foreground') #{player.name}
-                      span(className='hidden w-28 shrink-0 text-right font-mono text-2xs text-muted-foreground md:inline') #{joinedFormatter.format(player.joinedAt)}
-                      span(className='hidden w-24 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground sm:inline') #{formatCredits(player.held)}
-                      span(className='w-28 shrink-0 text-right font-mono text-sm tabular-nums text-foreground') #{formatCredits(player.balance)}
+                    li
+                      Link(
+                        ~ to={adminPlayerPath(hostname, house.accountId, player.userId)}
+                        ~ aria-label={`Open ${player.name}`}
+                        ~ className='-mx-2 flex items-center gap-x-4 rounded-md px-2 py-1 transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                        ~ )
+                        div(className='flex min-w-0 flex-1 items-center gap-3')
+                          if player.imageUrl
+                            img(src={player.imageUrl} alt='' referrerPolicy='no-referrer' className='size-7 shrink-0 rounded-full border object-cover')
+                          else
+                            div(className='grid size-7 shrink-0 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
+                              Icon(name='person' size={14})
+                          p(className='truncate text-sm text-foreground') #{player.name}
+                        span(className='hidden w-28 shrink-0 text-right font-mono text-2xs text-muted-foreground md:inline') #{joinedFormatter.format(player.joinedAt)}
+                        span(className='hidden w-24 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground sm:inline') #{formatCredits(player.held)}
+                        span(className='w-28 shrink-0 text-right font-mono text-sm tabular-nums text-foreground') #{formatCredits(player.balance)}
                 if house.truncated
                   p(className='mt-4 text-xs text-muted-foreground') Showing the first #{formatCount(house.players.length)} players of this house.
 

@@ -1,0 +1,176 @@
+import { useState } from 'octane'
+import { Link, useParams } from '@octanejs/tanstack-router'
+import { Masthead, Panel, StatTile } from '@/components/overview'
+import Button from '@/components/ui/button.btsx'
+import Input from '@/components/ui/input.btsx'
+import { useConvexQuery } from '@/hooks/use-convex-query'
+import { adminPlayersPath } from '@/lib/admin/console-paths'
+import { formatLedgerAmount, formatLedgerLabel } from '@/lib/asgard/account-detail'
+import { convexClient } from '@/lib/convex-client'
+import { useFirebaseUser } from '@/lib/firebase/auth'
+import { Icon } from '@/lib/icons'
+import { isTopupAmount } from '@/lib/money/credits'
+import { formatCount, formatRelativeTime } from '@/lib/overview/metrics'
+import { cn } from '@/lib/utils'
+import { api } from '../../convex/_generated/api'
+import type { Id } from '../../convex/_generated/dataModel'
+
+module
+  const blankClass = 'rounded-lg border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground'
+  const labelClass = 'font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground'
+  const POSITIVE_TONE = 'text-emerald-700 dark:text-emerald-400'
+
+  const joinedFormatter = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  const formatCredits = (value: number) => `${value.toLocaleString('en-US')} CR`
+  const readInput = (event: Event) => (event.currentTarget as HTMLInputElement).value
+
+  /** Digits only, so `1,000` and `1000` are the same amount and `1e3` is not one. */
+  const readCredits = (text: string) => {
+    const digits = text.replace(/[,\s]/g, '')
+    return /^\d+$/.test(digits) ? Number(digits) : Number.NaN
+  }
+
+  // One id per press of the button: a retry of the same request replays on the
+  // server instead of paying the player twice.
+  const newRequestId = () =>
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
+
+setup
+  // `strict: false` because the console builds its route tree by hand, so the
+  // params are not statically known here.
+  const params = useParams({ strict: false }) as { accountId?: string; userId?: string }
+  const accountId = (params.accountId ?? '') as Id<'accounts'>
+  const userId = (params.userId ?? '') as Id<'users'>
+  const playersPath = adminPlayersPath(typeof window === 'undefined' ? '' : window.location.hostname)
+
+  const { user, isLoading } = useFirebaseUser()
+  const isSignedIn = user !== null
+  // Answers only for the house's own contact and only for someone who plays
+  // there. `null` is "no such player here"; `undefined` is no answer, which is
+  // also what a refused read looks like.
+  const player = useConvexQuery(api.ledger.q.playerAtMyHouse, { accountId, userId }, { enabled: isSignedIn })
+
+  const [amountText, setAmountText] = useState('')
+  const [note, setNote] = useState('')
+  const [isSending, setIsSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [sent, setSent] = useState<number | null>(null)
+
+  const amount = readCredits(amountText)
+  const floatAvailable = player?.floatAvailable ?? 0
+  const amountInvalid = amountText.trim().length > 0 && !isTopupAmount(amount)
+  const overFloat = isTopupAmount(amount) && amount > floatAvailable
+  const canSend = !isSending && isTopupAmount(amount) && !overFloat && player?.isFrozen === false
+  const now = Date.now()
+
+  const amountHint = amountInvalid
+    ? 'Enter a whole number of credits, at least 1.'
+    : overFloat
+      ? `The house holds ${formatCredits(floatAvailable)}, so it cannot give that much.`
+      : `Taken from ${player?.houseName ?? 'the house'}’s wallet balance: ${formatCredits(floatAvailable)} available.`
+
+  const send = async (event: Event) => {
+    event.preventDefault()
+    if (!canSend || !convexClient) return
+
+    setIsSending(true)
+    setError(null)
+    setSent(null)
+    try {
+      await convexClient.mutation(api.ledger.m.allocateToPlayer, {
+        accountId,
+        userId,
+        amount,
+        requestId: newRequestId(),
+        note: note.trim() || undefined
+      })
+      // The balances above are a live query, so they move on their own.
+      setSent(amount)
+      setAmountText('')
+      setNote('')
+    } catch (caught) {
+      const data = (caught as { data?: unknown }).data
+      setError(typeof data === 'string' && data !== 'Unauthorized.' ? data : 'Could not add those credits. Check that the house is active and try again.')
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+section(className='relative overview-page px-4 pb-16 md:px-6')
+  div(className='overview-content')
+    Link(to={playersPath} className='mb-4 inline-flex items-center gap-1.5 font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground')
+      Icon(name='chevron-right' size={12} className='rotate-180')
+      span Players
+
+    Masthead(
+      ~ eyebrow={player ? `Player · ${player.houseName}` : 'Player'}
+      ~ title={player?.name ?? 'Player'}
+      ~ description={player ? `Playing since ${joinedFormatter.format(player.joinedAt)}.` : 'One of your house’s players.'}
+      ~ )
+      if player?.imageUrl
+        img(src={player.imageUrl} alt='' referrerPolicy='no-referrer' className='size-10 shrink-0 rounded-full border object-cover')
+
+    div(className='overview-sections')
+      if !isSignedIn
+        p(className={blankClass}) #{isLoading ? 'Checking your session…' : 'Sign in as a banker to see this player.'}
+      elseif player === undefined
+        div(className='flex items-center gap-3 py-10')
+          Icon(name='spinner' size={16} className='animate-spin text-muted-foreground')
+          p(className='text-sm text-muted-foreground') Reading this player. If this does not finish, they may not be one of your players.
+      elseif player === null
+        p(className={blankClass}) This person does not play at that house.
+      else
+        fragment
+          div(className='overview-stats grid md:grid-cols-3')
+            StatTile(hero={true} label='Player balance' value={formatCredits(player.balance)} caption={player.isFrozen ? 'This wallet is frozen.' : 'Available to play with at your house.'})
+            StatTile(label='Held' value={formatCredits(player.held)} caption='Committed to open plays.')
+            StatTile(label='Your house wallet' value={formatCredits(player.floatAvailable)} caption='What you can still give out.')
+
+          Panel(title='Add credits' collapsible={false} description='Give this player credits out of your house’s wallet balance. The amount leaves your balance and lands in theirs at once.')
+            if player.isFrozen
+              p(className={blankClass}) This player’s wallet is frozen, so credits cannot be added to it.
+            else
+              form(className='grid gap-3' onSubmit={send})
+                div(className='grid gap-3 md:grid-cols-[12rem_1fr]')
+                  label(className='grid gap-1.5')
+                    span(className={labelClass}) Credits
+                    Input(
+                      ~ inputMode='numeric'
+                      ~ autoComplete='off'
+                      ~ placeholder='500'
+                      ~ value={amountText}
+                      ~ aria-invalid={amountInvalid || overFloat}
+                      ~ onInput={(event: Event) => setAmountText(readInput(event))}
+                      ~ )
+                  label(className='grid gap-1.5')
+                    span(className={labelClass}) Note
+                    Input(
+                      ~ autoComplete='off'
+                      ~ placeholder='Optional, shown on the movement'
+                      ~ value={note}
+                      ~ onInput={(event: Event) => setNote(readInput(event))}
+                      ~ )
+                div(className='flex flex-wrap items-center justify-between gap-3')
+                  p(className={cn('font-mono text-2xs', amountInvalid || overFloat ? 'text-destructive' : 'text-muted-foreground')}) #{amountHint}
+                  Button(type='submit' size='sm' disabled={!canSend})
+                    span #{isSending ? 'Adding…' : 'Add credits'}
+                if error
+                  p(className='text-sm text-destructive' role='alert') #{error}
+                if sent !== null
+                  p(className={cn('text-sm', POSITIVE_TONE)} role='status') #{formatCredits(sent)} added to #{player.name}.
+
+          Panel(title='Movements' collapsible={false} description='This player’s credits at your house, newest first.' meta={player.entries.length === 0 ? 'No movements' : `Newest ${formatCount(player.entries.length)}`})
+            if player.entries.length === 0
+              p(className={blankClass}) No credit has moved for this player at your house yet.
+            else
+              ul(className='overview-feed')
+                each entry in player.entries key entry._id
+                  li(className='flex flex-wrap items-center gap-x-3 gap-y-1')
+                    span(className='w-20 shrink-0 font-mono text-2xs text-muted-foreground') #{formatRelativeTime(entry.createdAt, now)}
+                    span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{formatLedgerLabel(entry)}
+                    span(className={cn('w-24 shrink-0 text-right font-mono text-sm tabular-nums', entry.amount < 0 ? 'text-destructive' : POSITIVE_TONE)}) #{formatLedgerAmount(entry.amount)}
+                    span(className='hidden w-24 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 md:inline') #{entry.balanceAfter.toLocaleString('en-US')}
+
+    div(aria-hidden={true} className='h-20 w-full')

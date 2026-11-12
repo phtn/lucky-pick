@@ -8,6 +8,28 @@ import { useGameSettings } from "@/hooks/use-game-settings";
 import { enabledBetTypes, enabledGameIds, stakesFor, ticketCostFor } from "@/lib/game-settings";
 import { evenOddPick, randomPick, randomPicks } from "@/lib/rng";
 import { formatPeso } from "@/lib/format";
+import { useConvexQuery } from "@/hooks/use-convex-query";
+import { convexClient } from "@/lib/convex-client";
+import { useFirebaseUser } from "@/lib/firebase/auth";
+import { api } from "../../convex/_generated/api";
+import { MAX_TICKETS_PER_PURCHASE } from "../../convex/tickets/d";
+
+module
+  const ticketTimeFormatter = new Intl.DateTimeFormat([], { hour: '2-digit', minute: '2-digit' });
+
+  // One id per press: a retried request replays on the server instead of
+  // buying the same tickets twice.
+  const newRequestId = () =>
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+
+  // The server's own sentence when it sent one, since it names the remedy
+  // (choose a banker, not enough credits); a generic line otherwise.
+  const readBuyError = (error: unknown) => {
+    const data = (error as { data?: unknown }).data;
+    return typeof data === 'string' && data.length > 0 ? data : 'Could not buy that ticket. Try again.';
+  };
 
 setup
   const [gameId, setGameId] = useState<GameId>('6/42');
@@ -16,7 +38,29 @@ setup
   // stake the house has since withdrawn — falls back to the configured price.
   const [stakeChoice, setStakeChoice] = useState<BetCost | null>(null);
   const [selected, setSelected] = useState<number[]>([9,10,11]);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  // A signed-in player buys real tickets with credits, and the list is read
+  // back from Convex. A visitor who is not signed in keeps the local practice
+  // board this page always had: nothing is charged and nothing is stored.
+  const { user } = useFirebaseUser();
+  const isSignedIn = user !== null;
+  const realTickets = useConvexQuery(api.tickets.q.mine, {}, { enabled: isSignedIn });
+  const [localTickets, setTickets] = useState<Ticket[]>([]);
+  const [isBuying, setIsBuying] = useState(false);
+  // Numbered from the oldest, so a ticket keeps its number as newer ones arrive above it.
+  const tickets: Ticket[] = isSignedIn
+    ? (realTickets ?? []).map((row, index, rows) => ({
+        id: rows.length - index,
+        numbers: row.numbers,
+        game: row.game,
+        betType: row.betType,
+        required: row.betType,
+        status: row.status,
+        hits: row.hits,
+        time: ticketTimeFormatter.format(row.createdAt),
+        prizeWon: row.prizeWon ?? undefined,
+        cost: row.cost
+      }))
+    : localTickets;
   // This page sells tickets but does not run a draw yet, so nothing sets these.
   // They are state, not constants, so the draw can be wired in without
   // reshaping what the panels below are handed.
@@ -155,8 +199,27 @@ setup
   };
 
 
+  // The one path that spends credits. Picks are sent as they are; the server
+  // re-checks every one of them, the price, and the balance.
+  const buyReal = async (picks: number[][]) => {
+    if (!convexClient || isBuying) return false;
+    setIsBuying(true);
+    try {
+      const result = await convexClient.mutation(api.tickets.m.buy, { game: gameId, betType, cost: betCost, picks, requestId: newRequestId() });
+      playTone(900,0.25,'triangle',0.16);
+      showToast(`${result.bought === 1 ? 'Ticket bought' : `×${result.bought} tickets bought`} • ${result.spent.toLocaleString('en-US')} CR`);
+      return true;
+    } catch (error) {
+      showToast(readBuyError(error));
+      return false;
+    } finally {
+      setIsBuying(false);
+    }
+  };
+
   const addTicket = () => {
     if(selected.length!==required) return;
+    if (isSignedIn) { void buyReal([[...selected].sort((a,b)=>a-b)]); return; }
     const nowTime=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
     const base: Ticket = { id:idCounterRef.current++, numbers:[...selected].sort((a,b)=>a-b), game:gameId, betType, required, status:'pending', hits:0, time:nowTime, cost:betCost };
     setTickets(prev=>[base,...prev]);
@@ -167,6 +230,12 @@ setup
   // Random-bet multipliers: buy 1, 10, 20 ... 200 machine picks in one tap.
   const addRandomTickets = async (count: number) => {
     if (isDrawing) return;
+    if (isSignedIn) {
+      const size = Math.min(count, MAX_TICKETS_PER_PURCHASE);
+      const picks = await randomPicks(size, required, pool);
+      if (await buyReal(picks)) setSelected(picks[0]);
+      return;
+    }
     const room = MAX_TICKETS - ticketCount;
     if (room <= 0) { showToast(`Ticket limit reached (${MAX_TICKETS} tickets) — clear some first`); return; }
     const size = Math.min(count, room);
@@ -223,7 +292,7 @@ div(className="app-main-grid grid grid-cols-1 xl:grid-cols-[360px_1fr_380px] gap
       ~ ticketCount={ticketCount}
       ~ buyerTag=""
       ~ buyerLabel="you"
-      ~ isDrawing={isDrawing}
+      ~ isDrawing={isDrawing || isBuying}
       ~ onSelectBetType={selectBetType}
       ~ onToggleNumber={toggleNumber}
       ~ onQuickPick={quickPick}
@@ -240,5 +309,5 @@ div(className="app-main-grid grid grid-cols-1 xl:grid-cols-[360px_1fr_380px] gap
       ~ draws={draws}
       ~ drawnBalls={drawnBalls}
       ~ drawGame={drawGameId}
-      ~ onClear={() => setTickets([])}
+      ~ onClear={() => isSignedIn ? showToast('Bought tickets stay until their draw settles them.') : setTickets([])}
       ~ )

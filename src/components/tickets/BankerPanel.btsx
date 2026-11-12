@@ -1,5 +1,5 @@
 
-div(className='bg-[#303030] rounded-[3rem] size-full')
+div(className='bg-[#303030]/10 rounded-[3rem] size-full')
   div(className='h-20 border-b border-border/20 w-full flex items-center justify-center')
     h2(className='font-sans font-[450] text-white text-base tracking-tight') My Banker
 

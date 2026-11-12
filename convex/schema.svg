@@ -25,7 +25,7 @@
 
   <rect class="bg" width="1200" height="800" rx="18"/>
   <text class="title" x="40" y="52">Lucky Pick · Convex schema</text>
-  <text class="subtitle" x="40" y="76">13 tables. An arrow points from the table that stores an id to the table it refers to.</text>
+  <text class="subtitle" x="40" y="76">14 tables. An arrow points from the table that stores an id to the table it refers to.</text>
 
   <!-- edges -->
   <path class="edge" d="M540,180 L440,260"/>
@@ -44,7 +44,10 @@
   <path class="edge" d="M840,684 C840,740 900,740 900,684"/>
   <path class="soft" d="M130,344 L130,430"/>
 
+  <path class="edge" d="M250,180 L340,260"/>
+
   <!-- edge labels -->
+  <text class="label" x="282" y="226" text-anchor="end">userId</text>
   <text class="label" x="478" y="216" text-anchor="end">userId</text>
   <text class="label" x="722" y="216">accountId</text>
   <text class="label" x="600" y="277" text-anchor="middle">selectedAccountId</text>
@@ -65,6 +68,10 @@
   <rect class="box activity" x="490" y="110" width="220" height="70" rx="12"/>
   <text class="name" x="600" y="140">notifications</text>
   <text class="desc" x="600" y="161">A user's inbox, newest 100 kept</text>
+
+  <rect class="box activity" x="110" y="110" width="220" height="70" rx="12"/>
+  <text class="name" x="220" y="138">tickets</text>
+  <text class="desc" x="220" y="157">Real bets; also accountId → accounts</text>
 
   <!-- row B -->
   <rect class="box activity" x="30" y="260" width="200" height="84" rx="12"/>

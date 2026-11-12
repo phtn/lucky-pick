@@ -22,6 +22,7 @@ An arrow points from the table that stores an id to the table it refers to.
 | `topupPolicy` | The single row holding the switchable top-up rule: whether a different god must decide a request. | `money/d.ts` |
 | `topupPolicyChanges` | One logged switch of that rule, with who made it. Never trimmed. | `money/d.ts` |
 | `games` | One of the five games as the house configures it: price grid, stakes, prizes. | `games/d.ts` |
+| `tickets` | One real ticket a player bought with credits at a house. Mirrors `Ticket` in `src/lib/lotto.ts`. | `tickets/d.ts` |
 | `practicePlays` | One resolved practice draw and its best tickets. | `plays/d.ts` |
 | `notifications` | One event in a user's inbox. | `notifications/d.ts` |
 | `historicalResults` | One imported PCSO draw result. | `resultValidators.ts` |
@@ -55,6 +56,7 @@ An arrow points from the table that stores an id to the table it refers to.
 
 ### Per-user activity
 
+- `tickets.userId` → `users` (the player) and `tickets.accountId` → `accounts` (the house it was bought at). `tickets.game` holds a `games.gameId` value, not a document reference. `tickets.m.buy` writes it: the stake moves from the player's `available` to `held` at that house (`ticketHold`) and each ticket starts `pending`. Nothing settles a ticket yet.
 - `practicePlays.userId` → `users`. `practicePlays.game` holds the same value as `games.gameId` (`'6/42'` … `'6/58'`), but it is not a document reference.
 - `notifications.userId` → `users` (the recipient) and `notifications.accountId` → `accounts` (nullable). `accountName` is copied in so the row still reads correctly if the house is renamed.
 
@@ -87,6 +89,7 @@ An arrow points from the table that stores an id to the table it refers to.
 | `topupRequests` | `by_status_and_createdAt`, `by_accountId_and_createdAt`, `by_accountId_and_status` |
 | `topupPolicy`, `topupPolicyChanges` | none; read in creation order |
 | `games` | `by_gameId`, `by_order` |
+| `tickets` | `by_userId_and_createdAt`, `by_accountId_and_createdAt` |
 | `practicePlays` | `by_userId_and_drawnAt` |
 | `notifications` | `by_userId_and_createdAt` |
 | `historicalResults` | `by_drawId`, `by_game`, `by_game_and_date` |

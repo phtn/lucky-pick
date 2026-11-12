@@ -8,7 +8,7 @@ import { isPlatformStaff } from '../lib/auth'
 import schema from '../schema'
 import { getUserByTokenIdentifier } from '../users/q'
 import { ledgerKindSchema, MY_HISTORY_LIMIT, walletBucketSchema } from './d'
-import { findPartnerWallets } from './wallets'
+import { findPartnerWallets, findUserWallet } from './wallets'
 
 /** Staff read any account; everyone else must manage the one they are asking about. */
 const requireAccountReader = async (ctx: QueryCtx, accountId: Id<'accounts'>) => {
@@ -203,6 +203,60 @@ export const myHouseWallets = query({
     }
 
     return houses.sort((a, b) => a.name.localeCompare(b.name))
+  }
+})
+
+/**
+ * One player as their banker sees them: who they are, what they hold at the
+ * house, how that has moved, and what the house has left to give. Only the
+ * house's linked contact may read it, and only for someone who plays there;
+ * both refusals read the same, so an id tells a stranger nothing. Like
+ * `myPlayers`, it carries a display name and picture and nothing private.
+ */
+export const playerAtMyHouse = query({
+  args: { accountId: v.id('accounts'), userId: v.id('users') },
+  returns: v.union(
+    v.null(),
+    v.object({
+      houseName: v.string(),
+      /** What the house can still hand out. */
+      floatAvailable: v.number(),
+      name: v.string(),
+      imageUrl: v.union(v.string(), v.null()),
+      joinedAt: v.number(),
+      balance: v.number(),
+      held: v.number(),
+      isFrozen: v.boolean(),
+      entries: v.array(historyEntryValidator)
+    })
+  ),
+  handler: async (ctx, { accountId, userId }) => {
+    const { account } = await requireAccountManager(ctx, accountId)
+
+    const player = await ctx.db.get('users', userId)
+    const wallet = player ? await findUserWallet(ctx, accountId, userId) : null
+    if (!player || (player.selectedAccountId !== accountId && !wallet)) return null
+
+    const { float } = await findPartnerWallets(ctx, accountId)
+    const entries = wallet
+      ? await ctx.db
+          .query('ledgerEntries')
+          .withIndex('by_walletId_and_createdAt', (q) => q.eq('walletId', wallet._id))
+          .order('desc')
+          .take(MY_HISTORY_LIMIT)
+      : []
+
+    return {
+      houseName: account.name,
+      floatAvailable: float?.available ?? 0,
+      name: player.nickname ?? player.name ?? player.preferredUsername ?? 'Player',
+      imageUrl: player.imageUrl ?? null,
+      joinedAt: player.createdAt,
+      balance: wallet?.available ?? 0,
+      held: wallet?.held ?? 0,
+      isFrozen: wallet?.status === 'frozen',
+      entries: await withTransactionHeaders(ctx, entries)
+    }
   }
 })
 

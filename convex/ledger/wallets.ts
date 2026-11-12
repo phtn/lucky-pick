@@ -82,3 +82,35 @@ export const getPartnerWallets = async (
     earnings: found.earnings ?? (await create('partnerEarnings', null))
   }
 }
+
+export const findUserWallet = async (ctx: QueryCtx, accountId: Id<'accounts'>, userId: Id<'users'>) =>
+  await ctx.db
+    .query('wallets')
+    .withIndex('by_accountId_and_userId', (q) => q.eq('accountId', accountId).eq('userId', userId))
+    .unique()
+
+/** A player's wallet at one house, created empty on first use like every other wallet. */
+export const getUserWallet = async (
+  ctx: MutationCtx,
+  accountId: Id<'accounts'>,
+  userId: Id<'users'>
+): Promise<Doc<'wallets'>> => {
+  const existing = await findUserWallet(ctx, accountId, userId)
+  if (existing) return existing
+
+  const now = Date.now()
+  const id = await ctx.db.insert('wallets', {
+    kind: 'user',
+    accountId,
+    userId,
+    systemKey: null,
+    available: 0,
+    held: 0,
+    // A player spends from this, so it cannot go below zero.
+    floor: 0,
+    status: 'active',
+    createdAt: now,
+    updatedAt: now
+  })
+  return (await ctx.db.get('wallets', id))!
+}

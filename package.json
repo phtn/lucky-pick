@@ -11,6 +11,7 @@
     "preview": "rsbuild preview",
     "typecheck": "tsrx-tsc --noEmit",
     "typecheck:ts": "tsc -p tsconfig.typecheck.json",
+    "typecheck:file": "tsc src/lib/c-stream/index.ts --noEmit",
     "check": "bun run typecheck && bun run build",
     "deploy": "bun run build && wrangler deploy",
     "deploy:dry": "bun run build && wrangler deploy --dry-run",

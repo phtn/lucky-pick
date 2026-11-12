@@ -329,3 +329,44 @@ test('myPlayers lists who chose the contact’s house, with what they hold there
   expect((await t.withIdentity(owner()).query(api.accounts.q.myPlayers, {})).map((h) => h.name)).toEqual(['Casa Dos'])
   await expect(t.query(api.accounts.q.myPlayers, {})).rejects.toThrow('Unauthorized.')
 })
+
+test('a banker gives a player credits out of the house float, and only what it holds', async () => {
+  const t = makeT()
+  const accountId = await house(t, 'Casa Uno', 'active', { initialCredits: 5_000 })
+  await signIn(t, owner())
+  await signIn(t, ana())
+  await signIn(t, ben())
+  await t.withIdentity(ana()).mutation(api.users.m.selectBanker, { accountId })
+  const ids = await t.run(async (ctx) => {
+    const users = await ctx.db.query('users').collect()
+    return { ana: users.find((u) => u.subject === 'ana')!._id, ben: users.find((u) => u.subject === 'ben')!._id }
+  })
+  const give = (who: ReturnType<typeof ana>, userId: Id<'users'>, amount: number, requestId = 'req-00000001') =>
+    t.withIdentity(who).mutation(api.ledger.m.allocateToPlayer, { accountId, userId, amount, requestId, note: 'Welcome' })
+  const read = () => t.withIdentity(owner()).query(api.ledger.q.playerAtMyHouse, { accountId, userId: ids.ana })
+
+  expect(await read()).toMatchObject({ houseName: 'Casa Uno', floatAvailable: 5_000, balance: 0, entries: [] })
+
+  await give(owner(), ids.ana, 1_200)
+  // A retry of the same request replays; it does not pay twice.
+  await give(owner(), ids.ana, 1_200)
+
+  expect(await read()).toMatchObject({
+    floatAvailable: 3_800,
+    balance: 1_200,
+    entries: [{ amount: 1_200, balanceAfter: 1_200, kind: 'allocate', memo: 'Welcome' }]
+  })
+  // The player sees it as their own balance at that house.
+  expect(await t.withIdentity(ana()).query(api.ledger.q.balanceForCurrentUser, { accountSlug: 'casa-uno' })).toBe(1_200)
+
+  await expect(give(owner(), ids.ana, 3_801, 'req-00000002')).rejects.toThrow('The house holds 3,800 credits')
+  await expect(give(owner(), ids.ana, 0.5, 'req-00000003')).rejects.toThrow('Enter a whole number of credits')
+  // Ben never chose this house; and a player cannot hand out the house's credits.
+  await expect(give(owner(), ids.ben, 10, 'req-00000004')).rejects.toThrow('That player does not play at this house.')
+  await expect(give(ana(), ids.ana, 10, 'req-00000005')).rejects.toThrow('Unauthorized.')
+  expect(await t.withIdentity(owner()).query(api.ledger.q.playerAtMyHouse, { accountId, userId: ids.ben })).toBeNull()
+  await expect(t.withIdentity(ana()).query(api.ledger.q.playerAtMyHouse, { accountId, userId: ids.ana })).rejects.toThrow(
+    'Unauthorized.'
+  )
+  expect(await read()).toMatchObject({ floatAvailable: 3_800, balance: 1_200 })
+})

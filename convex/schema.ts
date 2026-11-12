@@ -8,6 +8,7 @@ import { topupPolicyChangeFields, topupPolicyFields, topupRequestFields } from '
 import { notificationFields } from './notifications/d'
 import { practicePlayFields } from './plays/d'
 import { resultFields, resultGame } from './resultValidators'
+import { ticketFields } from './tickets/d'
 import { userDocumentValidator } from './users/v'
 
 export default defineSchema({
@@ -62,6 +63,11 @@ export default defineSchema({
   // A single row; see `topupPolicyFields`.
   topupPolicy: defineTable(topupPolicyFields),
   topupPolicyChanges: defineTable(topupPolicyChangeFields),
+  // Real tickets, bought with credits. A player reads their own newest first;
+  // a house reads everything placed at it.
+  tickets: defineTable(ticketFields)
+    .index('by_userId_and_createdAt', ['userId', 'createdAt'])
+    .index('by_accountId_and_createdAt', ['accountId', 'createdAt']),
   practicePlays: defineTable(practicePlayFields).index('by_userId_and_drawnAt', ['userId', 'drawnAt']),
   notifications: defineTable(notificationFields).index('by_userId_and_createdAt', ['userId', 'createdAt']),
 })

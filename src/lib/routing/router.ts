@@ -41,6 +41,7 @@ const ticketsPage = lazyPage(() => import('@/pages/tickets-page.btsx'))
 const adminShell = lazyPage(() => import('@/pages/admin-page.btsx'))
 const adminOverview = lazyPage(() => import('@/pages/admin-overview-page.btsx'))
 const adminPlayers = lazyPage(() => import('@/pages/admin-players-page.btsx'))
+const adminPlayer = lazyPage(() => import('@/pages/admin-player-page.btsx'))
 
 function createAdminRouteTree() {
   const rootRoute = createRootRoute({ component: adminShell })
@@ -57,7 +58,15 @@ function createAdminRouteTree() {
     component: adminPlayers
   })
 
-  return rootRoute.addChildren([overviewRoute, playersRoute])
+  // One player at one house. Both ids are in the path because a banker can
+  // front several houses, and a player's balance is per house.
+  const playerRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/players/$accountId/$userId',
+    component: adminPlayer
+  })
+
+  return rootRoute.addChildren([overviewRoute, playersRoute, playerRoute])
 }
 
 function createAsgardRouteTree() {
@@ -192,6 +201,12 @@ function createAppRouteTree() {
     component: adminPlayers
   })
 
+  const adminPlayerRoute = createRoute({
+    getParentRoute: () => adminRoute,
+    path: 'players/$accountId/$userId',
+    component: adminPlayer
+  })
+
   return rootRoute.addChildren([
     landingRoute,
     ticketsRoute,
@@ -200,7 +215,7 @@ function createAppRouteTree() {
     profileRoute,
     trxRoute,
     asgardRoute.addChildren([asgardIndexRoute, asgardAccountsRoute, asgardAccountRoute, asgardGamesRoute]),
-    adminRoute.addChildren([adminIndexRoute, adminPlayersRoute])
+    adminRoute.addChildren([adminIndexRoute, adminPlayersRoute, adminPlayerRoute])
   ])
 }
 
