@@ -6,8 +6,10 @@ import { useTrxBalance } from '@/hooks/use-trx-balance'
 import { isFirebaseConfigured } from '@/lib/firebase'
 import { forgetAllAccounts, getAccountLabel } from '@/lib/firebase/accounts'
 import { describeAuthError, signInWithGoogle, signOutUser, useFirebaseUser, useRememberedAccounts } from '@/lib/firebase/auth'
+import { canOpenAdmin } from '@/lib/admin/access'
 import { canOpenAsgard } from '@/lib/asgard/access'
 import { navigate } from '@/lib/routing/navigation'
+import { adminRoutePrefix } from '@/lib/routing/admin-subdomain'
 import { asgardHandoffPath } from '@/lib/routing/asgard-subdomain'
 import { formatTrx, formatUsd } from '@/lib/tronweb/balance'
 import { api } from '../../../convex/_generated/api'
@@ -30,6 +32,9 @@ setup
   // The address is on the caller's own `users` row, so the menu reads it rather
   // than being told it. `undefined` until the Convex token exchange lands.
   const profile = useConvexQuery(api.users.q.current, {}, { enabled: user !== null })
+  // The houses this user is the linked contact of, which is what makes them a
+  // banker. `undefined` until read, and the admin row stays hidden until then.
+  const houses = useConvexQuery(api.accounts.q.myHouses, {}, { enabled: user !== null })
 
   const notify = useCallback((message: string | null) => {
     if (message) onNotify?.(message)
@@ -91,6 +96,13 @@ setup
     ? [{ id: 'asgard', label: 'Asgard', icon: 'asgard', onSelect: () => navigate(asgardHandoffPath) }]
     : []
 
+  // The admin console is offered to bankers — contacts of a usable house — and
+  // to holders of the `admin` claim. On this origin it lives under `/admin`, so
+  // it is reached with the in-app navigation.
+  const adminAction: SwitcherAction[] = canOpenAdmin(user !== null, customClaims, houses)
+    ? [{ id: 'admin', label: 'Admin', icon: 'bank', onSelect: () => navigate(adminRoutePrefix) }]
+    : []
+
   // The balance belongs to whoever is signed in, so it is not behind the Asgard
   // gate the row first sat in. The row is absent until there is an address to
   // read: a user mid-provisioning has no account to show a balance for, and a
@@ -123,6 +135,7 @@ setup
     ? [
         { id: 'profile', label: 'Profile', icon: 'user-settings', onSelect: () => navigate('/me') },
         ...trxAction,
+        ...adminAction,
         ...asgardAction
       ]
     : accounts.length > 0

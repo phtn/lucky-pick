@@ -1,5 +1,5 @@
 import { ConvexError, v } from 'convex/values'
-import { isAccountSlug, isPublicAccountSlug } from '../../src/lib/accounts/accounts'
+import { canUseAccount, isAccountSlug, isPublicAccountSlug } from '../../src/lib/accounts/accounts'
 import { compareBankerRows } from '../../src/lib/accounts/bankers'
 import type { Id } from '../_generated/dataModel'
 import { query } from '../_generated/server'
@@ -213,5 +213,87 @@ export const myHouses = query({
       status: account.status,
       confirmedAt: account.confirmedAt ?? null
     }))
+  }
+})
+
+/** How many players of one house the admin console lists. */
+const PLAYER_LIST_LIMIT = 200
+
+/**
+ * The players of every house the caller is the linked contact of: everyone who
+ * has chosen that house to play against, with what they hold there. Matched on
+ * the identity's token like `myHouses`, so a stranger gets an empty list rather
+ * than anyone's roster. Only a usable house is listed: a pending, suspended or
+ * closed one has nobody playing at it.
+ *
+ * The `returns` validator is the privacy boundary. A banker sees a player's
+ * display name and picture, never their email, phone or sign-in identifiers.
+ */
+export const myPlayers = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      accountId: v.id('accounts'),
+      name: v.string(),
+      /** True when the house has more players than the list carries. */
+      truncated: v.boolean(),
+      players: v.array(
+        v.object({
+          userId: v.id('users'),
+          name: v.string(),
+          imageUrl: v.union(v.string(), v.null()),
+          joinedAt: v.number(),
+          balance: v.number(),
+          held: v.number()
+        })
+      )
+    })
+  ),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new ConvexError('Unauthorized.')
+
+    const accounts = await ctx.db
+      .query('accounts')
+      .withIndex('by_primaryContact_tokenIdentifier', (q) =>
+        q.eq('primaryContact.tokenIdentifier', identity.tokenIdentifier)
+      )
+      .take(MAX_LIST_LIMIT)
+
+    const houses = []
+    for (const account of accounts) {
+      if (!canUseAccount(account.status)) continue
+
+      const users = await ctx.db
+        .query('users')
+        .withIndex('by_selectedAccountId', (q) => q.eq('selectedAccountId', account._id))
+        .take(PLAYER_LIST_LIMIT + 1)
+
+      const players = []
+      for (const user of users.slice(0, PLAYER_LIST_LIMIT)) {
+        const wallet = await ctx.db
+          .query('wallets')
+          .withIndex('by_accountId_and_userId', (q) => q.eq('accountId', account._id).eq('userId', user._id))
+          .unique()
+
+        players.push({
+          userId: user._id,
+          name: user.nickname ?? user.name ?? user.preferredUsername ?? 'Player',
+          imageUrl: user.imageUrl ?? null,
+          joinedAt: user.createdAt,
+          balance: wallet?.available ?? 0,
+          held: wallet?.held ?? 0
+        })
+      }
+
+      houses.push({
+        accountId: account._id,
+        name: account.name,
+        truncated: users.length > PLAYER_LIST_LIMIT,
+        players: players.sort((a, b) => a.name.localeCompare(b.name))
+      })
+    }
+
+    return houses.sort((a, b) => a.name.localeCompare(b.name))
   }
 })

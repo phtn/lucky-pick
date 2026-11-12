@@ -79,7 +79,7 @@ An arrow points from the table that stores an id to the table it refers to.
 
 | Table | Indexes |
 | --- | --- |
-| `users` | `by_tokenIdentifier`, `by_firebaseUid`, `by_email` |
+| `users` | `by_tokenIdentifier`, `by_firebaseUid`, `by_email`, `by_selectedAccountId` |
 | `accounts` | `by_slug`, `by_createdAt`, `by_status_and_createdAt`, `by_ownerTokenIdentifier_and_createdAt`, `by_primaryContact_tokenIdentifier`, `by_primaryContact_email`, `by_primaryContact_firebaseUid` |
 | `wallets` | `by_accountId_and_kind`, `by_accountId_and_userId`, `by_userId`, `by_systemKey` |
 | `ledgerTransactions` | `by_idempotencyKey`, `by_accountId_and_createdAt`, `by_reversesTxnId` |

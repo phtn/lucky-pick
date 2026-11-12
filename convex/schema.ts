@@ -40,7 +40,9 @@ export default defineSchema({
   users: defineTable(userDocumentValidator)
     .index('by_tokenIdentifier', ['tokenIdentifier'])
     .index('by_firebaseUid', ['firebaseUid'])
-    .index('by_email', ['email']),
+    .index('by_email', ['email'])
+    // A house's players: everyone who has chosen it to play against.
+    .index('by_selectedAccountId', ['selectedAccountId']),
   wallets: defineTable(walletFields)
     .index('by_accountId_and_kind', ['accountId', 'kind'])
     .index('by_accountId_and_userId', ['accountId', 'userId'])

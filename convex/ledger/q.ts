@@ -146,6 +146,66 @@ export const partnerFloatHistory = query({
   }
 })
 
+/** Houses one contact can front, and how much of each float's history the profile carries. */
+const MY_HOUSE_LIMIT = 50
+
+const balanceValidator = v.union(v.object({ available: v.number(), held: v.number() }), v.null())
+const readBalance = (wallet: { available: number; held: number } | null) =>
+  wallet ? { available: wallet.available, held: wallet.held } : null
+
+/**
+ * The wallets of every house the caller is the linked contact of, with each
+ * float's recent movements. A top-up is claimed into the house's float, not
+ * into the contact's own wallet, so this is where a claim shows up on `/me`.
+ * Matches on the identity's token like `myHouses`, and returns balances only:
+ * floors, ids of other wallets and payout details stay out.
+ */
+export const myHouseWallets = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      accountId: v.id('accounts'),
+      name: v.string(),
+      float: balanceValidator,
+      earnings: balanceValidator,
+      entries: v.array(historyEntryValidator)
+    })
+  ),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new ConvexError('Unauthorized.')
+
+    const accounts = await ctx.db
+      .query('accounts')
+      .withIndex('by_primaryContact_tokenIdentifier', (q) =>
+        q.eq('primaryContact.tokenIdentifier', identity.tokenIdentifier)
+      )
+      .take(MY_HOUSE_LIMIT)
+
+    const houses = []
+    for (const account of accounts) {
+      const { float, earnings } = await findPartnerWallets(ctx, account._id)
+      const entries = float
+        ? await ctx.db
+            .query('ledgerEntries')
+            .withIndex('by_walletId_and_createdAt', (q) => q.eq('walletId', float._id))
+            .order('desc')
+            .take(MY_HISTORY_LIMIT)
+        : []
+
+      houses.push({
+        accountId: account._id,
+        name: account.name,
+        float: readBalance(float),
+        earnings: readBalance(earnings),
+        entries: await withTransactionHeaders(ctx, entries)
+      })
+    }
+
+    return houses.sort((a, b) => a.name.localeCompare(b.name))
+  }
+})
+
 /** The caller's own wallet. Takes no id: it is derived from the identity, so there is nothing to probe. */
 export const myWallet = query({
   args: {},

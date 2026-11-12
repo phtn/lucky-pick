@@ -275,3 +275,57 @@ test('listBankers orders usable houses first', async () => {
   const rows = await t.withIdentity(ana()).query(api.accounts.q.listBankers, {})
   expect(rows.map((r) => r.name)).toEqual(['Bravo', 'Charlie', 'Aardvark', 'Alpha'])
 })
+
+const owner = () => member('owner', 'owner@example.com')
+
+test('myPlayers lists who chose the contact’s house, with what they hold there and nothing private', async () => {
+  const t = makeT()
+  const accountId = await house(t, 'Casa Uno')
+  const other = await house(t, 'Casa Dos')
+  await signIn(t, owner())
+  await signIn(t, ana())
+  await signIn(t, ben())
+  await t.withIdentity(ana()).mutation(api.users.m.selectBanker, { accountId })
+  await t.withIdentity(ben()).mutation(api.users.m.selectBanker, { accountId })
+
+  const anaId = await t.run(async (ctx) => {
+    const users = await ctx.db.query('users').collect()
+    const anaUser = users.find((user) => user.subject === 'ana')!
+    await ctx.db.patch(anaUser._id, { nickname: 'Ana' })
+    await ctx.db.patch(users.find((user) => user.subject === 'ben')!._id, { nickname: 'Ben' })
+    await ctx.db.insert('wallets', {
+      kind: 'user',
+      accountId,
+      userId: anaUser._id,
+      systemKey: null,
+      available: 300,
+      held: 20,
+      floor: 0,
+      status: 'active',
+      createdAt: 0,
+      updatedAt: 0
+    })
+    return anaUser._id
+  })
+
+  const houses = await t.withIdentity(owner()).query(api.accounts.q.myPlayers, {})
+  // Both houses share the contact's email, so the owner fronts both; only one has players.
+  expect(houses.map((h) => [h.name, h.players.length])).toEqual([
+    ['Casa Dos', 0],
+    ['Casa Uno', 2]
+  ])
+  const casa = houses.find((h) => h.accountId === accountId)!
+  expect(casa.truncated).toBe(false)
+  expect(casa.players).toMatchObject([
+    { userId: anaId, name: 'Ana', balance: 300, held: 20 },
+    { name: 'Ben', balance: 0, held: 0 }
+  ])
+  expect(Object.keys(casa.players[0]).sort()).toEqual(['balance', 'held', 'imageUrl', 'joinedAt', 'name', 'userId'])
+  void other
+
+  // A player is nobody's banker, and a suspended house lists no one.
+  expect(await t.withIdentity(ana()).query(api.accounts.q.myPlayers, {})).toEqual([])
+  await t.run((ctx) => ctx.db.patch(accountId, { status: 'suspended' }))
+  expect((await t.withIdentity(owner()).query(api.accounts.q.myPlayers, {})).map((h) => h.name)).toEqual(['Casa Dos'])
+  await expect(t.query(api.accounts.q.myPlayers, {})).rejects.toThrow('Unauthorized.')
+})

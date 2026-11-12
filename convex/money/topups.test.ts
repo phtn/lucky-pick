@@ -377,3 +377,21 @@ test('claimable lists a contact’s approved, unminted top-ups and nobody else�
   await t.run((ctx) => ctx.db.patch(accountId, { status: 'suspended' }))
   expect(await t.withIdentity(ana).query(api.money.topups.claimable, {})).toEqual([])
 })
+
+test('a claimed top-up shows in the contact’s house balance, with its movement', async () => {
+  const { t, accountId } = await setup()
+  const id = await request(t, accountId, 5_000)
+  await t.withIdentity(godB).mutation(api.money.topups.approve, { id })
+
+  expect(await t.withIdentity(ana).query(api.ledger.q.myHouseWallets, {})).toMatchObject([
+    { accountId, name: 'Ana Store', float: { available: 0, held: 0 }, entries: [] }
+  ])
+
+  await claim(t, id)
+
+  const [house] = await t.withIdentity(ana).query(api.ledger.q.myHouseWallets, {})
+  expect(house).toMatchObject({ float: { available: 5_000, held: 0 }, earnings: { available: 0, held: 0 } })
+  expect(house.entries).toMatchObject([{ amount: 5_000, balanceAfter: 5_000, kind: 'mint', memo: 'GCASH-001' }])
+  // Someone who fronts no house has no house balance to read.
+  expect(await t.withIdentity(bo).query(api.ledger.q.myHouseWallets, {})).toEqual([])
+})

@@ -27,7 +27,7 @@ module
   }
 
   const itemClassName = 'relative z-10 flex items-center justify-center gap-2 cursor-pointer font-sans hover:text-foreground px-1 py-2.5 capitalize whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-  const baseClassName = 'relative inline-flex items-center justify-self-end gap-5 md:gap-7 lg:gap-8 border-b border-sidebar-border dark:border-surface/33 min-w-lg'
+  const baseClassName = 'relative flex items-center justify-self-end gap-5 md:gap-7 lg:gap-8 border-b border-sidebar-border dark:border-surface/33 min-w-lg'
 
 props { activeId, className, items, label = 'Tabs', onSelect, ref, ...navProps }: Props
 

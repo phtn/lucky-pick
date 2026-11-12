@@ -15,7 +15,10 @@ module
    * subdomain roots them at `/`, while the main origin roots them under
    * `/admin`, so the links have to be built rather than written out.
    */
-  const navPages = [{ to: '', label: 'Overview', icon: 'chart', exact: true }] as AdminNavItem[]
+  const navPages = [
+    { to: '', label: 'Overview', icon: 'chart', exact: true },
+    { to: '/players', label: 'Players', icon: 'user' }
+  ] as AdminNavItem[]
 
   const toNavItems = (base: string): AdminNavItem[] =>
     navPages.map((page) => ({

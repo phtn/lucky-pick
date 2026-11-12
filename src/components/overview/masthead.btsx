@@ -30,4 +30,4 @@ header(className={cn('overview-masthead flex items-end justify-between w-full ga
       p(className='mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground') #{description}
   div(className='flex shrink-0 items-center gap-3')
     | #{children}
-  span(className='overview-rule' aria-hidden={true})
+  span(className='overview-rule_' aria-hidden={true})

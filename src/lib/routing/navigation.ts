@@ -10,6 +10,11 @@ export function navigate(path: string) {
   void router.navigate({ to: path, hash: true })
 }
 
+/** Like `navigate`, but the page being left is dropped from history, so Back does not return to it. */
+export function replaceRoute(path: string) {
+  void router.navigate({ to: path, replace: true })
+}
+
 export function followRoute(event: MouseEvent, path: string) {
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
   event.preventDefault()

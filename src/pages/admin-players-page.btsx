@@ -1,0 +1,76 @@
+import { Masthead, Panel } from '@/components/overview'
+import { useConvexQuery } from '@/hooks/use-convex-query'
+import { useFirebaseUser } from '@/lib/firebase/auth'
+import { Icon } from '@/lib/icons'
+import { formatCount } from '@/lib/overview/metrics'
+import { api } from '../../convex/_generated/api'
+
+module
+  const blankClass = 'rounded-lg border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground'
+  const headClass = 'font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground'
+
+  const joinedFormatter = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  const formatCredits = (value: number) => `${value.toLocaleString('en-US')} CR`
+
+setup
+  const { user, isLoading } = useFirebaseUser()
+  const isSignedIn = user !== null
+  // The query answers from the caller's own identity: it lists the players of
+  // the houses they are the linked contact of, and nothing for anyone else. So
+  // this page is safe on a console that does not yet check a session itself.
+  const houses = useConvexQuery(api.accounts.q.myPlayers, {}, { enabled: isSignedIn })
+  const playerCount = (houses ?? []).reduce((total, house) => total + house.players.length, 0)
+
+section(className='relative overview-page px-4 pb-16 md:px-6')
+  div(className='overview-content')
+    Masthead(
+      ~ eyebrow='Admin · Console'
+      ~ title='Players'
+      ~ description='Everyone who has chosen one of your houses to play against, and what they hold there.'
+      ~ )
+      if houses !== undefined
+        div(className='flex items-center gap-2 rounded-full border border-border/50 px-3 py-1.5')
+          span(className={headClass}) #{formatCount(playerCount)} #{playerCount === 1 ? 'player' : 'players'}
+
+    div(className='overview-sections')
+      if !isSignedIn
+        p(className={blankClass}) #{isLoading ? 'Checking your session…' : 'Sign in as a banker to see your players.'}
+      elseif houses === undefined
+        div(className='flex items-center gap-3 py-10')
+          Icon(name='spinner' size={16} className='animate-spin text-muted-foreground')
+          p(className='text-sm text-muted-foreground') Reading your players…
+      elseif houses.length === 0
+        p(className={blankClass}) You are not the contact of a confirmed or active house, so there are no players to list.
+      else
+        each house in houses key house.accountId
+          Panel(
+            ~ title={house.name}
+            ~ collapsible={false}
+            ~ meta={`${formatCount(house.players.length)}${house.truncated ? '+' : ''} ${house.players.length === 1 ? 'player' : 'players'}`}
+            ~ )
+            if house.players.length === 0
+              p(className={blankClass}) Nobody has chosen this house yet.
+            else
+              fragment
+                div(className='flex items-center gap-x-4 pb-2')
+                  span(className={`${headClass} min-w-0 flex-1`}) Player
+                  span(className={`${headClass} hidden w-28 shrink-0 text-right md:inline`}) Joined
+                  span(className={`${headClass} hidden w-24 shrink-0 text-right sm:inline`}) Held
+                  span(className={`${headClass} w-28 shrink-0 text-right`}) Balance
+                ul(className='overview-feed')
+                  each player in house.players key player.userId
+                    li(className='flex items-center gap-x-4')
+                      div(className='flex min-w-0 flex-1 items-center gap-3')
+                        if player.imageUrl
+                          img(src={player.imageUrl} alt='' referrerPolicy='no-referrer' className='size-7 shrink-0 rounded-full border object-cover')
+                        else
+                          div(className='grid size-7 shrink-0 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
+                            Icon(name='person' size={14})
+                        p(className='truncate text-sm text-foreground') #{player.name}
+                      span(className='hidden w-28 shrink-0 text-right font-mono text-2xs text-muted-foreground md:inline') #{joinedFormatter.format(player.joinedAt)}
+                      span(className='hidden w-24 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground sm:inline') #{formatCredits(player.held)}
+                      span(className='w-28 shrink-0 text-right font-mono text-sm tabular-nums text-foreground') #{formatCredits(player.balance)}
+                if house.truncated
+                  p(className='mt-4 text-xs text-muted-foreground') Showing the first #{formatCount(house.players.length)} players of this house.
+
+    div(aria-hidden={true} className='h-20 w-full')

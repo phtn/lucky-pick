@@ -1,17 +1,19 @@
-import { useCallback, useState } from 'octane'
+import { useCallback, useEffect, useState } from 'octane'
 import type { FunctionReturnType } from 'convex/server'
 import { Distribution, Masthead, Panel, StatTile } from '@/components/overview'
+import Tabs from '@/components/ui/Tabs.btsx'
+import type { TabItem } from '@/components/ui/Tabs.btsx'
 import { useConvexQuery } from '@/hooks/use-convex-query'
 import { usePendingTronAccount } from '@/hooks/use-pending-tron-account'
 import { formatLedgerAmount, formatLedgerLabel } from '@/lib/asgard/account-detail'
 import { toMyHouseItems } from '@/lib/accounts/my-houses'
 import { convexClient } from '@/lib/convex-client'
-import { isFirebaseConfigured } from '@/lib/firebase'
-import { describeAuthError, signInWithGoogle, useFirebaseUser } from '@/lib/firebase/auth'
+import { useFirebaseUser } from '@/lib/firebase/auth'
 import { formatPeso } from '@/lib/format'
 import { GAMES } from '@/lib/games'
 import { Icon } from '@/lib/icons'
 import { formatCount, formatPercent, formatRelativeTime } from '@/lib/overview/metrics'
+import { replaceRoute } from '@/lib/routing/navigation'
 import type { PracticePlayRow } from '@/lib/profile/record'
 import { readPracticeStats } from '@/lib/profile/stats'
 import { clearPendingTronAccount } from '@/lib/tronweb/pending-account'
@@ -100,11 +102,17 @@ component UserAvatar
 
 setup
   const { user, isLoading: isAuthLoading } = useFirebaseUser()
-  const [isSigningIn, setIsSigningIn] = useState(false)
-  const [signInError, setSignInError] = useState<string | null>(null)
   const [brokenPhotoUrl, setBrokenPhotoUrl] = useState<string | null>(null)
 
   const isSignedIn = user !== null
+
+  // This page is only for a signed-in user. Arriving signed out, or signing out
+  // while here, goes home, and replaces the entry so Back does not return to a
+  // page with nothing to show. It waits for the session check, so a signed-in
+  // reload is not bounced while Firebase is still restoring the user.
+  useEffect(() => {
+    if (!isAuthLoading && !isSignedIn) replaceRoute('/')
+  }, [isAuthLoading, isSignedIn])
 
   // Every read is the caller's own, derived from the Convex identity. The hook
   // answers `undefined` until a value arrives — and leaves it `undefined` where
@@ -116,6 +124,9 @@ setup
   const plays = useConvexQuery(api.plays.q.mine, PLAYS_ARGS, { enabled: isSignedIn })
   const myHouses = useConvexQuery(api.accounts.q.myHouses, {}, { enabled: isSignedIn })
   const claimableTopups = useConvexQuery(api.money.topups.claimable, {}, { enabled: isSignedIn })
+  // A claimed top-up lands in the house's float, not in the caller's own
+  // wallet, so the Wallet tab reads both. Empty for anyone who fronts no house.
+  const houseWallets = useConvexQuery(api.ledger.q.myHouseWallets, {}, { enabled: isSignedIn }) ?? []
 
   const now = Date.now()
   const entries = movements ?? EMPTY_MOVEMENTS
@@ -141,7 +152,9 @@ setup
       ? 'Your credit account has not been read on this load.'
       : wallet === null
         ? 'No credits have been allocated to you yet.'
-        : `${formatCredits(wallet.held)} CR held against open plays.`
+        : wallet.status === 'frozen'
+          ? 'Available to play with. This wallet is frozen.'
+          : 'Available to play with.'
 
   // `null` is an answer — the identity is known and carries no `users` row yet.
   // `undefined` is no answer at all, which says nothing about the account, so it
@@ -191,6 +204,27 @@ setup
   // Approved top-ups for the caller's houses. Like the houses above, no answer
   // and an empty answer both show nothing: most players front no house.
   const topupsToClaim = claimableTopups ?? []
+  // One section at a time. The bankers tab exists only for someone who fronts
+  // a house, and leads when a top-up is waiting, since that is what the
+  // approval notification sends them here to do.
+  const hasBankers = houseItems.length > 0 || topupsToClaim.length > 0
+  const tabs: TabItem[] = [
+    ...(hasBankers ? [{ id: 'bankers', label: topupsToClaim.length > 0 ? `Bankers (${topupsToClaim.length})` : 'Bankers' }] : []),
+    { id: 'wallet', label: 'Wallet' },
+    // { id: 'practice', label: 'Practice' },
+    { id: 'plays', label: 'Recent plays' },
+    // { id: 'real', label: 'Real plays' }
+  ]
+  // Null until the reader picks one; a pick that has since disappeared (the
+  // last house went away) falls back to the default as well.
+  const [selectedTab, setSelectedTab] = useState<string | null>(null)
+  const activeTab =
+    selectedTab !== null && tabs.some((tab) => tab.id === selectedTab)
+      ? selectedTab
+      : topupsToClaim.length > 0
+        ? 'bankers'
+        : 'wallet'
+
   const [claimingTopupIds, setClaimingTopupIds] = useState<ReadonlySet<string>>(new Set())
   const [claimError, setClaimError] = useState<string | null>(null)
 
@@ -242,21 +276,6 @@ setup
     }
   }, [])
 
-  const startSignIn = useCallback(async () => {
-    setIsSigningIn(true)
-    setSignInError(null)
-    try {
-      await signInWithGoogle()
-    } catch (error) {
-      // `null` is a cancellation — the window was closed, which needs no notice.
-      // Anything else is actionable, and this button is the only control on the
-      // page, so the remedy (allow popups, check the connection) has to be said.
-      setSignInError(describeAuthError(error))
-    } finally {
-      setIsSigningIn(false)
-    }
-  }, [])
-
   // The one load on which this user's private key exists anywhere. Everything
   // below it is about getting the key off this page and into their keeping.
   const pendingTronAccount = usePendingTronAccount()
@@ -288,10 +307,8 @@ setup
 
 
 
-// A shared `/me` link must not look broken, so a signed-out viewer is shown the
-// prompt in place of the panels rather than being sent somewhere else.
-section(className='relative overview-page pb-16')
-  div(className='px-4')
+section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll')
+  div(className='px-4 pb-16')
     div(className='flex items-center w-full')
       div(className='translate-x-12 size-12 flex items-end ')
         if avatarUrl
@@ -324,29 +341,11 @@ section(className='relative overview-page pb-16')
           span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') joined #{formatMemberSince(memberSince)}
           span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') #{accountRecordLabel}
 
-    if isAuthLoading && !isSignedIn
+    // Signed out is either still being checked or already on its way home.
+    if !isSignedIn
       div(className='mt-16 flex items-center gap-3')
         Icon(name='spinner' size={16} className='animate-spin text-muted-foreground')
-        p(className='text-sm text-muted-foreground') Checking your session…
-    elseif !isSignedIn
-      div(className='mt-12 rounded-xl border border-dashed border-border/60 px-6 py-14 text-center')
-        div(className='mx-auto grid size-10 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
-          Icon(name='person' size={18})
-        p(className='mt-5 text-sm text-foreground') Sign in to see your profile.
-        p(className='mx-auto mt-2 max-w-sm text-xs leading-relaxed text-muted-foreground') Your credits, your practice plays, and your account details are on this page once you are signed in.
-        if isFirebaseConfigured
-          button(
-            ~ type='button'
-            ~ onClick={() => void startSignIn()}
-            ~ disabled={isSigningIn}
-            ~ className='mt-7 inline-flex h-10 items-center gap-2 rounded-full bg-foreground px-5 text-sm font-medium text-background transition-opacity disabled:opacity-60'
-            ~ )
-            Icon(name='goog' size={14})
-            span #{isSigningIn ? 'Opening Google…' : 'Sign in with Google'}
-        else
-          p(className='mt-7 font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') Sign-in is unavailable on this deployment
-        if signInError
-          p(className='mt-4 text-xs text-destructive') #{signInError}
+        p(className='text-sm text-muted-foreground') #{isAuthLoading ? 'Checking your session…' : 'Taking you home…'}
     else
       div#profile-panel(className='overview-sections px-10')
         // Not collapsible, and first: this is the only moment the key exists,
@@ -385,128 +384,166 @@ section(className='relative overview-page pb-16')
                   ~ className='inline-flex h-9 items-center gap-2 rounded-full bg-foreground px-4 text-xs font-medium text-background'
                   ~ )
                   span I have saved it
-        if houseItems.length > 0
-          Panel(title='Your Bankers' description='Houses you were named on as the contact.' meta={formatCount(houseItems.length)})
-            ul(className='overview-feed')
-              each house in houseItems key house.id
-                li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
-                  div(className='min-w-0 flex-1')
-                    p(className='truncate text-sm text-foreground') #{house.name}
-                    p(className='truncate text-xs text-muted-foreground') #{house.detail}
-                  if house.canConfirm
-                    button(
-                      ~ type='button'
-                      ~ onClick={() => void confirmHouse(house.id)}
-                      ~ disabled={confirmingHouseIds.has(house.id)}
-                      ~ aria-busy={confirmingHouseIds.has(house.id) || undefined}
-                      ~ className='inline-flex h-9 items-center rounded-full bg-foreground px-4 text-xs font-medium text-background transition-opacity disabled:opacity-60'
-                      ~ )
-                      span #{confirmingHouseIds.has(house.id) ? 'Confirming…' : 'Confirm'}
-            if houseError
-              p(className='mt-4 text-xs text-destructive') #{houseError}
-        if topupsToClaim.length > 0
-          Panel(title='Top-ups to claim' description='Approved credits waiting for you to take them into your house.' meta={formatCount(topupsToClaim.length)})
-            ul(className='overview-feed')
-              each topup in topupsToClaim key topup.id
-                li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
-                  div(className='min-w-0 flex-1')
-                    p(className='truncate text-sm text-foreground') #{topup.amount.toLocaleString('en-US')} CR
-                    p(className='truncate text-xs text-muted-foreground') #{topup.accountName}
-                  button(
-                    ~ type='button'
-                    ~ onClick={() => void claimTopup(topup.id)}
-                    ~ disabled={claimingTopupIds.has(topup.id)}
-                    ~ aria-busy={claimingTopupIds.has(topup.id) || undefined}
-                    ~ className='inline-flex h-9 items-center rounded-full bg-foreground px-4 text-xs font-medium text-background transition-opacity disabled:opacity-60'
-                    ~ )
-                    span #{claimingTopupIds.has(topup.id) ? 'Claiming…' : 'Claim'}
-            if claimError
-              p(className='mt-4 text-xs text-destructive') #{claimError}
-        Panel(title='Credits' description='What you hold, and how it has moved.' meta={!hasReadMovements ? 'Not read yet' : entries.length === 0 ? 'No movements' : `Newest ${formatCount(entries.length)}`})
-          div(className='grid gap-10 lg:grid-cols-5 lg:gap-8')
-            div(className='lg:col-span-2')
-              StatTile(
-                ~ hero={true}
-                ~ label='Balance'
-                ~ value={balanceValue}
-                ~ caption={balanceCaption}
-                ~ )
-            div(className='lg:col-span-3')
-              if entries.length === 0
-                Blank(message={hasReadMovements ? 'No credit has moved on your account yet.' : UNREAD_MOVEMENTS})
-              else
+        Tabs(activeId={activeTab} items={tabs} onSelect={setSelectedTab} label='Profile sections' className='w-full min-w-0 justify-between justify-self-start overflow-x-auto md:w-auto md:justify-start')
+
+        if activeTab === 'bankers'
+          fragment
+            if topupsToClaim.length > 0
+              Panel(title='Top-ups to claim' collapsible={false} description='Approved credits waiting for you to take them into your house.' meta={formatCount(topupsToClaim.length)})
                 ul(className='overview-feed')
-                  each entry in entries key entry._id
-                    li(className='flex flex-wrap items-center gap-x-3 gap-y-1')
-                      span(className='w-20 shrink-0 font-mono text-2xs text-muted-foreground') #{formatRelativeTime(entry.createdAt, now)}
-                      span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{formatLedgerLabel(entry)}
-                      if entry.bucket === 'held'
-                        span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) held
-                      span(className={cn('w-20 shrink-0 text-right font-mono text-sm tabular-nums', entry.amount < 0 ? 'text-destructive' : POSITIVE_TONE)}) #{formatLedgerAmount(entry.amount)}
-                      span(className='hidden w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 lg:inline') #{formatCredits(entry.balanceAfter)}
-
-        Panel(
-          ~ title='Practice'
-          ~ description={practiceDescription}
-          ~ meta={hasReadPlays ? `${formatCount(stats.plays)} draws read` : 'Not read yet'}
-          ~ )
-          if stats.plays === 0
-            Blank(message={hasReadPlays ? 'No practice draw has been recorded on your account yet.' : UNREAD_PLAYS})
-          else
-            fragment
-              div(className='overview-stats grid md:grid-cols-3')
-                StatTile(
-                  ~ label='Draws played'
-                  ~ value={formatCount(stats.plays)}
-                  ~ caption={`${formatCount(stats.officialPlays)} checked against an official draw · ${formatCount(stats.simulatedPlays)} simulated.`}
-                  ~ )
-                StatTile(label='Stake' value={formatPeso(stats.spent)} caption='What those tickets would have cost.')
-                StatTile(label='Winnings' value={formatPeso(stats.won)} caption='What those tickets would have paid, official and simulated draws together.')
-                StatTile(
-                  ~ label='Net'
-                  ~ value={formatNet(stats.net)}
-                  ~ caption={stats.net < 0 ? 'Down across the draws counted here.' : 'Up across the draws counted here.'}
-                  ~ )
-                StatTile(label='Win rate' value={formatPercent(stats.winRate, 1)} caption='Winning tickets over the tickets of those draws.')
-                if bestDraw
+                  each topup in topupsToClaim key topup.id
+                    li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
+                      div(className='min-w-0 flex-1')
+                        p(className='truncate text-sm text-foreground') #{topup.amount.toLocaleString('en-US')} CR
+                        p(className='truncate text-xs text-muted-foreground') #{topup.accountName}
+                      button(
+                        ~ type='button'
+                        ~ onClick={() => void claimTopup(topup.id)}
+                        ~ disabled={claimingTopupIds.has(topup.id)}
+                        ~ aria-busy={claimingTopupIds.has(topup.id) || undefined}
+                        ~ className='inline-flex h-9 items-center rounded-full bg-foreground px-4 text-xs font-medium text-background transition-opacity disabled:opacity-60'
+                        ~ )
+                        span #{claimingTopupIds.has(topup.id) ? 'Claiming…' : 'Claim'}
+                if claimError
+                  p(className='mt-4 text-xs text-destructive') #{claimError}
+            if houseItems.length > 0
+              Panel(title='Your Bankers' collapsible={false} description='Houses you were named on as the contact.' meta={formatCount(houseItems.length)})
+                ul(className='overview-feed')
+                  each house in houseItems key house.id
+                    li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
+                      div(className='min-w-0 flex-1')
+                        p(className='truncate text-sm text-foreground') #{house.name}
+                        p(className='truncate text-xs text-muted-foreground') #{house.detail}
+                      if house.canConfirm
+                        button(
+                          ~ type='button'
+                          ~ onClick={() => void confirmHouse(house.id)}
+                          ~ disabled={confirmingHouseIds.has(house.id)}
+                          ~ aria-busy={confirmingHouseIds.has(house.id) || undefined}
+                          ~ className='inline-flex h-9 items-center rounded-full bg-foreground px-4 text-xs font-medium text-background transition-opacity disabled:opacity-60'
+                          ~ )
+                          span #{confirmingHouseIds.has(house.id) ? 'Confirming…' : 'Confirm'}
+                if houseError
+                  p(className='mt-4 text-xs text-destructive') #{houseError}
+        elseif activeTab === 'wallet'
+          fragment
+            each house in houseWallets key house.accountId
+              Panel(title={house.name} collapsible={false} description='Your house’s float: claimed top-ups land here.' meta={house.entries.length === 0 ? 'No movements' : `Newest ${formatCount(house.entries.length)}`})
+                div(className='grid gap-10 lg:grid-cols-5 lg:gap-8')
+                  div(className='grid content-start gap-8 lg:col-span-2')
+                    StatTile(
+                      ~ hero={true}
+                      ~ label='House balance'
+                      ~ value={house.float ? `${formatCredits(house.float.available)} CR` : '—'}
+                      ~ caption={house.float ? 'Float available to hand out.' : 'This house has no float wallet yet.'}
+                      ~ )
+                    div(className='grid grid-cols-2 gap-6')
+                      StatTile(label='Held' value={`${formatCredits(house.float?.held ?? 0)} CR`} caption='Float committed, not settled.')
+                      StatTile(label='Earnings' value={`${formatCredits(house.earnings?.available ?? 0)} CR`} caption='Won from players.')
+                  div(className='lg:col-span-3')
+                    if house.entries.length === 0
+                      Blank(message='This house’s float has not moved yet.')
+                    else
+                      ul(className='overview-feed')
+                        each entry in house.entries key entry._id
+                          li(className='flex flex-wrap items-center gap-x-3 gap-y-1')
+                            span(className='w-20 shrink-0 font-mono text-2xs text-muted-foreground') #{formatRelativeTime(entry.createdAt, now)}
+                            span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{formatLedgerLabel(entry)}
+                            if entry.bucket === 'held'
+                              span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) held
+                            span(className={cn('w-20 shrink-0 text-right font-mono text-sm tabular-nums', entry.amount < 0 ? 'text-destructive' : POSITIVE_TONE)}) #{formatLedgerAmount(entry.amount)}
+                            span(className='hidden w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 lg:inline') #{formatCredits(entry.balanceAfter)}
+            Panel(title={houseWallets.length > 0 ? 'Your own wallet' : 'Wallet'} collapsible={false} description='Your own credit balance to play with, and how it has moved. 1 credit is worth ₱1.' meta={!hasReadMovements ? 'Not read yet' : entries.length === 0 ? 'No movements' : `Newest ${formatCount(entries.length)}`})
+              div(className='grid gap-10 lg:grid-cols-5 lg:gap-8')
+                div(className='grid content-start gap-8 lg:col-span-2')
                   StatTile(
-                    ~ label='Best draw'
-                    ~ value={formatPeso(bestDraw.won)}
-                    ~ caption={`${GAMES[bestDraw.game].name} · ${formatRelativeTime(bestDraw.drawnAt, now)}.`}
+                    ~ hero={true}
+                    ~ label='Balance'
+                    ~ value={balanceValue}
+                    ~ caption={balanceCaption}
                     ~ )
-              if stats.officialPlays > 0
-                // A PCSO check asks what own numbers would have done in the real
-                // draw. Pooled into totals dominated by generator fiction that
-                // answer is lost, so it is named once rather than doubling every tile.
-                p(className='mt-8 text-xs text-muted-foreground') #{`Of which official: ${formatPeso(stats.officialSpent)} staked and ${formatPeso(stats.officialWon)} paid across ${formatCount(stats.officialPlays)} checked draws, on ${formatCount(stats.officialWinCount)} winning tickets.`}
-              if favouriteGame
-                p(className='mt-4 text-xs text-muted-foreground') #{`Most played: ${GAMES[favouriteGame].name}.`}
-              div(className='mt-10')
-                Distribution(
-                  ~ segments={stats.hitDistribution}
-                  ~ caption={`Tickets by numbers matched. Counted from the ticket detail each draw stores — at most ${formatCount(TICKET_DETAIL_LIMIT)} tickets of a draw — so a larger draw is represented by those rather than by every ticket it held.`}
-                  ~ )
+                  if wallet
+                    div(className='grid grid-cols-2 gap-6')
+                      StatTile(label='Held' value={`${formatCredits(wallet.held)} CR`} caption='Committed to open plays.')
+                      StatTile(label='Total' value={`${formatCredits(wallet.available + wallet.held)} CR`} caption='Balance plus held.')
+                div(className='lg:col-span-3')
+                  if entries.length === 0
+                    Blank(message={hasReadMovements ? 'No credit has moved on your account yet.' : UNREAD_MOVEMENTS})
+                  else
+                    ul(className='overview-feed')
+                      each entry in entries key entry._id
+                        li(className='flex flex-wrap items-center gap-x-3 gap-y-1')
+                          span(className='w-20 shrink-0 font-mono text-2xs text-muted-foreground') #{formatRelativeTime(entry.createdAt, now)}
+                          span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{formatLedgerLabel(entry)}
+                          if entry.bucket === 'held'
+                            span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) held
+                          span(className={cn('w-20 shrink-0 text-right font-mono text-sm tabular-nums', entry.amount < 0 ? 'text-destructive' : POSITIVE_TONE)}) #{formatLedgerAmount(entry.amount)}
+                          span(className='hidden w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 lg:inline') #{formatCredits(entry.balanceAfter)}
+        elseif activeTab === 'practice'
+          Panel(
+            ~ title='Practice'
+            ~ collapsible={false}
+            ~ description={practiceDescription}
+            ~ meta={hasReadPlays ? `${formatCount(stats.plays)} draws read` : 'Not read yet'}
+            ~ )
+            if stats.plays === 0
+              Blank(message={hasReadPlays ? 'No practice draw has been recorded on your account yet.' : UNREAD_PLAYS})
+            else
+              fragment
+                div(className='overview-stats grid md:grid-cols-3')
+                  StatTile(
+                    ~ label='Draws played'
+                    ~ value={formatCount(stats.plays)}
+                    ~ caption={`${formatCount(stats.officialPlays)} checked against an official draw · ${formatCount(stats.simulatedPlays)} simulated.`}
+                    ~ )
+                  StatTile(label='Stake' value={formatPeso(stats.spent)} caption='What those tickets would have cost.')
+                  StatTile(label='Winnings' value={formatPeso(stats.won)} caption='What those tickets would have paid, official and simulated draws together.')
+                  StatTile(
+                    ~ label='Net'
+                    ~ value={formatNet(stats.net)}
+                    ~ caption={stats.net < 0 ? 'Down across the draws counted here.' : 'Up across the draws counted here.'}
+                    ~ )
+                  StatTile(label='Win rate' value={formatPercent(stats.winRate, 1)} caption='Winning tickets over the tickets of those draws.')
+                  if bestDraw
+                    StatTile(
+                      ~ label='Best draw'
+                      ~ value={formatPeso(bestDraw.won)}
+                      ~ caption={`${GAMES[bestDraw.game].name} · ${formatRelativeTime(bestDraw.drawnAt, now)}.`}
+                      ~ )
+                if stats.officialPlays > 0
+                  // A PCSO check asks what own numbers would have done in the real
+                  // draw. Pooled into totals dominated by generator fiction that
+                  // answer is lost, so it is named once rather than doubling every tile.
+                  p(className='mt-8 text-xs text-muted-foreground') #{`Of which official: ${formatPeso(stats.officialSpent)} staked and ${formatPeso(stats.officialWon)} paid across ${formatCount(stats.officialPlays)} checked draws, on ${formatCount(stats.officialWinCount)} winning tickets.`}
+                if favouriteGame
+                  p(className='mt-4 text-xs text-muted-foreground') #{`Most played: ${GAMES[favouriteGame].name}.`}
+                div(className='mt-10')
+                  Distribution(
+                    ~ segments={stats.hitDistribution}
+                    ~ caption={`Tickets by numbers matched. Counted from the ticket detail each draw stores — at most ${formatCount(TICKET_DETAIL_LIMIT)} tickets of a draw — so a larger draw is represented by those rather than by every ticket it held.`}
+                    ~ )
 
-        Panel(title='Recent plays' description='One row per resolved draw, newest first.' meta={!hasReadPlays ? 'Not read yet' : rows.length === 0 ? 'No draws' : `${formatCount(playFeed.length)} of ${formatCount(rows.length)}`})
-          if playFeed.length === 0
-            Blank(message={hasReadPlays ? 'Resolve a draw while signed in and it is listed here.' : UNREAD_PLAYS})
-          else
-            ul(className='overview-feed')
-              each play in playFeed key play._id
-                li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
-                  div(className='min-w-0 flex-1')
-                    p(className='truncate text-sm text-foreground') #{GAMES[play.game].name}
-                    p(className='truncate font-mono text-xs text-muted-foreground') #{formatDrawnBalls(play.drawnBalls)}
-                  if play.isOfficial
-                    span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) official
-                  // A party row holds every player's tickets, so its stake and
-                  // ticket count mean something other than a solo row's.
-                  if play.mode === 'party'
-                    span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) party
-                  span(className='w-24 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{`${formatCount(play.ticketCount)} tickets`}
-                  span(className='w-16 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{formatHits(play.bestHits)}
-                  span(className={cn('w-24 shrink-0 text-right font-mono text-sm tabular-nums', play.won > 0 ? POSITIVE_TONE : 'text-muted-foreground/70')}) #{formatPeso(play.won)}
-                  span(className='w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70') #{formatRelativeTime(play.drawnAt, now)}
-
-        Panel(title='Real plays' description='Tickets bought with credits, once they can be bought.' meta='Not yet playable')
-          Blank(message='Credit-backed tickets are still being built. When they ship, every ticket you buy with credits is listed here with the draw it was entered in and what it settled for.')
+        elseif activeTab === 'plays'
+          Panel(title='Recent plays' collapsible={false} description='One row per resolved draw, newest first.' meta={!hasReadPlays ? 'Not read yet' : rows.length === 0 ? 'No draws' : `${formatCount(playFeed.length)} of ${formatCount(rows.length)}`})
+            if playFeed.length === 0
+              Blank(message={hasReadPlays ? 'Resolve a draw while signed in and it is listed here.' : UNREAD_PLAYS})
+            else
+              ul(className='overview-feed')
+                each play in playFeed key play._id
+                  li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
+                    div(className='min-w-0 flex-1')
+                      p(className='truncate text-sm text-foreground') #{GAMES[play.game].name}
+                      p(className='truncate font-mono text-xs text-muted-foreground') #{formatDrawnBalls(play.drawnBalls)}
+                    if play.isOfficial
+                      span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) official
+                    // A party row holds every player's tickets, so its stake and
+                    // ticket count mean something other than a solo row's.
+                    if play.mode === 'party'
+                      span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) party
+                    span(className='w-24 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{`${formatCount(play.ticketCount)} tickets`}
+                    span(className='w-16 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{formatHits(play.bestHits)}
+                    span(className={cn('w-24 shrink-0 text-right font-mono text-sm tabular-nums', play.won > 0 ? POSITIVE_TONE : 'text-muted-foreground/70')}) #{formatPeso(play.won)}
+                    span(className='w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70') #{formatRelativeTime(play.drawnAt, now)}
+        else
+          Panel(title='Real plays' collapsible={false} description='Tickets bought with credits, once they can be bought.' meta='Not yet playable')
+            Blank(message='Credit-backed tickets are still being built. When they ship, every ticket you buy with credits is listed here with the draw it was entered in and what it settled for.')
