@@ -30,6 +30,33 @@ export const topupRequestFields = {
   updatedAt: v.number()
 }
 
+/**
+ * The one rule about top-ups the house can switch: whether a request must be
+ * decided by a god other than the one who filed it. A single row, and no row
+ * at all means the rule is on — a deployment that has never touched the switch
+ * keeps the two-person check it always had.
+ */
+export const topupPolicyFields = {
+  requireSecondGod: v.boolean(),
+  updatedAt: v.number(),
+  updatedBy: v.string()
+}
+
+/** How many policy changes the console reads back; the log itself is never trimmed. */
+export const TOPUP_POLICY_CHANGE_LIMIT = 50
+
+/**
+ * Every flip of the switch, kept forever. Switching the rule off lets one god
+ * mint alone, so who did it and when has to outlive the setting itself.
+ * `actorLabel` is the actor's email or name as their token carried it then.
+ */
+export const topupPolicyChangeFields = {
+  requireSecondGod: v.boolean(),
+  actorTokenIdentifier: v.string(),
+  actorLabel: v.string(),
+  createdAt: v.number()
+}
+
 export const topupRequestSchema = v.object(topupRequestFields)
 
 export type TopupStatus = typeof topupStatusSchema.type

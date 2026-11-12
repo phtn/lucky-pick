@@ -2,8 +2,9 @@ import { useState } from 'octane'
 import { NuqsAdapter } from '@octanejs/nuqs/adapters/react'
 import Tabs from '@/components/ui/Tabs.btsx'
 import type { TabItem } from '@/components/ui/Tabs.btsx'
+import AccountsActivity from '@/components/asgard/accounts-activity.btsx'
 import AccountsPanel from '@/components/asgard/accounts-panel.btsx'
-import { Icon } from '@/lib/icons'
+import AccountsSettings from '@/components/asgard/accounts-settings.btsx'
 
 module
   const tabs: TabItem[] = [
@@ -12,24 +13,8 @@ module
     { id: 'settings', label: 'Settings' }
   ]
 
-  /**
-   * Directory is the real surface. The other two name what belongs in them
-   * rather than pretending to hold it.
-   */
-  const placeholders: Record<string, { title: string; detail: string }> = {
-    settings: {
-      title: 'Granting and revoking lands here.',
-      detail: 'The god and admin claims, who may change them, and what each change costs the holder’s session.'
-    },
-    activity: {
-      title: 'Account activity lands here.',
-      detail: 'Sign-ins, claim changes and the account they were made against, most recent first.'
-    }
-  }
-
 setup
   const [activeId, setActiveId] = useState('accounts')
-  const placeholder = placeholders[activeId]
 
 section(className='flex min-h-0 flex-col')
   header(className='asgard-topbar')
@@ -40,13 +25,12 @@ section(className='flex min-h-0 flex-col')
   div(className='asgard-topbar-tabs')
     Tabs(activeId={activeId} items={tabs} onSelect={setActiveId} label='Accounts sections')
 
-  if placeholder
-    div(className='px-4 py-10 md:px-6')
-      div(className='mx-auto flex max-w-xl flex-col items-center gap-3 rounded-xl border border-dashed border-border/60 px-6 py-12 text-center')
-        div(className='grid size-9 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
-          Icon(name='account' size={16})
-        p(className='text-sm text-foreground') #{placeholder.title}
-        p(className='max-w-sm text-xs leading-relaxed text-muted-foreground') #{placeholder.detail}
+  if activeId === 'activity'
+    div(className='h-[calc(100dvh-108px)] overflow-y-auto px-4 pt-4 pb-16 md:px-6')
+      AccountsActivity
+  elseif activeId === 'settings'
+    div(className='h-[calc(100dvh-108px)] overflow-y-auto px-4 pt-4 pb-16 md:px-6')
+      AccountsSettings
   else
     div(className='px-4 pb-16 md:px-6 h-[calc(100dvh-108px)] overflow-scroll')
       NuqsAdapter

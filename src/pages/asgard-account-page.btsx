@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'octane'
 import { Link, useParams } from '@octanejs/tanstack-router'
 import StatusBadge from '@/components/asgard/status-badge.btsx'
+import Button from '@/components/ui/button.btsx'
+import Input from '@/components/ui/input.btsx'
 import Tabs from '@/components/ui/Tabs.btsx'
 import type { TabItem } from '@/components/ui/Tabs.btsx'
 import { Icon } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { formatAccountCredits } from '@/lib/accounts/accounts'
 import { LEDGER_KIND_LABEL, TOPUP_STATUS_LABEL, TOPUP_STATUS_TONE, formatLedgerAmount, formatLedgerLabel, formatWalletAvailable } from '@/lib/asgard/account-detail'
-import { fetchAccount, formatAccountDate, formatContactName, getAccountInitials, type AccountDetail } from '@/lib/asgard/accounts'
+import { fetchAccount, formatAccountDate, formatContactName, getAccountInitials, submitTopupAction, type AccountDetail, type TopupAction } from '@/lib/asgard/accounts'
 import { asgardAccountsPath } from '@/lib/asgard/console-paths'
 import { isAbortError, readErrorMessage } from '@/lib/asgard/errors'
+import { MAX_TOPUP_CREDITS, isTopupAmount } from '@/lib/money/credits'
 
 module
   type Status = 'loading' | 'ready' | 'missing' | 'error'
@@ -24,6 +27,15 @@ module
   const chipClass = 'rounded-xs border px-1.5 py-0.5 font-mono text-2xs uppercase tracking-wider'
   const panelClass = 'rounded-lg border border-sidebar-border bg-foreground/[0.015]'
   const blockClass = 'grid min-h-[50vh] place-items-center px-6 text-center'
+  const fieldLabelClass = 'grid gap-1.5'
+
+  const readInput = (event: Event) => (event.currentTarget as HTMLInputElement).value
+
+  /** Digits only, so `1,000` and `1000` are the same amount and `1e3` is not one. */
+  const readCredits = (text: string) => {
+    const digits = text.replace(/[,\s]/g, '')
+    return /^\d+$/.test(digits) ? Number(digits) : Number.NaN
+  }
 
   /** A row of the record: a label and whatever the account has, or an em dash. */
   export { Reading }
@@ -106,17 +118,142 @@ component LedgerTab
           span(className='hidden w-24 shrink-0 text-right font-mono text-2xs text-muted-foreground lg:inline') #{entry.balanceAfter.toLocaleString('en-US')}
 
 component TopupsTab
-  props { detail }: { detail: AccountDetail }
-  if detail.topups.length === 0
-    p(className='rounded-lg border border-dashed border-sidebar-border px-4 py-10 text-center text-sm text-muted-foreground') No top-up has been filed for this account.
-  else
-    ul(className={cn(panelClass, 'divide-y divide-dashed divide-sidebar-border overflow-hidden')})
-      each topup in detail.topups key topup._id
-        li(className='flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5')
-          span(className='w-24 shrink-0 font-mono text-2xs text-muted-foreground') #{formatAccountDate(topup.createdAt)}
-          span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{topup.paymentReference || topup.note || 'No reference'}
-          span(className={cn(chipClass, 'shrink-0', TOPUP_STATUS_TONE[topup.status])}) #{TOPUP_STATUS_LABEL[topup.status]}
-          span(className='w-24 shrink-0 text-right font-mono text-sm text-foreground') #{topup.amount.toLocaleString('en-US')}
+  props { detail, onAction }: { detail: AccountDetail; onAction: (action: TopupAction) => Promise<void> }
+  setup
+    const [amountText, setAmountText] = useState('')
+    const [reference, setReference] = useState('')
+    const [note, setNote] = useState('')
+    // The id of the request being acted on, or `request` while one is filed.
+    const [busy, setBusy] = useState<string | null>(null)
+    const [error, setError] = useState<string | null>(null)
+    const [rejectingId, setRejectingId] = useState<string | null>(null)
+    const [rejectReason, setRejectReason] = useState('')
+
+    const isClosed = detail.account.status === 'closed'
+    const amount = readCredits(amountText)
+    const amountInvalid = amountText.trim().length > 0 && !isTopupAmount(amount)
+    const canFile = !isClosed && busy === null && isTopupAmount(amount) && reference.trim().length > 0
+
+    const run = async (key: string, action: TopupAction) => {
+      setBusy(key)
+      setError(null)
+      try {
+        await onAction(action)
+        return true
+      } catch (caught: unknown) {
+        setError(readErrorMessage(caught, 'Could not update this top-up.'))
+        return false
+      } finally {
+        setBusy(null)
+      }
+    }
+
+    const file = async (event: Event) => {
+      event.preventDefault()
+      if (!canFile) return
+      const filed = await run('request', {
+        action: 'request',
+        amount,
+        paymentReference: reference.trim(),
+        note: note.trim() || undefined
+      })
+      if (!filed) return
+      setAmountText('')
+      setReference('')
+      setNote('')
+    }
+
+    const startReject = (id: string) => {
+      setRejectingId(id)
+      setRejectReason('')
+    }
+
+    const reject = async (id: string) => {
+      if (await run(id, { action: 'reject', id, decisionNote: rejectReason.trim() })) setRejectingId(null)
+    }
+
+  div(className='grid gap-4')
+    form(className={cn(panelClass, 'grid gap-3 px-3.5 py-3')} onSubmit={file})
+      div(className='flex flex-wrap items-baseline justify-between gap-2')
+        h2(className={readingLabelClass}) Add credits
+        p(className='font-mono text-2xs text-muted-foreground') #{detail.requireSecondGod ? 'Credits reach the float once a different god approves the request.' : 'Credits reach the float once the request is approved.'}
+      if isClosed
+        p(className='text-sm text-muted-foreground') This account is closed, so it cannot be topped up.
+      else
+        fragment
+          div(className='grid gap-3 md:grid-cols-[10rem_1fr_1fr]')
+            label(className={fieldLabelClass})
+              span(className={readingLabelClass}) Credits
+              Input(
+                ~ id='topup-amount'
+                ~ inputMode='numeric'
+                ~ autoComplete='off'
+                ~ placeholder='5,000'
+                ~ value={amountText}
+                ~ aria-invalid={amountInvalid}
+                ~ onInput={(event: Event) => setAmountText(readInput(event))}
+                ~ )
+            label(className={fieldLabelClass})
+              span(className={readingLabelClass}) Payment reference
+              Input(
+                ~ autoComplete='off'
+                ~ placeholder='GCash ref, bank slip number'
+                ~ value={reference}
+                ~ onInput={(event: Event) => setReference(readInput(event))}
+                ~ )
+            label(className={fieldLabelClass})
+              span(className={readingLabelClass}) Note
+              Input(
+                ~ autoComplete='off'
+                ~ placeholder='Optional'
+                ~ value={note}
+                ~ onInput={(event: Event) => setNote(readInput(event))}
+                ~ )
+          div(className='flex flex-wrap items-center justify-between gap-3')
+            p(className={cn('font-mono text-2xs', amountInvalid ? 'text-destructive' : 'text-muted-foreground')})
+              | #{amountInvalid ? `Enter a whole number from 1 to ${MAX_TOPUP_CREDITS.toLocaleString('en-US')}.` : '1 credit = ₱1, so this is also the pesos received.'}
+            Button(type='submit' size='sm' disabled={!canFile})
+              span #{busy === 'request' ? 'Filing…' : 'File top-up request'}
+
+    if error
+      p(className='rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive' role='alert') #{error}
+
+    if detail.topups.length === 0
+      p(className='rounded-lg border border-dashed border-sidebar-border px-4 py-10 text-center text-sm text-muted-foreground') No top-up has been filed for this account.
+    else
+      ul(className={cn(panelClass, 'divide-y divide-dashed divide-sidebar-border overflow-hidden')})
+        each topup in detail.topups key topup._id
+          li(className='grid gap-2 px-3 py-2.5')
+            div(className='flex flex-wrap items-center gap-x-3 gap-y-1')
+              span(className='w-24 shrink-0 font-mono text-2xs text-muted-foreground') #{formatAccountDate(topup.createdAt)}
+              span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{topup.paymentReference || topup.note || 'No reference'}
+              span(className={cn(chipClass, 'shrink-0', TOPUP_STATUS_TONE[topup.status])}) #{TOPUP_STATUS_LABEL[topup.status]}
+              span(className='w-24 shrink-0 text-right font-mono text-sm text-foreground') #{topup.amount.toLocaleString('en-US')}
+            if topup.status === 'pending'
+              div(className='flex flex-wrap items-center justify-end gap-2')
+                if topup.makerTokenIdentifier === detail.viewerTokenIdentifier && rejectingId !== topup._id
+                  fragment
+                    span(className='mr-auto font-mono text-2xs text-muted-foreground') #{detail.requireSecondGod ? 'You filed this. Another god has to approve it.' : 'You filed this. The second-god check is off, so you can decide it.'}
+                    Button(type='button' size='xs' variant='outline' disabled={busy !== null} onClick={() => run(topup._id, { action: 'cancel', id: topup._id })})
+                      | #{busy === topup._id ? 'Working…' : 'Cancel request'}
+                if rejectingId === topup._id
+                  fragment
+                    Input(
+                      ~ className='h-7 min-w-40 flex-1'
+                      ~ autoComplete='off'
+                      ~ placeholder='Reason for rejecting'
+                      ~ aria-label='Reason for rejecting'
+                      ~ value={rejectReason}
+                      ~ onInput={(event: Event) => setRejectReason(readInput(event))}
+                      ~ )
+                    Button(type='button' size='xs' variant='ghost' disabled={busy !== null} onClick={() => setRejectingId(null)}) Back
+                    Button(type='button' size='xs' variant='destructive' disabled={busy !== null || rejectReason.trim().length === 0} onClick={() => reject(topup._id)})
+                      | #{busy === topup._id ? 'Rejecting…' : 'Reject'}
+                elseif topup.makerTokenIdentifier !== detail.viewerTokenIdentifier || !detail.requireSecondGod
+                  fragment
+                    Button(type='button' size='xs' variant='destructive' disabled={busy !== null} onClick={() => startReject(topup._id)}) Reject
+                    Button(type='button' size='xs' disabled={busy !== null} onClick={() => run(topup._id, { action: 'approve', id: topup._id })})
+                      | #{busy === topup._id ? 'Working…' : `Approve +${topup.amount.toLocaleString('en-US')}`}
 
 setup
   // `strict: false` because this console builds its route tree by hand rather
@@ -151,6 +288,12 @@ setup
     return () => controller.abort()
   }, [slug])
 
+  // The route answers every top-up action with the account as it now stands,
+  // so the float, its history and the request list all move together.
+  const runTopupAction = async (action: TopupAction) => {
+    setDetail(await submitTopupAction(slug, action))
+  }
+
 section(className='flex min-h-0 flex-col')
   header(className='asgard-topbar')
     div(className='flex min-w-0 items-center gap-3')
@@ -167,7 +310,12 @@ section(className='flex min-h-0 flex-col')
         if detail
           p(className='mt-1 truncate font-mono text-xs text-muted-foreground') #{detail.account.slug} · #{formatContactName(detail.account.primaryContact.name)}
     if detail
-      StatusBadge(status={detail.account.status})
+      div(className='flex shrink-0 items-center gap-2')
+        if detail.account.status !== 'closed'
+          Button(type='button' size='sm' variant='outline' onClick={() => setActiveId('topups')})
+            Icon(name='plus' size={13})
+            span Add credits
+        StatusBadge(status={detail.account.status})
 
   if status === 'ready' && detail
     fragment
@@ -192,7 +340,7 @@ section(className='flex min-h-0 flex-col')
         elseif activeId === 'ledger'
           LedgerTab(detail={detail})
         else
-          TopupsTab(detail={detail})
+          TopupsTab(detail={detail} onAction={runTopupAction})
   elseif status === 'loading'
     div(className={blockClass})
       Icon(name='spinner' size={18} className='animate-spin text-muted-foreground')

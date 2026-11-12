@@ -1,20 +1,26 @@
 import { ConvexError, v } from 'convex/values'
 import { CREDIT_CURRENCY, isTopupAmount } from '../../src/lib/money/credits'
 import type { Doc, Id } from '../_generated/dataModel'
-import { mutation, query, type MutationCtx } from '../_generated/server'
+import { mutation, query, type MutationCtx, type QueryCtx } from '../_generated/server'
 import { requireGodIdentity, requireStaffIdentity } from '../accounts/helpers'
+import { isTopGod } from '../lib/auth'
 import { post } from '../ledger/post'
 import { notify } from '../notifications/helpers'
 import { getPartnerWallets, getSystemWallet } from '../ledger/wallets'
 import schema from '../schema'
 import { trimOrNull } from '../utils'
-import { topupStatusSchema } from './d'
+import { TOPUP_POLICY_CHANGE_LIMIT, topupStatusSchema } from './d'
 
 /**
  * Top-ups are the only way credits come into existence, so they are
  * maker-checker: one god records that money arrived (`request`), a different
  * god confirms it (`approve`), and only approval mints. Nothing here moves a
  * balance except through `post()`.
+ *
+ * "A different god" is the default, not a constant: a top god can switch that
+ * one check off (`setSecondGodRule`), after which the maker may decide their
+ * own request. Every flip is logged, and a decided request still records its
+ * maker and its checker, so a self-approval reads as one.
  */
 
 const DEFAULT_LIST_LIMIT = 100
@@ -110,6 +116,10 @@ export async function createTopupRequest(
   })
 }
 
+/** No row means the rule has never been switched, and it starts on. */
+const requiresSecondGod = async (ctx: QueryCtx | MutationCtx) =>
+  (await ctx.db.query('topupPolicy').first())?.requireSecondGod ?? true
+
 /** Every decision is made on a request that is still waiting; anything else has already been settled. */
 const getPendingRequest = async (ctx: MutationCtx, id: Id<'topupRequests'>) => {
   const request = await ctx.db.get('topupRequests', id)
@@ -156,7 +166,7 @@ export const approve = mutation({
     const topup = await getPendingRequest(ctx, id)
 
     // The point of maker-checker: the god who recorded the payment cannot also be the one who confirms it.
-    if (topup.makerTokenIdentifier === identity.tokenIdentifier) {
+    if (topup.makerTokenIdentifier === identity.tokenIdentifier && (await requiresSecondGod(ctx))) {
       throw new ConvexError('A top-up must be approved by someone other than the god who requested it.')
     }
 
@@ -224,7 +234,7 @@ export const reject = mutation({
     const topup = await getPendingRequest(ctx, id)
 
     // A maker who has changed their mind withdraws the request instead; only a checker refuses it.
-    if (topup.makerTokenIdentifier === identity.tokenIdentifier) {
+    if (topup.makerTokenIdentifier === identity.tokenIdentifier && (await requiresSecondGod(ctx))) {
       throw new ConvexError('A top-up must be rejected by someone other than the god who requested it.')
     }
 
@@ -268,6 +278,85 @@ export const cancel = mutation({
 
     return null
   }
+})
+
+/** The rule as it stands, and who last switched it. `null` fields mean it never has been. */
+export const policy = query({
+  args: {},
+  returns: v.object({
+    requireSecondGod: v.boolean(),
+    updatedAt: v.union(v.number(), v.null()),
+    updatedBy: v.union(v.string(), v.null())
+  }),
+  handler: async (ctx) => {
+    await requireStaffIdentity(ctx)
+
+    const row = await ctx.db.query('topupPolicy').first()
+    return {
+      requireSecondGod: row?.requireSecondGod ?? true,
+      updatedAt: row?.updatedAt ?? null,
+      updatedBy: row?.updatedBy ?? null
+    }
+  }
+})
+
+/** The most recent flips of the rule, newest first. */
+export const policyChanges = query({
+  args: {},
+  returns: v.array(schema.doc('topupPolicyChanges')),
+  handler: async (ctx) => {
+    await requireStaffIdentity(ctx)
+    return await ctx.db.query('topupPolicyChanges').order('desc').take(TOPUP_POLICY_CHANGE_LIMIT)
+  }
+})
+
+/**
+ * Switches the second-god check on or off. Reserved for a top god: with the
+ * rule off one god can mint alone, so the gods it constrains cannot be the ones
+ * to lift it. Setting it to what it already is changes and logs nothing.
+ */
+export const setSecondGodRule = mutation({
+  args: { requireSecondGod: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, { requireSecondGod }) => {
+    const identity = await ctx.auth.getUserIdentity()
+
+    if (!identity || !isTopGod(identity)) {
+      throw new ConvexError('Changing the approval rule requires a top-god account.')
+    }
+
+    const row = await ctx.db.query('topupPolicy').first()
+    if ((row?.requireSecondGod ?? true) === requireSecondGod) return null
+
+    const now = Date.now()
+    const next = { requireSecondGod, updatedAt: now, updatedBy: identity.tokenIdentifier }
+
+    if (row) {
+      await ctx.db.patch('topupPolicy', row._id, next)
+    } else {
+      await ctx.db.insert('topupPolicy', next)
+    }
+
+    await ctx.db.insert('topupPolicyChanges', {
+      requireSecondGod,
+      actorTokenIdentifier: identity.tokenIdentifier,
+      actorLabel: identity.email ?? identity.name ?? identity.subject,
+      createdAt: now
+    })
+
+    return null
+  }
+})
+
+/**
+ * Who is asking. A pending request offers its maker a cancel and everyone else
+ * an approve or a reject, and the console can only tell which by comparing the
+ * request's maker with the caller's own identifier.
+ */
+export const viewer = query({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => (await requireStaffIdentity(ctx)).tokenIdentifier
 })
 
 /** The console's top-up queue: newest first, capped, optionally narrowed by status and/or account. */

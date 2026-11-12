@@ -32,7 +32,7 @@ component HeroCTA
       div(aria-hidden={true} className='pointer-events-none absolute size-full dark:bg-white bg-foreground skew-3 scale-84 transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.82]')
       Link(
         ~ to={route}
-        ~ className='rounded-none bg-transparent relative z-10 w-full transition-transform duration-[160ms] ease-out-strong active:scale-[0.97] text-background'
+        ~ className='flex items-center rounded-none bg-transparent relative z-10 w-full transition-transform duration-[160ms] ease-out-strong active:scale-[0.97] text-background h-12 gap-2.5 px-6.5 font-[500] text-lg tracking-tight'
         ~ )
         span Enter Game
 props {}: {}
@@ -41,19 +41,21 @@ setup
   const session = {};
 div(className='app-shell')
   div(className="app-frame relative z-10 w-full max-w-[1480px] mx-auto px-4 py-4 md:py-2 overflow-x-hidden")
-      AnalyticsSessionContext(value={session})
-        AppHeader
+    AnalyticsSessionContext(value={session})
+      AppHeader
 
-      if !isAppPagePath(pathname)
-        fragment
-          div(className='font-sans grid grid-cols-1 md:grid-cols-5 md:items-center md:border-t size-full pt-6 md:pt-0 md:max-w-6xl mx-auto')
-            HeroImage(className='flex md:hidden h-72')
-            div(className='col-span-2 gap-6 flex flex-col justify-center min-h-80 md:min-h-100')
-              h1(className={"text-5xl md:text-6xl font-black tracking-tight md:block flex flex-col items-center"})
-                span(className='hero-rise [--hero-delay:40ms] block font-ark font-bold text-[#92fb06] text-8xl md:text-9xl tracking-tight leading-24 md:leading-28') #{"360x"}
-                div(className='hero-rise [--hero-delay:100ms]')
-                  span(className='block font-ark font-bold leading-10 md:leading-12') #{"Super"}
-                  span(className='block md:translate-x-4 font-ark font-black') #{"Jackpot"}
-              HeroCTA(route='/tickets')
-            HeroImage(className='hidden md:flex [--hero-delay:160ms]')
-      Outlet
+    if !isAppPagePath(pathname)
+      div(className='font-sans grid grid-cols-1 md:grid-cols-5 md:items-center md:border-t w-full md:h-200 pt-6 md:pt-0 md:max-w-6xl mx-auto')
+        HeroImage(className='flex md:hidden h-72 [--hero-delay:160ms]')
+        div(className='col-span-2 gap-6 flex flex-col justify-center min-h-80 md:min-h-80')
+          h1(className={"text-5xl md:text-6xl font-black tracking-tight md:block flex flex-col items-center"})
+            span(className='hero-rise [--hero-delay:40ms] block font-ark font-bold text-[#92fb06] text-8xl md:text-9xl tracking-tight leading-24 md:leading-28') #{"360x"}
+            div(className='hero-rise [--hero-delay:100ms]')
+              span(className='block font-ark font-bold leading-10 md:leading-12') #{"Super"}
+              span(className='block md:translate-x-4 font-ark font-black') #{"Jackpot"}
+          HeroCTA(route='/tickets')
+        HeroImage(className='hidden md:flex [--hero-delay:160ms]')
+    Outlet
+    footer(className="app-footer flex items-center h-16 font-mono text-foreground/40 text-xs tracking-widest space-x-3")
+      span &copy; #{new Date().getFullYear()}
+      span Lucky Pick 3

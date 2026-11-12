@@ -6,6 +6,7 @@ import { getVerifiedGodSession } from '@/lib/firebase-admin/server-auth'
 import { getHostnameFromHostHeader } from '@/lib/routing/admin-subdomain'
 import { isAsgardConsoleHostname } from '@/lib/routing/asgard-subdomain'
 import { api } from '../../convex/_generated/api'
+import type { Id } from '../../convex/_generated/dataModel'
 import { createConvexClient, RequestError } from './convex'
 
 export interface AsgardAccountRouteEnvironment {
@@ -15,6 +16,10 @@ export interface AsgardAccountRouteEnvironment {
 export type AsgardAccountListResponse = {
   accounts: Awaited<ReturnType<typeof listAccounts>>
 }
+
+export type AsgardAccountActivityResponse = Awaited<ReturnType<typeof loadAccountActivity>>
+
+export type AsgardAccountSettingsResponse = Awaited<ReturnType<typeof loadAccountSettings>>
 
 export type AsgardAccountCreateResponse = AsgardAccountListResponse
 
@@ -30,6 +35,9 @@ const ACCOUNT_LIST_LIMIT = 250
  * ledger itself. All of it is read in one request, so none of it is paginated.
  */
 const ACCOUNT_TOPUP_LIMIT = 50
+
+/** How many top-up requests, across every account, the Activity tab reads. */
+const ACTIVITY_TOPUP_LIMIT = 100
 const ACCOUNT_ENTRY_LIMIT = 50
 
 const json = (body: unknown, status = 200) =>
@@ -67,6 +75,33 @@ async function getAsgardConvexClient(
 const listAccounts = (client: AsgardConvexClient) =>
   client.query(api.accounts.q.listForAsgard, { limit: ACCOUNT_LIST_LIMIT })
 
+/**
+ * What the Activity tab is built from: the roster and the most recent top-up
+ * requests across every account. The feed itself is assembled on the client,
+ * so this stays two plain reads.
+ */
+async function loadAccountActivity(client: AsgardConvexClient) {
+  const [accounts, topups, policyChanges] = await Promise.all([
+    listAccounts(client),
+    client.query(api.money.topups.list, { limit: ACTIVITY_TOPUP_LIMIT }),
+    client.query(api.money.topups.policyChanges, {})
+  ])
+
+  return { accounts, topups, policyChanges }
+}
+
+/**
+ * What the Settings tab needs: the approval rule as it stands, and whether
+ * this caller may switch it. `canManage` only decides what the console offers;
+ * Convex is what refuses a god who is not a top god.
+ */
+async function loadAccountSettings(client: AsgardConvexClient, session: GodSession) {
+  return {
+    policy: await client.query(api.money.topups.policy, {}),
+    canManage: session.customClaims.topg === true
+  }
+}
+
 const checkAccountSlugAvailability = (client: AsgardConvexClient, slug: string) =>
   client.query(api.accounts.q.checkSlugAvailability, { slug })
 
@@ -83,14 +118,92 @@ async function loadAccountDetail(client: AsgardConvexClient, slug: string) {
   const account = await client.query(api.accounts.q.getBySlug, { slug })
   if (!account) return null
 
-  // All three take only the account id, and none waits on the others.
-  const [wallets, topups, entries] = await Promise.all([
+  // None of these waits on the others. `viewer` is who is asking, which is what
+  // tells a pending top-up's maker (who may cancel it) from its checkers.
+  const [wallets, topups, entries, viewerTokenIdentifier, policy] = await Promise.all([
     client.query(api.ledger.q.partnerWallets, { accountId: account._id }),
     client.query(api.money.topups.list, { accountId: account._id, limit: ACCOUNT_TOPUP_LIMIT }),
-    client.query(api.ledger.q.partnerFloatHistory, { accountId: account._id, limit: ACCOUNT_ENTRY_LIMIT })
+    client.query(api.ledger.q.partnerFloatHistory, { accountId: account._id, limit: ACCOUNT_ENTRY_LIMIT }),
+    client.query(api.money.topups.viewer, {}),
+    client.query(api.money.topups.policy, {})
   ])
 
-  return { account, wallets, topups, entries }
+  // `requireSecondGod` decides whether a request's maker is offered approve and reject.
+  return { account, wallets, topups, entries, viewerTokenIdentifier, requireSecondGod: policy.requireSecondGod }
+}
+
+/**
+ * What a POST to one account's page may ask for: filing a top-up, or deciding
+ * one that is pending. Convex re-validates every field and enforces who may do
+ * which, so this only narrows `unknown` into the mutation arguments.
+ */
+function readTopupActionBody(body: unknown) {
+  const payload = readObject(body)
+  const id = asTrimmedString(payload.id) as Id<'topupRequests'>
+
+  switch (payload.action) {
+    case 'request': {
+      if (typeof payload.amount !== 'number') return { error: 'A top-up amount is required.' as const }
+      const paymentReference = asTrimmedString(payload.paymentReference)
+      if (!paymentReference) return { error: 'A payment reference is required.' as const }
+
+      return {
+        action: 'request' as const,
+        amount: payload.amount,
+        paymentReference,
+        note: asOptionalString(payload.note)
+      }
+    }
+    case 'approve':
+      if (!id) return { error: 'A top-up request is required.' as const }
+      return { action: 'approve' as const, id, decisionNote: asOptionalString(payload.decisionNote) }
+    case 'reject': {
+      if (!id) return { error: 'A top-up request is required.' as const }
+      const decisionNote = asTrimmedString(payload.decisionNote)
+      if (!decisionNote) return { error: 'A rejection needs a reason.' as const }
+      return { action: 'reject' as const, id, decisionNote }
+    }
+    case 'cancel':
+      if (!id) return { error: 'A top-up request is required.' as const }
+      return { action: 'cancel' as const, id }
+    default:
+      return { error: 'Unknown top-up action.' as const }
+  }
+}
+
+type TopupAction = Exclude<ReturnType<typeof readTopupActionBody>, { error: string }>
+
+/** Runs one top-up action against the account behind `slug`. `false` means no such account. */
+async function runTopupAction(client: AsgardConvexClient, slug: string, action: TopupAction) {
+  const account = await client.query(api.accounts.q.getBySlug, { slug })
+  if (!account) return false
+
+  if (action.action === 'request') {
+    await client.mutation(api.money.topups.request, {
+      accountId: account._id,
+      amount: action.amount,
+      paymentReference: action.paymentReference,
+      note: action.note
+    })
+    return true
+  }
+
+  // A decision names a request by id, so it is checked against this page's
+  // account: a request filed for another house is not decided from here.
+  const requests = await client.query(api.money.topups.list, { accountId: account._id, limit: ACCOUNT_TOPUP_LIMIT })
+  if (!requests.some((request) => request._id === action.id)) {
+    throw new RequestError(404, 'That top-up request does not belong to this account.')
+  }
+
+  if (action.action === 'approve') {
+    await client.mutation(api.money.topups.approve, { id: action.id, decisionNote: action.decisionNote })
+  } else if (action.action === 'reject') {
+    await client.mutation(api.money.topups.reject, { id: action.id, decisionNote: action.decisionNote })
+  } else {
+    await client.mutation(api.money.topups.cancel, { id: action.id })
+  }
+
+  return true
 }
 
 const asTrimmedString = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
@@ -197,8 +310,13 @@ function handleRouteError(error: unknown, fallback: string) {
 /**
  * `GET /api/asgard/accounts` — every account and its status.
  * `GET /api/asgard/accounts?slug=…` — validate one prospective slug.
+ * `GET /api/asgard/accounts?view=activity` — the roster and recent top-ups, for the activity feed.
  * `GET /api/asgard/accounts/:slug` — one account, its wallets, top-ups and float history.
- * `POST /api/asgard/accounts` — provision a new account.
+ * `GET /api/asgard/accounts?view=settings` — the top-up approval rule, and whether the caller may switch it.
+ * `POST /api/asgard/accounts` — provision a new account, or, with
+ *   `{ action: 'set-second-god-rule', requireSecondGod }`, switch the approval rule.
+ * `POST /api/asgard/accounts/:slug` — file a top-up for the account, or approve,
+ *   reject or cancel one that is pending. Answers with the refreshed account.
  */
 export async function handleAsgardAccounts(
   request: Request,
@@ -213,10 +331,6 @@ export async function handleAsgardAccounts(
   if (route.kind === 'unknown') return json({ error: 'Not found.' }, 404)
 
   if (request.method !== 'GET' && request.method !== 'POST') {
-    return json({ error: 'Method not allowed.' }, 405)
-  }
-  // Only the roster endpoint provisions accounts; one account's page is a read.
-  if (request.method === 'POST' && route.kind === 'account') {
     return json({ error: 'Method not allowed.' }, 405)
   }
   if (request.method === 'POST' && !isSameOriginRequest(request)) {
@@ -239,7 +353,11 @@ export async function handleAsgardAccounts(
         return detail ? json(detail) : json({ error: 'Account not found.' }, 404)
       }
 
-      const slug = new URL(request.url).searchParams.get('slug')
+      const searchParams = new URL(request.url).searchParams
+      if (searchParams.get('view') === 'activity') return json(await loadAccountActivity(client))
+      if (searchParams.get('view') === 'settings') return json(await loadAccountSettings(client, session))
+
+      const slug = searchParams.get('slug')
       if (slug !== null) return json(await checkAccountSlugAvailability(client, slug))
       return json({ accounts: await listAccounts(client) })
     }
@@ -249,6 +367,26 @@ export async function handleAsgardAccounts(
       body = await request.json()
     } catch {
       return json({ error: 'A valid JSON request body is required.' }, 400)
+    }
+
+    if (route.kind === 'account') {
+      const action = readTopupActionBody(body)
+      if ('error' in action) return json({ error: action.error }, 400)
+
+      if (!(await runTopupAction(client, route.slug, action))) return json({ error: 'Account not found.' }, 404)
+
+      // Re-read rather than patching the page's copy: an approval moves the
+      // float, its history and the request itself in one go.
+      const detail = await loadAccountDetail(client, route.slug)
+      return detail ? json(detail) : json({ error: 'Account not found.' }, 404)
+    }
+
+    const rule = readObject(body)
+    if (rule.action === 'set-second-god-rule') {
+      if (typeof rule.requireSecondGod !== 'boolean') return json({ error: 'Say whether the rule is on or off.' }, 400)
+
+      await client.mutation(api.money.topups.setSecondGodRule, { requireSecondGod: rule.requireSecondGod })
+      return json(await loadAccountSettings(client, session))
     }
 
     const parsed = readCreateAccountBody(body)
@@ -264,7 +402,9 @@ export async function handleAsgardAccounts(
     return handleRouteError(
       error,
       request.method === 'POST'
-        ? 'Unable to create the account.'
+        ? route.kind === 'account'
+          ? 'Unable to update this top-up.'
+          : 'Unable to create the account.'
         : route.kind === 'account'
           ? 'Unable to load this account.'
           : 'Unable to load accounts.'

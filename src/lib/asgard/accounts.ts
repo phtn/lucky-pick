@@ -2,9 +2,11 @@ import { ACCOUNT_STATUS_VALUES, formatAccountCredits, type AccountStatus } from 
 import { ACCOUNT_STATUS_LABEL } from '@/lib/accounts/account-status'
 import { ASGARD_ACCOUNTS_ENDPOINT, asgardAccountEndpoint } from '@/lib/asgard/account-api'
 import type {
+  AsgardAccountActivityResponse,
   AsgardAccountCreateResponse,
   AsgardAccountDetailResponse,
   AsgardAccountListResponse,
+  AsgardAccountSettingsResponse,
   AsgardAccountSlugAvailabilityResponse
 } from '@/server/asgard-account-routes'
 
@@ -68,6 +70,39 @@ export function fetchAccounts(signal?: AbortSignal) {
   )
 }
 
+/** The roster and recent top-ups the Activity tab builds its feed from. */
+export function fetchAccountActivity(signal?: AbortSignal) {
+  return requestJson<AsgardAccountActivityResponse>(
+    `${ASGARD_ACCOUNTS_ENDPOINT}?view=activity`,
+    { signal },
+    'Could not load account activity.'
+  )
+}
+
+export type AccountSettings = AsgardAccountSettingsResponse
+export type TopupPolicyChange = AsgardAccountActivityResponse['policyChanges'][number]
+
+export function fetchAccountSettings(signal?: AbortSignal) {
+  return requestJson<AccountSettings>(
+    `${ASGARD_ACCOUNTS_ENDPOINT}?view=settings`,
+    { signal },
+    'Could not load the account rules.'
+  )
+}
+
+/** Switches the second-god rule and answers with the settings as they now stand. */
+export function setSecondGodRule(requireSecondGod: boolean) {
+  return requestJson<AccountSettings>(
+    ASGARD_ACCOUNTS_ENDPOINT,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'set-second-god-rule', requireSecondGod })
+    },
+    'Could not change the approval rule.'
+  )
+}
+
 /** One account's page. A 404 is a real answer here, so it reads as `null`. */
 export async function fetchAccount(slug: string, signal?: AbortSignal): Promise<AccountDetail | null> {
   const response = await fetch(asgardAccountEndpoint(slug), { credentials: 'same-origin', signal })
@@ -75,6 +110,26 @@ export async function fetchAccount(slug: string, signal?: AbortSignal): Promise<
   if (!response.ok) throw new Error(await readError(response, 'Could not load this account.'))
 
   return (await response.json()) as AccountDetail
+}
+
+/** What the account page can do about top-ups. Mirrors the route's POST body. */
+export type TopupAction =
+  | { action: 'request'; amount: number; paymentReference: string; note?: string }
+  | { action: 'approve'; id: string; decisionNote?: string }
+  | { action: 'reject'; id: string; decisionNote: string }
+  | { action: 'cancel'; id: string }
+
+/** Files or decides a top-up and answers with the account as it now stands. */
+export function submitTopupAction(slug: string, action: TopupAction) {
+  return requestJson<AccountDetail>(
+    asgardAccountEndpoint(slug),
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(action)
+    },
+    'Could not update this top-up.'
+  )
 }
 
 export function checkAccountSlugAvailability(slug: string, signal?: AbortSignal) {

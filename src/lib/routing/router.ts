@@ -1,4 +1,4 @@
-import { createRootRoute, createRoute, createRouter, lazyRouteComponent } from '@octanejs/tanstack-router'
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent, type RouteComponent } from '@octanejs/tanstack-router'
 import AnalyticsRoute from '@/pages/AnalyticsRoute.btsx'
 import AppRoot from '@/pages/AppRoot.btsx'
 import { adminRoutePrefix, isAdminSubdomainHostname } from './admin-subdomain'
@@ -16,24 +16,30 @@ const isAsgardHost = typeof window !== 'undefined' && isAsgardSubdomainHostname(
 // them and the two labels never overlap.
 const isAdminHost = typeof window !== 'undefined' && isAdminSubdomainHostname(window.location.hostname)
 
-const asgardShell = lazyRouteComponent(() => import('@/pages/asgard-page.btsx'))
-const asgardOverview = lazyRouteComponent(() => import('@/pages/asgard-overview-page.btsx'))
-const asgardAccounts = lazyRouteComponent(() => import('@/pages/asgard-accounts-page.btsx'))
-const asgardAccount = lazyRouteComponent(() => import('@/pages/asgard-account-page.btsx'))
-const asgardGames = lazyRouteComponent(() => import('@/pages/asgard-games-page.btsx'))
+// The router library types `lazyRouteComponent`'s `preload` as possibly
+// returning `undefined`, but a route's `component` wants one that always
+// returns a promise. The two are the library's own halves of one feature, so
+// the mismatch is bridged once here rather than at every route.
+const lazyPage = (importer: () => Promise<unknown>) => lazyRouteComponent(importer) as unknown as RouteComponent
 
-const profilePage = lazyRouteComponent(() => import('@/pages/profile-page.btsx'))
-const trxPage = lazyRouteComponent(() => import('@/pages/trx-page.btsx'))
+const asgardShell = lazyPage(() => import('@/pages/asgard-page.btsx'))
+const asgardOverview = lazyPage(() => import('@/pages/asgard-overview-page.btsx'))
+const asgardAccounts = lazyPage(() => import('@/pages/asgard-accounts-page.btsx'))
+const asgardAccount = lazyPage(() => import('@/pages/asgard-account-page.btsx'))
+const asgardGames = lazyPage(() => import('@/pages/asgard-games-page.btsx'))
+
+const profilePage = lazyPage(() => import('@/pages/profile-page.btsx'))
+const trxPage = lazyPage(() => import('@/pages/trx-page.btsx'))
 
 // The simulator is a surface of its own, not a page inside the landing shell:
 // it brings its own `app-shell`, frame and header, so it hangs off the root
 // rather than the landing page's `Outlet`. Lazy, so arriving at the landing
 // page does not pay for the whole game up front.
-const gamePage = lazyRouteComponent(() => import('../../Tickets.btsx'))
-const ticketsPage = lazyRouteComponent(() => import('@/pages/tickets-page.btsx'))
+const gamePage = lazyPage(() => import('../../Tickets.btsx'))
+const ticketsPage = lazyPage(() => import('@/pages/tickets-page.btsx'))
 
-const adminShell = lazyRouteComponent(() => import('@/pages/admin-page.btsx'))
-const adminOverview = lazyRouteComponent(() => import('@/pages/admin-overview-page.btsx'))
+const adminShell = lazyPage(() => import('@/pages/admin-page.btsx'))
+const adminOverview = lazyPage(() => import('@/pages/admin-overview-page.btsx'))
 
 function createAdminRouteTree() {
   const rootRoute = createRootRoute({ component: adminShell })

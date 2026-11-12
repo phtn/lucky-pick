@@ -7,7 +7,7 @@ export const usePathname = () =>
   })
 
 export function navigate(path: string) {
-  void analyticsRouter.navigate({ to: path, hash: true })
+  void router.navigate({ to: path, hash: true })
 }
 
 export function followRoute(event: MouseEvent, path: string) {

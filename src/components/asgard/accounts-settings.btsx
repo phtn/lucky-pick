@@ -1,0 +1,109 @@
+import { useEffect, useState } from 'octane'
+import { Icon } from '@/lib/icons'
+import { cn } from '@/lib/utils'
+import { ACCOUNT_RULE_GROUPS, topupApprovalRules, type AccountRule } from '@/lib/asgard/account-rules'
+import { fetchAccountSettings, formatAccountDate, setSecondGodRule, type AccountSettings } from '@/lib/asgard/accounts'
+import { isAbortError, readErrorMessage } from '@/lib/asgard/errors'
+
+module
+  type Status = 'loading' | 'ready' | 'error'
+
+  const labelClass = 'font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground'
+  const panelClass = 'rounded-lg border border-sidebar-border bg-foreground/[0.015]'
+  const headingClass = 'border-b border-dashed border-sidebar-border px-3 py-2.5'
+
+  export { RuleList }
+
+component RuleList
+  props { rules }: { rules: AccountRule[] }
+  dl(className='divide-y divide-dashed divide-sidebar-border')
+    each rule in rules key rule.label
+      div(className='grid gap-1 px-3 py-2.5')
+        div(className='flex flex-wrap items-baseline justify-between gap-2')
+          dt(className='text-sm text-muted-foreground') #{rule.label}
+          dd(className='text-right text-sm text-foreground') #{rule.value}
+        if rule.detail
+          p(className='font-mono text-2xs leading-relaxed text-muted-foreground') #{rule.detail}
+
+setup
+  const [settings, setSettings] = useState<AccountSettings | null>(null)
+  const [status, setStatus] = useState<Status>('loading')
+  const [error, setError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    fetchAccountSettings(controller.signal)
+      .then((response) => {
+        setSettings(response)
+        setStatus('ready')
+      })
+      .catch((caught: unknown) => {
+        if (isAbortError(caught)) return
+        setError(readErrorMessage(caught, 'Could not load the account rules.'))
+        setStatus('error')
+      })
+
+    return () => controller.abort()
+  }, [])
+
+  const required = settings?.policy.requireSecondGod ?? true
+  const canToggle = status === 'ready' && settings?.canManage === true && !isSaving
+
+  const ruleNote =
+    status === 'loading'
+      ? 'Loading the current rule…'
+      : status === 'error'
+        ? 'The current rule could not be read, so it is shown as on.'
+        : required
+          ? 'On: the god who files a top-up cannot be the one who decides it.'
+          : 'Off: a god can approve their own top-up and mint credits alone.'
+
+  const toggle = async () => {
+    if (!canToggle) return
+    setIsSaving(true)
+    setError(null)
+    try {
+      setSettings(await setSecondGodRule(!required))
+    } catch (caught: unknown) {
+      setError(readErrorMessage(caught, 'Could not change the approval rule.'))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+div(className='grid gap-4')
+  p(className='max-w-2xl text-sm leading-relaxed text-muted-foreground') These are the rules every account runs under. All but the second-god check are set in code and enforced by the server, so they cannot be edited from the console.
+
+  section(className={panelClass})
+    h2(className={cn(labelClass, headingClass)}) Top-up approval
+    div(className='flex flex-wrap items-center justify-between gap-3 border-b border-dashed border-sidebar-border px-3 py-3')
+      div(className='min-w-0 flex-1')
+        p(id='second-god-label' className='text-sm text-foreground') Require a different god to approve or reject
+        p(className='mt-1 font-mono text-2xs leading-relaxed text-muted-foreground') #{ruleNote}
+        if settings?.policy.updatedAt
+          p(className='mt-1 font-mono text-2xs text-muted-foreground') Last switched #{formatAccountDate(settings.policy.updatedAt)}.
+        if status === 'ready' && settings?.canManage === false
+          p(className='mt-1 font-mono text-2xs text-muted-foreground') Only a top god can switch this.
+      button(
+        ~ type='button'
+        ~ role='switch'
+        ~ aria-checked={required}
+        ~ aria-labelledby='second-god-label'
+        ~ disabled={!canToggle}
+        ~ onClick={toggle}
+        ~ className={cn('relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50', required ? 'border-emerald-500/40 bg-emerald-500/80' : 'border-border bg-foreground/15')}
+        ~ )
+        span(aria-hidden={true} className={cn('absolute top-1/2 left-0.5 grid size-[18px] -translate-y-1/2 place-items-center rounded-full bg-background shadow-sm transition-transform duration-150 ease-out', required && 'translate-x-5')})
+          if isSaving
+            Icon(name='spinner' size={10} className='animate-spin text-muted-foreground')
+    if error
+      p(className='border-b border-dashed border-sidebar-border px-3 py-2 text-sm text-destructive' role='alert') #{error}
+    RuleList(rules={topupApprovalRules(required)})
+
+  div(className='grid gap-4 lg:grid-cols-2')
+    each group in ACCOUNT_RULE_GROUPS key group.title
+      section(className={panelClass})
+        h2(className={cn(labelClass, headingClass)}) #{group.title}
+        RuleList(rules={group.rules})

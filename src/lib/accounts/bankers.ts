@@ -54,7 +54,7 @@ export function toBankerItems(rows: BankerRow[]): BankerItem[] {
     icon: 'bank',
     description: describeBankerStatus(row.status) ?? undefined,
     // A balance only means something at a house the player can play at.
-    meta: canUseAccount(row.status) ? formatAccountCredits(row.balance) : undefined,
+    meta: canUseAccount(row.status) ? '' : undefined,
     disabled: !canUseAccount(row.status),
     // The logo is the house's own face and wins; the contact's avatar is the
     // stand-in for a house that has not set one.

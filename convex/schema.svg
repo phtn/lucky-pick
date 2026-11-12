@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" width="1200" height="800" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+    <style>
+      .bg { fill: #0f172a; }
+      .title { fill: #f8fafc; font-size: 24px; font-weight: 700; }
+      .subtitle { fill: #94a3b8; font-size: 13px; }
+      .box { fill: #1e293b; stroke-width: 2; }
+      .identity { stroke: #60a5fa; }
+      .money { stroke: #34d399; }
+      .activity { stroke: #a78bfa; }
+      .reference { stroke: #fbbf24; }
+      .legacy { stroke: #64748b; stroke-dasharray: 6 5; }
+      .name { fill: #f8fafc; font-size: 16px; font-weight: 700; text-anchor: middle; }
+      .desc { fill: #cbd5e1; font-size: 11.5px; text-anchor: middle; }
+      .edge { stroke: #94a3b8; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+      .both { marker-start: url(#arrow); }
+      .soft { stroke: #94a3b8; stroke-width: 1.6; fill: none; stroke-dasharray: 2 5; }
+      .label { fill: #e2e8f0; font-size: 11.5px; paint-order: stroke; stroke: #0f172a; stroke-width: 5px; stroke-linejoin: round; }
+      .legend { fill: #94a3b8; font-size: 12px; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1200" height="800" rx="18"/>
+  <text class="title" x="40" y="52">Lucky Pick · Convex schema</text>
+  <text class="subtitle" x="40" y="76">13 tables. An arrow points from the table that stores an id to the table it refers to.</text>
+
+  <!-- edges -->
+  <path class="edge" d="M540,180 L440,260"/>
+  <path class="edge" d="M660,180 L760,260"/>
+  <path class="edge" d="M510,285 L690,285"/>
+  <path class="edge" d="M690,320 L510,320"/>
+  <path class="edge" d="M230,302 L290,302"/>
+  <path class="edge" d="M1000,302 L910,302"/>
+  <path class="edge" d="M540,430 L440,344"/>
+  <path class="edge" d="M660,430 L760,344"/>
+  <path class="edge" d="M1000,430 L870,344"/>
+  <path class="edge" d="M800,600 L800,344"/>
+  <path class="edge" d="M450,600 L550,514"/>
+  <path class="edge" d="M510,642 L690,642"/>
+  <path class="edge both" d="M1060,514 L930,630"/>
+  <path class="edge" d="M840,684 C840,740 900,740 900,684"/>
+  <path class="soft" d="M130,344 L130,430"/>
+
+  <!-- edge labels -->
+  <text class="label" x="478" y="216" text-anchor="end">userId</text>
+  <text class="label" x="722" y="216">accountId</text>
+  <text class="label" x="600" y="277" text-anchor="middle">selectedAccountId</text>
+  <text class="label" x="600" y="338" text-anchor="middle">primaryContact.userId</text>
+  <text class="label" x="260" y="293" text-anchor="middle">userId</text>
+  <text class="label" x="955" y="293" text-anchor="middle">accountId</text>
+  <text class="label" x="478" y="394" text-anchor="end">userId</text>
+  <text class="label" x="722" y="394">accountId</text>
+  <text class="label" x="950" y="384">accountId</text>
+  <text class="label" x="810" y="486">accountId</text>
+  <text class="label" x="488" y="553" text-anchor="end">walletId</text>
+  <text class="label" x="600" y="633" text-anchor="middle">txnId</text>
+  <text class="label" x="1008" y="582">txnId ⇄ ref</text>
+  <text class="label" x="870" y="748" text-anchor="middle">reversesTxnId</text>
+  <text class="label" x="142" y="391">game = gameId (by value)</text>
+
+  <!-- row A -->
+  <rect class="box activity" x="490" y="110" width="220" height="70" rx="12"/>
+  <text class="name" x="600" y="140">notifications</text>
+  <text class="desc" x="600" y="161">A user's inbox, newest 100 kept</text>
+
+  <!-- row B -->
+  <rect class="box activity" x="30" y="260" width="200" height="84" rx="12"/>
+  <text class="name" x="130" y="294">practicePlays</text>
+  <text class="desc" x="130" y="316">One resolved practice draw</text>
+
+  <rect class="box identity" x="290" y="260" width="220" height="84" rx="12"/>
+  <text class="name" x="400" y="294">users</text>
+  <text class="desc" x="400" y="316">A signed-in person (Firebase)</text>
+
+  <rect class="box identity" x="690" y="260" width="220" height="84" rx="12"/>
+  <text class="name" x="800" y="294">accounts</text>
+  <text class="desc" x="800" y="316">A house (banker / partner)</text>
+
+  <rect class="box legacy" x="1000" y="260" width="170" height="84" rx="12"/>
+  <text class="name" x="1085" y="290">credits</text>
+  <text class="desc" x="1085" y="310">Legacy balances, migrating</text>
+  <text class="desc" x="1085" y="327">also userId → users</text>
+
+  <!-- row C -->
+  <rect class="box reference" x="30" y="430" width="200" height="84" rx="12"/>
+  <text class="name" x="130" y="464">games</text>
+  <text class="desc" x="130" y="486">Price grid and stakes per game</text>
+
+  <rect class="box money" x="490" y="430" width="220" height="84" rx="12"/>
+  <text class="name" x="600" y="464">wallets</text>
+  <text class="desc" x="600" y="486">Balances: available and held</text>
+
+  <rect class="box money" x="950" y="430" width="220" height="84" rx="12"/>
+  <text class="name" x="1060" y="464">topupRequests</text>
+  <text class="desc" x="1060" y="486">Maker-checker credit purchase</text>
+
+  <!-- row D -->
+  <rect class="box reference" x="30" y="600" width="200" height="84" rx="12"/>
+  <text class="name" x="130" y="634">historicalResults</text>
+  <text class="desc" x="130" y="656">Imported PCSO draw results</text>
+
+  <rect class="box money" x="290" y="600" width="220" height="84" rx="12"/>
+  <text class="name" x="400" y="634">ledgerEntries</text>
+  <text class="desc" x="400" y="656">One signed leg in one bucket</text>
+
+  <rect class="box money" x="690" y="600" width="240" height="84" rx="12"/>
+  <text class="name" x="810" y="634">ledgerTransactions</text>
+  <text class="desc" x="810" y="656">Immutable, idempotent header</text>
+
+  <rect class="box money" x="970" y="640" width="200" height="84" rx="12"/>
+  <text class="name" x="1070" y="670">topupPolicy</text>
+  <text class="desc" x="1070" y="690">Second-god rule, one row</text>
+  <text class="desc" x="1070" y="707">+ topupPolicyChanges log</text>
+
+  <!-- legend -->
+  <g transform="translate(40,776)">
+    <rect x="0" y="-11" width="14" height="14" rx="3" fill="#1e293b" stroke="#60a5fa" stroke-width="2"/>
+    <text class="legend" x="22" y="1">Identity</text>
+    <rect x="96" y="-11" width="14" height="14" rx="3" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+    <text class="legend" x="118" y="1">Money</text>
+    <rect x="182" y="-11" width="14" height="14" rx="3" fill="#1e293b" stroke="#a78bfa" stroke-width="2"/>
+    <text class="legend" x="204" y="1">Per-user activity</text>
+    <rect x="322" y="-11" width="14" height="14" rx="3" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+    <text class="legend" x="344" y="1">Reference data</text>
+    <rect x="456" y="-11" width="14" height="14" rx="3" fill="#1e293b" stroke="#64748b" stroke-width="2" stroke-dasharray="3 2"/>
+    <text class="legend" x="478" y="1">Legacy</text>
+    <path d="M560,-4 L600,-4" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#arrow)"/>
+    <text class="legend" x="608" y="1">stores an id of</text>
+    <path d="M722,-4 L762,-4" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="2 5"/>
+    <text class="legend" x="770" y="1">same value, no id</text>
+  </g>
+</svg>

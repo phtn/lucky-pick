@@ -191,7 +191,7 @@ setup
     setConfirmingHouseIds((ids) => new Set(ids).add(accountId))
     setHouseError(null)
     try {
-      await convexClient.mutation(api.accounts.m.confirmAsContact, { accountId: accountId as Id<'accounts'> })
+      await convexClient?.mutation(api.accounts.m.confirmAsContact, { accountId: accountId as Id<'accounts'> })
     } catch (error) {
       // The guard refuses a stranger, an unlinked contact, a house that is no
       // longer pending and a missing house with one identical message, so the
@@ -262,14 +262,14 @@ setup
 section(className='relative overview-page pb-16')
   div(className='px-4')
     div(className='flex items-center w-full')
-      div(className='translate-x-11 size-10 flex items-end ')
+      div(className='translate-x-12 size-12 flex items-end ')
         if avatarUrl
           img(
             ~ src={avatarUrl}
             ~ alt=''
             ~ referrerPolicy='no-referrer'
             ~ onError={() => setBrokenPhotoUrl(photoUrl)}
-            ~ className='size-8.5 shrink-0 rounded-full aspect-square object-cover border'
+            ~ className='size-8 shrink-0 rounded-full aspect-square object-cover border'
             ~ )
         else
           div(className='grid size-8 shrink-0 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
@@ -280,16 +280,13 @@ section(className='relative overview-page pb-16')
         ~ eyebrow={email || 'No email on this account'}
         ~ title={name || 'Your profile'}
         ~ description='Monitor tickets and review recent bets.'
-        ~ titleClass='ml-12'
+        ~ titleClass='ml-12 text-4xl!'
         ~ )
         // States the one fact the whole page depends on, so empty panels are read
         // as an empty account rather than as a page that failed.
         div(className='flex items-center gap-3 md:gap-6 rounded-full px-3 py-1.5')
-          div(className='flex items-center gap-2')
-            span(aria-hidden={true} className={cn('size-1.5 rounded-full', isSignedIn ? 'bg-chart-good' : 'bg-chart-idle')})
-            span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') #{isSignedIn ? 'signed in' : 'signed out'}
           if isVerified
-            span(className={cn(chipClass, 'bg-chart-good/15 text-emerald-700 dark:text-emerald-400')}) verified
+            span(className={cn(chipClass, 'rounded bg-chart-good/15 text-emerald-700 dark:text-emerald-400')}) verified
           else
 
             span(className={cn(chipClass, 'bg-amber-500/15 text-amber-700 dark:text-amber-400')}) unverified
@@ -358,7 +355,7 @@ section(className='relative overview-page pb-16')
                   ~ )
                   span I have saved it
         if houseItems.length > 0
-          Panel(title='Your houses' description='Houses you were named on as the contact.' meta={formatCount(houseItems.length)})
+          Panel(title='Your Bankers' description='Houses you were named on as the contact.' meta={formatCount(houseItems.length)})
             ul(className='overview-feed')
               each house in houseItems key house.id
                 li(className='flex flex-wrap items-center gap-x-4 gap-y-1')

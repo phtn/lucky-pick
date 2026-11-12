@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
-import { formatAccountCredits, type AccountStatus } from './accounts'
+import type { AccountStatus } from './accounts'
 import {
   compareBankerRows,
   describeBankerStatus,
@@ -101,10 +101,9 @@ describe('toBankerItems', () => {
     assert.equal(item?.imageUrl, null)
   })
 
-  test('shows the balance as meta via formatAccountCredits', () => {
+  test('keeps the balance out of meta on a house that can take players', () => {
     const [item] = toBankerItems([row('A', 'active', { balance: 250_000 })])
-    assert.equal(item?.meta, formatAccountCredits(250_000))
-    assert.equal(item?.meta, '250K')
+    assert.equal(item?.meta, '')
     assert.equal(item?.id, 'id-A')
     assert.equal(item?.label, 'A')
     assert.equal(item?.icon, 'bank')

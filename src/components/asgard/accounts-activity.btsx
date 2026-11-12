@@ -1,0 +1,96 @@
+import { useEffect, useState } from 'octane'
+import { Link } from '@octanejs/tanstack-router'
+import { Icon } from '@/lib/icons'
+import { cn } from '@/lib/utils'
+import { ACCOUNT_ACTIVITY_LABEL, ACCOUNT_ACTIVITY_TONE, buildAccountActivity, formatActivityTime, type AccountActivityEvent, type PendingTopup } from '@/lib/asgard/account-activity'
+import { fetchAccountActivity } from '@/lib/asgard/accounts'
+import { asgardAccountPath } from '@/lib/asgard/console-paths'
+import { isAbortError, readErrorMessage } from '@/lib/asgard/errors'
+
+module
+  type Status = 'loading' | 'ready' | 'error'
+  type Feed = { pending: PendingTopup[]; events: AccountActivityEvent[] }
+
+  const labelClass = 'font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground'
+  const panelClass = 'rounded-lg border border-sidebar-border bg-foreground/[0.015]'
+  const emptyClass = 'rounded-lg border border-dashed border-sidebar-border px-4 py-10 text-center text-sm text-muted-foreground'
+  const linkClass = 'truncate text-sm text-foreground underline-offset-4 hover:underline'
+
+  const credits = (amount: number) => `${amount.toLocaleString('en-US')} CR`
+
+setup
+  const hostname = typeof window === 'undefined' ? '' : window.location.hostname
+  const [feed, setFeed] = useState<Feed | null>(null)
+  const [status, setStatus] = useState<Status>('loading')
+  const [error, setError] = useState<string | null>(null)
+  // Bumped by "Try again", which is all it takes to run the load once more.
+  const [attempt, setAttempt] = useState(0)
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    setStatus('loading')
+    fetchAccountActivity(controller.signal)
+      .then((response) => {
+        setFeed(buildAccountActivity(response.accounts, response.topups, response.policyChanges))
+        setError(null)
+        setStatus('ready')
+      })
+      .catch((caught: unknown) => {
+        if (isAbortError(caught)) return
+        setError(readErrorMessage(caught, 'Could not load account activity.'))
+        setStatus('error')
+      })
+
+    return () => controller.abort()
+  }, [attempt])
+
+if status === 'loading'
+  div(className='grid min-h-[40vh] place-items-center')
+    Icon(name='spinner' size={18} className='animate-spin text-muted-foreground')
+elseif status === 'error' || !feed
+  div(className='grid min-h-[40vh] place-items-center px-6 text-center')
+    div(className='flex max-w-sm flex-col items-center gap-3')
+      p(className='text-sm text-destructive' role='alert') #{error ?? 'Could not load account activity.'}
+      button(type='button' onClick={() => setAttempt((value) => value + 1)} className='font-mono text-xs uppercase tracking-wider text-muted-foreground underline hover:text-foreground') Try again
+else
+  div(className='grid gap-6')
+    section(className='grid gap-2')
+      div(className='flex items-baseline justify-between gap-3')
+        h2(className={labelClass}) Waiting for approval
+        span(className='font-mono text-2xs text-muted-foreground') #{feed.pending.length}
+      if feed.pending.length === 0
+        p(className={emptyClass}) No top-up is waiting for a second god.
+      else
+        ul(className={cn(panelClass, 'divide-y divide-dashed divide-sidebar-border overflow-hidden')})
+          each request in feed.pending key request.id
+            li(className='flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5')
+              span(className='w-32 shrink-0 font-mono text-2xs text-muted-foreground') #{formatActivityTime(request.at)}
+              if request.accountSlug
+                Link(to={asgardAccountPath(hostname, request.accountSlug)} className={cn(linkClass, 'min-w-0 flex-1')}) #{request.accountName}
+              else
+                span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{request.accountName}
+              span(className='hidden min-w-0 max-w-56 truncate font-mono text-2xs text-muted-foreground md:inline') #{request.reference ?? 'No reference'}
+              span(className='w-28 shrink-0 text-right font-mono text-sm text-foreground') #{credits(request.amount)}
+
+    section(className='grid gap-2')
+      div(className='flex items-baseline justify-between gap-3')
+        h2(className={labelClass}) Recent activity
+        span(className='font-mono text-2xs text-muted-foreground') #{feed.events.length}
+      if feed.events.length === 0
+        p(className={emptyClass}) Nothing has happened to an account yet.
+      else
+        ul(className={cn(panelClass, 'divide-y divide-dashed divide-sidebar-border overflow-hidden')})
+          each event in feed.events key event.id
+            li(className='flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5')
+              span(className='w-32 shrink-0 font-mono text-2xs text-muted-foreground') #{formatActivityTime(event.at)}
+              span(className='flex w-40 shrink-0 items-center gap-2 text-sm text-foreground')
+                span(aria-hidden={true} className={cn('size-1.5 shrink-0 rounded-full', ACCOUNT_ACTIVITY_TONE[event.kind])})
+                | #{ACCOUNT_ACTIVITY_LABEL[event.kind]}
+              if event.accountSlug
+                Link(to={asgardAccountPath(hostname, event.accountSlug)} className={cn(linkClass, 'min-w-0 flex-1')}) #{event.accountName}
+              else
+                span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{event.accountName}
+              if event.detail
+                span(className='hidden min-w-0 max-w-56 truncate font-mono text-2xs text-muted-foreground md:inline') #{event.detail}
+              span(className='w-28 shrink-0 text-right font-mono text-sm text-foreground') #{event.amount === null ? '' : credits(event.amount)}

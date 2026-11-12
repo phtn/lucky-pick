@@ -4,7 +4,7 @@ import { expect, test } from 'vitest'
 import { api } from '../_generated/api'
 import type { Id } from '../_generated/dataModel'
 import { auditWallets } from '../ledger/audit'
-import { god, godB, staff } from '../lib/testIdentities'
+import { god, godB, staff, topg } from '../lib/testIdentities'
 import schema from '../schema'
 import { createTopupRequest } from './topups'
 
@@ -227,4 +227,84 @@ test('list filters by status and account, newest first, with a bounded limit', a
   const both = await t.withIdentity(staff).query(api.money.topups.list, { accountId, status: 'cancelled' })
   expect(both.map((row) => row._id)).toEqual([first])
   expect(await t.withIdentity(staff).query(api.money.topups.list, { limit: -3 })).toHaveLength(1)
+})
+
+test('viewer answers with the caller’s own identifier, and only to staff', async () => {
+  const { t } = await setup()
+
+  expect(await t.withIdentity(god).query(api.money.topups.viewer, {})).toBe(god.tokenIdentifier)
+  expect(await t.withIdentity(godB).query(api.money.topups.viewer, {})).toBe(godB.tokenIdentifier)
+  await expect(t.query(api.money.topups.viewer, {})).rejects.toThrow('Unauthorized.')
+})
+
+test('the second-god rule starts on, and only a top god can switch it', async () => {
+  const { t } = await setup()
+
+  expect(await t.withIdentity(staff).query(api.money.topups.policy, {})).toEqual({
+    requireSecondGod: true,
+    updatedAt: null,
+    updatedBy: null
+  })
+  await expect(
+    t.withIdentity(god).mutation(api.money.topups.setSecondGodRule, { requireSecondGod: false })
+  ).rejects.toThrow('Changing the approval rule requires a top-god account.')
+
+  await t.withIdentity(topg).mutation(api.money.topups.setSecondGodRule, { requireSecondGod: false })
+
+  expect(await t.withIdentity(staff).query(api.money.topups.policy, {})).toMatchObject({
+    requireSecondGod: false,
+    updatedBy: topg.tokenIdentifier
+  })
+})
+
+test('with the rule off the maker may approve or reject their own request', async () => {
+  const { t, accountId } = await setup()
+  const approved = await request(t, accountId, 5_000)
+  const rejected = await request(t, accountId, 700)
+  await t.withIdentity(topg).mutation(api.money.topups.setSecondGodRule, { requireSecondGod: false })
+
+  await t.withIdentity(god).mutation(api.money.topups.approve, { id: approved })
+  await t.withIdentity(god).mutation(api.money.topups.reject, { id: rejected, decisionNote: 'Typo.' })
+
+  const state = await t.run(async (ctx) => ({
+    float: (await ctx.db.query('wallets').collect()).find((w) => w.kind === 'partnerFloat')!.available,
+    approved: (await ctx.db.get('topupRequests', approved))!,
+    rejected: (await ctx.db.get('topupRequests', rejected))!,
+    audit: await auditWallets(ctx)
+  }))
+  expect(state.float).toBe(5_000)
+  // The record still names the same god twice, which is what marks a self-approval.
+  expect(state.approved).toMatchObject({
+    status: 'approved',
+    makerTokenIdentifier: god.tokenIdentifier,
+    checkerTokenIdentifier: god.tokenIdentifier
+  })
+  expect(state.rejected.status).toBe('rejected')
+  expect(state.audit).toEqual({ total: 0, mismatched: [] })
+})
+
+test('switching the rule back on restores the check', async () => {
+  const { t, accountId } = await setup()
+  const id = await request(t, accountId)
+  await t.withIdentity(topg).mutation(api.money.topups.setSecondGodRule, { requireSecondGod: false })
+  await t.withIdentity(topg).mutation(api.money.topups.setSecondGodRule, { requireSecondGod: true })
+
+  await expect(t.withIdentity(god).mutation(api.money.topups.approve, { id })).rejects.toThrow(
+    'A top-up must be approved by someone other than the god who requested it.'
+  )
+})
+
+test('every flip of the rule is logged, newest first, and a no-op is not', async () => {
+  const { t } = await setup()
+  const flip = (requireSecondGod: boolean) =>
+    t.withIdentity(topg).mutation(api.money.topups.setSecondGodRule, { requireSecondGod })
+
+  await flip(true)
+  await flip(false)
+  await flip(false)
+  await flip(true)
+
+  const changes = await t.withIdentity(staff).query(api.money.topups.policyChanges, {})
+  expect(changes.map((change) => change.requireSecondGod)).toEqual([true, false])
+  expect(changes[0]).toMatchObject({ actorTokenIdentifier: topg.tokenIdentifier, actorLabel: 'topg' })
 })

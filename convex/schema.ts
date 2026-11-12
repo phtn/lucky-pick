@@ -4,7 +4,7 @@ import { accountSchema } from './accounts/d'
 import { creditsFields } from './credits/d'
 import { gameFields } from './games/d'
 import { ledgerEntryFields, ledgerTransactionFields, walletFields } from './ledger/d'
-import { topupRequestFields } from './money/d'
+import { topupPolicyChangeFields, topupPolicyFields, topupRequestFields } from './money/d'
 import { notificationFields } from './notifications/d'
 import { practicePlayFields } from './plays/d'
 import { resultFields, resultGame } from './resultValidators'
@@ -56,6 +56,9 @@ export default defineSchema({
   topupRequests: defineTable(topupRequestFields)
     .index('by_status_and_createdAt', ['status', 'createdAt'])
     .index('by_accountId_and_createdAt', ['accountId', 'createdAt']),
+  // A single row; see `topupPolicyFields`.
+  topupPolicy: defineTable(topupPolicyFields),
+  topupPolicyChanges: defineTable(topupPolicyChangeFields),
   practicePlays: defineTable(practicePlayFields).index('by_userId_and_drawnAt', ['userId', 'drawnAt']),
   notifications: defineTable(notificationFields).index('by_userId_and_createdAt', ['userId', 'createdAt']),
 })
