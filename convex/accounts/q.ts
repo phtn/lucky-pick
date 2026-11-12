@@ -216,6 +216,76 @@ export const myHouses = query({
   }
 })
 
+/** Players counted for the banker panel; a busier house reads as "this many or more". */
+const PLAYER_COUNT_LIMIT = 1_000
+
+/**
+ * The house the caller has chosen to play against, as the board's banker panel
+ * shows it: who it is, how many play there, and what the caller holds there.
+ * `null` when they have chosen none, or the one they chose has since gone.
+ *
+ * Like `listBankers`, the `returns` validator is the privacy boundary: the
+ * contact's avatar is the only thing of theirs that gets out, and other players
+ * are a number, never a list.
+ */
+export const myBanker = query({
+  args: {},
+  returns: v.union(
+    v.null(),
+    v.object({
+      accountId: v.id('accounts'),
+      slug: v.string(),
+      name: v.string(),
+      status: accountStatusSchema,
+      imageUrl: v.union(v.string(), v.null()),
+      /** When the house opened. */
+      since: v.number(),
+      playerCount: v.number(),
+      /** True when the house has more players than were counted. */
+      playerCountCapped: v.boolean(),
+      balance: v.number(),
+      held: v.number()
+    })
+  ),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new ConvexError('Unauthorized.')
+
+    const user = await getUserByTokenIdentifier(ctx, identity.tokenIdentifier)
+    if (!user?.selectedAccountId) return null
+
+    const account = await ctx.db.get('accounts', user.selectedAccountId)
+    if (!account || account.status === 'closed') return null
+
+    const players = await ctx.db
+      .query('users')
+      .withIndex('by_selectedAccountId', (q) => q.eq('selectedAccountId', account._id))
+      .take(PLAYER_COUNT_LIMIT + 1)
+
+    const wallet = await ctx.db
+      .query('wallets')
+      .withIndex('by_accountId_and_userId', (q) => q.eq('accountId', account._id).eq('userId', user._id))
+      .unique()
+
+    // The house's logo wins; the contact's live avatar stands in, as in `listBankers`.
+    const contact =
+      !account.logoUrl && account.primaryContact.userId ? await ctx.db.get(account.primaryContact.userId) : null
+
+    return {
+      accountId: account._id,
+      slug: account.slug,
+      name: account.name,
+      status: account.status,
+      imageUrl: account.logoUrl ?? contact?.imageUrl ?? account.primaryContact.imageUrl ?? null,
+      since: account.confirmedAt ?? account.createdAt,
+      playerCount: Math.min(players.length, PLAYER_COUNT_LIMIT),
+      playerCountCapped: players.length > PLAYER_COUNT_LIMIT,
+      balance: wallet?.available ?? 0,
+      held: wallet?.held ?? 0
+    }
+  }
+})
+
 /** How many players of one house the admin console lists. */
 const PLAYER_LIST_LIMIT = 200
 

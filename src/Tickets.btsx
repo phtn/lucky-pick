@@ -657,7 +657,7 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
                 ~ onNewPlayerName={setNewPlayerName}
                 ~ onAddPlayer={addPlayer}
                 ~ )
-            BankerPanel
+            BankerPanel(game={game})
 
           div(className="app-column app-column--draw order-1 xl:order-2")
             NewBetPanel(

@@ -1,15 +1,83 @@
+import { useConvexQuery } from '@/hooks/use-convex-query'
+import { canUseAccount } from '@/lib/accounts/accounts'
+import { describeBankerStatus } from '@/lib/accounts/bankers'
+import { useFirebaseUser } from '@/lib/firebase/auth'
+import type { GameConfig } from '@/lib/games'
+import { Icon } from '@/lib/icons'
+import { getNextDrawDate } from '@/lib/lotto'
+import { cn } from '@/lib/utils'
+import { api } from '../../../convex/_generated/api'
 
-div(className='bg-[#303030]/10 rounded-[3rem] size-full')
+module
+  interface BankerPanelProps {
+    /** The game on the board, whose schedule decides the next draw. */
+    game?: GameConfig
+  }
+
+  const labelClass = 'font-mono text-2xs uppercase tracking-[0.16em] text-white/50'
+  const valueClass = 'font-sans text-sm font-[450] text-white'
+  const rowClass = 'flex items-baseline justify-between gap-3 px-6 py-3.5'
+
+  const drawDateFormatter = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+  const drawTimeFormatter = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
+  const sinceFormatter = new Intl.DateTimeFormat(undefined, { month: 'short', year: 'numeric' })
+
+  const formatCredits = (value: number) => `${value.toLocaleString('en-US')} CR`
+
+  const formatPlayers = (count: number, capped: boolean) =>
+    `${count.toLocaleString('en-US')}${capped ? '+' : ''} ${count === 1 && !capped ? 'player' : 'players'}`
+
+props { game }: BankerPanelProps
+
+setup
+  const { user } = useFirebaseUser()
+  const isSignedIn = user !== null
+  // `undefined` is no answer yet; `null` is an answer: no banker chosen.
+  const banker = useConvexQuery(api.accounts.q.myBanker, {}, { enabled: isSignedIn })
+
+  const nextDraw = game ? getNextDrawDate(game.drawDays) : null
+  const isOpen = banker ? canUseAccount(banker.status) : false
+  const initial = banker?.name.trim()[0]?.toUpperCase() ?? ''
+
+div(className='bg-[#303030]/10 rounded-[3rem] size-full overflow-hidden')
   div(className='h-20 border-b border-border/20 w-full flex items-center justify-center')
     h2(className='font-sans font-[450] text-white text-base tracking-tight') My Banker
 
-  div(className='hidden')
-    ul(className='')
-      li(className='px-6 h-24 flex items-center justify-between hover:bg-muted/10')
-        div(className='flex items-center gap-2')
-          span(className='rounded-full size-10 flex items-center justify-center bg-muted font-[550] text-sm ') X
-          div
-            p(className='font-sans font-[450] text-white text-base') Name
-            p(className='font-mono font-[300] text-white text-xs') Winners
-        div
-          span(className='rounded-full size-6 flex items-center justify-center bg-[#FCD95D] font-[550] text-sm ') Y
+  if !isSignedIn
+    p(className='px-6 py-8 text-center text-sm text-white/60') Sign in and choose a banker to play with credits.
+  elseif banker === undefined
+    div(className='flex items-center justify-center gap-2 px-6 py-8')
+      Icon(name='spinner' size={14} className='animate-spin text-white/50')
+      span(className='text-sm text-white/60') Reading your banker…
+  elseif banker === null
+    p(className='px-6 py-8 text-center text-sm text-white/60') You have not chosen a banker yet. Pick one from “Play against” in the top bar.
+  else
+    fragment
+      div(className='flex items-center gap-3 px-6 py-5')
+        if banker.imageUrl
+          img(src={banker.imageUrl} alt='' referrerPolicy='no-referrer' className='size-11 shrink-0 rounded-full border border-border/30 object-cover')
+        else
+          span(aria-hidden={true} className='grid size-11 shrink-0 place-items-center rounded-full bg-muted font-[550] text-sm') #{initial}
+        div(className='min-w-0 flex-1')
+          p(className='truncate font-sans text-base font-[450] text-white') #{banker.name}
+          p(className='truncate font-mono text-xs font-[300] text-white/60') #{banker.slug} · since #{sinceFormatter.format(banker.since)}
+        span(className={cn('shrink-0 rounded-full px-2 py-0.5 font-mono text-2xs uppercase tracking-wider', isOpen ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400')})
+          | #{isOpen ? 'Open' : describeBankerStatus(banker.status) ?? 'Not open'}
+
+      dl(className='divide-y divide-border/15 border-t border-border/15')
+        div(className={rowClass})
+          dt(className={labelClass}) Players
+          dd(className={valueClass}) #{formatPlayers(banker.playerCount, banker.playerCountCapped)}
+        div(className={rowClass})
+          dt(className={labelClass}) Your balance
+          dd(className={valueClass}) #{formatCredits(banker.balance)}
+        if banker.held > 0
+          div(className={rowClass})
+            dt(className={labelClass}) Held on tickets
+            dd(className={valueClass}) #{formatCredits(banker.held)}
+
+  if game && nextDraw
+    div(className='border-t border-border/20 px-6 py-4')
+      p(className={labelClass}) Next #{game.id} draw
+      p(className='mt-1.5 font-sans text-base font-[450] text-white') #{drawDateFormatter.format(nextDraw)} · #{drawTimeFormatter.format(nextDraw)}
+      p(className='mt-1 font-mono text-xs font-[300] text-white/60') Draws on #{game.drawDayLabel}

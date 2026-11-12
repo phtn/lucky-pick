@@ -370,3 +370,43 @@ test('a banker gives a player credits out of the house float, and only what it h
   )
   expect(await read()).toMatchObject({ floatAvailable: 3_800, balance: 1_200 })
 })
+
+test('myBanker describes the chosen house with its player count and the caller’s balance', async () => {
+  const t = makeT()
+  const accountId = await house(t, 'Casa Uno', 'active', { initialCredits: 5_000 })
+  await signIn(t, owner())
+  await signIn(t, ana())
+  await signIn(t, ben())
+
+  expect(await t.withIdentity(ana()).query(api.accounts.q.myBanker, {})).toBeNull()
+
+  await t.withIdentity(ana()).mutation(api.users.m.selectBanker, { accountId })
+  await t.withIdentity(ben()).mutation(api.users.m.selectBanker, { accountId })
+  const anaId = (await t.run(async (ctx) => (await ctx.db.query('users').collect()).find((u) => u.subject === 'ana')))!._id
+  await t
+    .withIdentity(owner())
+    .mutation(api.ledger.m.allocateToPlayer, { accountId, userId: anaId, amount: 700, requestId: 'req-00000009' })
+
+  const banker = await t.withIdentity(ana()).query(api.accounts.q.myBanker, {})
+  expect(banker).toMatchObject({
+    accountId,
+    name: 'Casa Uno',
+    slug: 'casa-uno',
+    status: 'active',
+    playerCount: 2,
+    playerCountCapped: false,
+    balance: 700,
+    held: 0
+  })
+  expect(Object.keys(banker!).sort()).toEqual([
+    'accountId', 'balance', 'held', 'imageUrl', 'name', 'playerCount', 'playerCountCapped', 'since', 'slug', 'status'
+  ])
+  // Ben plays there too, but holds nothing.
+  expect(await t.withIdentity(ben()).query(api.accounts.q.myBanker, {})).toMatchObject({ playerCount: 2, balance: 0 })
+
+  // A suspended house is still the caller's banker and says so; a closed one is gone.
+  await t.run((ctx) => ctx.db.patch(accountId, { status: 'suspended' }))
+  expect(await t.withIdentity(ana()).query(api.accounts.q.myBanker, {})).toMatchObject({ status: 'suspended' })
+  await t.run((ctx) => ctx.db.patch(accountId, { status: 'closed' }))
+  expect(await t.withIdentity(ana()).query(api.accounts.q.myBanker, {})).toBeNull()
+})

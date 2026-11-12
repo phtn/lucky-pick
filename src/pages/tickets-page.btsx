@@ -276,7 +276,7 @@ div(className="app-main-grid grid grid-cols-1 xl:grid-cols-[360px_1fr_380px] gap
 
   // BANKER COLUMN
   div(className="app-column app-column--bet order-2 xl:order-1 space-y-4")
-    BankerPanel
+    BankerPanel(game={game})
 
   // NUMBER PICKER COLUMN
   div(className="app-column app-column--draw order-1 xl:order-2")
