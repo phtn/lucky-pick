@@ -4,7 +4,7 @@ import Button from '@/components/ui/button.btsx'
 import { cn } from '@/lib/utils'
 import { isAbortError, readErrorMessage } from '@/lib/asgard/errors'
 import { countEnabledBetTypes, fetchGames, formatConfiguredAt, seedGames, setGameEnabled, updateBetType, type GameBetTypeRow, type GameRow } from '@/lib/asgard/games'
-import { DEFAULT_TICKET_COST, MAX_STAKE_OPTIONS, MAX_TICKET_COST, MIN_TICKET_COST, isTicketCost } from '@/lib/game-settings'
+import { DEFAULT_TICKET_COST, MAX_STAKE, MAX_STAKE_OPTIONS, MAX_TICKET_COST, MIN_TICKET_COST, isStake, isTicketCost, stakesForCost } from '@/lib/game-settings'
 import { GAMES, GAME_IDS, type BetType, type GameId } from '@/lib/games'
 import Squishy from "../ui/squishy.btsx";
 import Scrubfield from "../ui/scrubfield.btsx";
@@ -40,7 +40,7 @@ module
 
     if (parts.length === 0) return null
 
-    const stakes = parts.map((part) => Number.parseInt(part, 10)).filter((stake) => isTicketCost(stake))
+    const stakes = parts.map((part) => Number.parseInt(part, 10)).filter((stake) => isStake(stake))
     return stakes.length > 0 ? stakes : null
   }
 
@@ -116,9 +116,17 @@ component BetTypeCell
       const next = Number.parseInt(costDraft, 10)
       if (!isTicketCost(next) || next === bet.ticketCost) {
         setCostDraft(String(bet.ticketCost))
+        setStakesDraft(stakesText(bet.stakes))
         return
       }
       onCost(bet.betType, next)
+    }
+
+    // A price implies its stakes, so the stakes box follows the scrub: 30 shows
+    // 30, 60, 90, 120 before the write lands, and the server stores the same.
+    const previewCost = (value: number) => {
+      setCostDraft(String(value))
+      if (isTicketCost(value)) setStakesDraft(stakesText(stakesForCost(value)))
     }
 
     const commitStakes = () => {
@@ -151,7 +159,7 @@ component BetTypeCell
         Squishy(ariaLabel={`${bet.enabled ? 'Disable' : 'Enable'} ${betTypeLabel(bet.betType)} on ${gameId}`} disabled={!isGameEnabled || isBusy} checked={bet.enabled && isGameEnabled} onChange={() => onToggle(bet.betType)} width={36} height={22} radius={13} stretch={80} trackOnColor="#079669" thumbOnColor="#ede9fe")
 
 
-    Scrubfield(label="Ticket" suffix="PHP" showFill={true} onChange={(v) => setCostDraft(String(v))} onCommit={commitCost} defaultValue={+costDraft} min={MIN_TICKET_COST} max={MAX_TICKET_COST} size="md" accent="#419cff" chipColor="#dedede40" className="dark:text-zinc-100" disabled={!bet.enabled || !isGameEnabled})
+    Scrubfield(label="Ticket" suffix="PHP" showFill={true} onChange={previewCost} onCommit={commitCost} defaultValue={+costDraft} min={MIN_TICKET_COST} max={MAX_TICKET_COST} size="md" accent="#419cff" chipColor="#dedede40" className="dark:text-zinc-100" disabled={!bet.enabled || !isGameEnabled})
 
     label(className='flex items-center gap-4 relative ml-8 ')
       span(className={labelClass}) Stakes
@@ -364,4 +372,4 @@ div(className='w-full')
               | #{` · not configured · playing at ₱${DEFAULT_TICKET_COST} with every bet type on`}
 
       p(className='pt-1 font-mono text-2xs uppercase tracking-wider text-muted-foreground')
-        | #{`A ticket costs ₱${MIN_TICKET_COST}–₱${MAX_TICKET_COST}; a bet type offers up to ${MAX_STAKE_OPTIONS} stakes.`}
+        | #{`A ticket costs ₱${MIN_TICKET_COST}–₱${MAX_TICKET_COST}; setting a price resets its stakes to 1–4× that price. A bet type offers up to ${MAX_STAKE_OPTIONS} stakes, each at most ₱${MAX_STAKE}.`}

@@ -18,6 +18,16 @@ export const BET_TYPE_VALUES: BetType[] = [1, 2, 3, 4, 5, 6]
 export const MIN_TICKET_COST = 1
 export const MAX_TICKET_COST = 50
 
+/**
+ * A cell offers its ticket price and the next whole multiples of it: a ₱30
+ * ticket is staked at 30, 60, 90 or 120. Setting a price resets the cell's
+ * stakes to exactly these.
+ */
+export const STAKE_MULTIPLES: number[] = [1, 2, 3, 4]
+
+/** The largest stake a cell can offer: the dearest ticket at the highest multiple. */
+export const MAX_STAKE = MAX_TICKET_COST * Math.max(...STAKE_MULTIPLES)
+
 /** How many stakes one cell may offer. Enough for the PCSO history, not a menu. */
 export const MAX_STAKE_OPTIONS = 8
 
@@ -49,13 +59,20 @@ export interface GameSettings {
 export const isTicketCost = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= MIN_TICKET_COST && value <= MAX_TICKET_COST
 
+/** A stake is whole pesos too, but may run past a ticket price, up to `MAX_STAKE`. */
+export const isStake = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= MIN_TICKET_COST && value <= MAX_STAKE
+
+/** The stakes a price implies: the price itself and its multiples, ascending. */
+export const stakesForCost = (ticketCost: number): number[] => STAKE_MULTIPLES.map((multiple) => multiple * ticketCost)
+
 /**
- * Ascending, de-duplicated, costs only, capped at `MAX_STAKE_OPTIONS`. A cell
+ * Ascending, de-duplicated, stakes only, capped at `MAX_STAKE_OPTIONS`. A cell
  * always offers at least one stake, so an empty list falls back to the cost it
  * is being stored against rather than leaving a bet type unbuyable.
  */
 export function normalizeStakes(stakes: readonly number[], ticketCost: number): number[] {
-  const valid = stakes.filter(isTicketCost)
+  const valid = stakes.filter(isStake)
   const unique = [...new Set(isTicketCost(ticketCost) ? [...valid, ticketCost] : valid)]
 
   return unique.sort((a, b) => a - b).slice(0, MAX_STAKE_OPTIONS)

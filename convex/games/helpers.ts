@@ -4,9 +4,11 @@ import {
   BET_TYPE_VALUES,
   DEFAULT_STAKES,
   DEFAULT_TICKET_COST,
+  MAX_STAKE,
   MAX_STAKE_OPTIONS,
   MAX_TICKET_COST,
   MIN_TICKET_COST,
+  isStake,
   isTicketCost,
   normalizeStakes
 } from '../../src/lib/game-settings'
@@ -105,8 +107,8 @@ export function readTicketCost(value: number): number {
  * itself is always admitted, so a list of just that cost is valid.
  */
 export function readStakes(stakes: readonly number[], ticketCost: number): number[] {
-  if (stakes.some((stake) => !isTicketCost(stake))) {
-    throw new ConvexError(`Every stake must be a whole number of pesos between ${MIN_TICKET_COST} and ${MAX_TICKET_COST}.`)
+  if (stakes.some((stake) => !isStake(stake))) {
+    throw new ConvexError(`Every stake must be a whole number of pesos between ${MIN_TICKET_COST} and ${MAX_STAKE}.`)
   }
   if (stakes.length > MAX_STAKE_OPTIONS) {
     throw new ConvexError(`A bet type may offer at most ${MAX_STAKE_OPTIONS} stakes.`)

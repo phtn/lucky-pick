@@ -1,5 +1,5 @@
 import { ConvexError, v } from 'convex/values'
-import { MAX_TICKET_COST, MIN_TICKET_COST, isTicketCost } from '../../src/lib/game-settings'
+import { MAX_STAKE, MIN_TICKET_COST, isStake } from '../../src/lib/game-settings'
 import { mutation } from '../_generated/server'
 import { getUserByTokenIdentifier } from '../users/q'
 import {
@@ -16,12 +16,12 @@ const { userId: _userId, ...clientFields } = practicePlayFields
 
 /**
  * A stake the house could actually have charged: whole pesos, within the bounds
- * a configured ticket cost lives in. Unlike the arrays above this is refused
+ * a configured stake lives in (a ticket price or one of its multiples). Unlike the arrays above this is refused
  * rather than trimmed — a made-up price would misstate what a session spent.
  */
 const readTicketCost = (cost: number) => {
-  if (!isTicketCost(cost)) {
-    throw new ConvexError(`A ticket cost must be a whole number of pesos between ${MIN_TICKET_COST} and ${MAX_TICKET_COST}.`)
+  if (!isStake(cost)) {
+    throw new ConvexError(`A ticket cost must be a whole number of pesos between ${MIN_TICKET_COST} and ${MAX_STAKE}.`)
   }
 
   return cost

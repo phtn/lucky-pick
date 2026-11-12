@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'octane';
 import { Outlet } from '@octanejs/tanstack-router';
 import { AnalyticsSessionContext } from '@/lib/analytics-session';
-import { usePathname } from '@/lib/navigation';
+import { usePathname } from '@/lib/routing/navigation';
 import { isAppPagePath } from '@/lib/routing/app-pages';
 import DrawHistory from '@/components/sim/DrawHistory.btsx';
 import DrawStage from '@/components/sim/DrawStage.btsx';
@@ -28,7 +28,7 @@ import { api } from '../convex/_generated/api';
 import { useGameSettings } from './hooks/use-game-settings';
 import { enabledBetTypes, enabledGameIds, stakesFor, ticketCostFor } from './lib/game-settings';
 import NewBetPanel from "./components/sim/NewBetPanel.btsx";
-import AppHead from "./components/topbar/AppHead.btsx";
+import AppHeader from "./components/topbar/AppHeader.btsx";
 import BankerPanel from "./components/tickets/BankerPanel.btsx";
 import NewTicketList from "./components/sim/NewTicketList.btsx";
 
@@ -624,26 +624,7 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
     div(className="fixed inset-0 pointer-events-none z-[90]")
   div(className="app-frame relative z-10 w-full max-w-[1480px] mx-auto px-4 py-2 overflow-x-hidden")
     AnalyticsSessionContext(value={session})
-      AppHead
-        // AppHeader(
-        //   ~ pool={pool}
-        //   ~ gameName={game.name}
-        //   ~ game={game}
-        //   ~ gameId={gameId}
-        //   ~ jackpots={jackpots}
-        //   ~ isDrawing={isDrawing}
-        //   ~ gameIds={sellableGames}
-        //   ~ onSwitchGame={switchGame}
-        //   ~ mode={mode}
-        //   ~ onSelectMode={selectMode}
-        //   ~ soundOn={soundOn}
-        //   ~ onToggleSound={() => setSoundOn(v => !v)}
-        //   ~ theme={theme}
-        //   ~ themeMode={themeMode}
-        //   ~ onToggleThemeMode={toggleMode}
-        //   ~ onPickTheme={pickTheme}
-        //   ~ onNotify={showToast}
-        //   ~ )
+      AppHeader
       Outlet
     if !isAppPagePath(pathname)
       fragment

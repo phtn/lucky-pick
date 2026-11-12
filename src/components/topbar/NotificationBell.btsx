@@ -4,7 +4,7 @@ import DropdownMenu, { DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
 import Button from '@/components/ui/button.btsx'
 import { Icon } from '@/lib/icons'
 import { cn } from '@/lib/utils'
-import { navigate } from '@/lib/navigation'
+import { navigate } from '@/lib/routing/navigation'
 import { useConvexQuery } from '@/hooks/use-convex-query'
 import { convexClient } from '@/lib/convex-client'
 import { countUnread, toNotificationItems, type NotificationItem } from '@/lib/notifications/notifications'

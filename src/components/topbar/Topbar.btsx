@@ -9,7 +9,7 @@ import type { GameConfig, GameId } from '@/lib/games';
 import type { GameMode } from '@/lib/lotto';
 import { cn } from '@/lib/utils';
 import { Link } from '@octanejs/tanstack-router';
-import { usePathname } from '@/lib/navigation';
+import { usePathname } from '@/lib/routing/navigation';
 
 module
   interface AppHeaderProps {

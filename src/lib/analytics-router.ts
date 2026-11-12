@@ -180,10 +180,10 @@ function createAppRouteTree() {
 
 const routeTree = isAsgardHost ? createAsgardRouteTree() : isAdminHost ? createAdminRouteTree() : createAppRouteTree()
 
-export const analyticsRouter = createRouter({ routeTree, scrollRestoration: true })
+export const router = createRouter({ routeTree, scrollRestoration: true })
 
 declare module '@tanstack/router-core' {
   interface Register {
-    router: typeof analyticsRouter
+    router: typeof router
   }
 }

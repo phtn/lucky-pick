@@ -64,8 +64,8 @@ test('a bet type can be closed without touching its price', async () => {
 
   const bet = (await t.query(api.games.q.list, {}))[0].betTypes.find((cell) => cell.betType === 2)
   expect(bet).toMatchObject({ enabled: false, ticketCost: 30 })
-  // A cell always offers the price it charges, so 30 joined the stakes.
-  expect(bet?.stakes).toEqual([20, 24, 25, 30])
+  // Setting the price reset the stakes to its multiples; closing left them alone.
+  expect(bet?.stakes).toEqual([30, 60, 90, 120])
 })
 
 test('stakes are stored ascending, de-duplicated, and always hold the ticket cost', async () => {
@@ -76,6 +76,19 @@ test('stakes are stored ascending, de-duplicated, and always hold the ticket cos
 
   const bet = (await t.query(api.games.q.list, {}))[0].betTypes.find((cell) => cell.betType === 6)
   expect(bet?.stakes).toEqual([20, 50, 100])
+})
+
+test('stakes set by hand survive until the price next changes', async () => {
+  const t = makeT()
+  const asGod = t.withIdentity(god)
+  const read = async () => (await t.query(api.games.q.list, {}))[0].betTypes.find((cell) => cell.betType === 3)
+
+  await asGod.mutation(api.games.m.updateBetType, { gameId: '6/49', betType: 3, ticketCost: 30 })
+  await asGod.mutation(api.games.m.updateBetType, { gameId: '6/49', betType: 3, stakes: [30, 45] })
+  expect((await read())?.stakes).toEqual([30, 45])
+
+  await asGod.mutation(api.games.m.updateBetType, { gameId: '6/49', betType: 3, ticketCost: 50 })
+  expect((await read())?.stakes).toEqual([50, 100, 150, 200])
 })
 
 test('a price that is not whole pesos, or out of range, is refused', async () => {

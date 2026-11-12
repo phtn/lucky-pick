@@ -1,19 +1,14 @@
 
 import {ClassValue} from 'octane'
 import { AnalyticsSessionContext } from "../../lib/analytics-session.ts";
-// import AppHeader from "../topbar/AppHeader.btsx";
 import { Outlet } from '@octanejs/tanstack-router';
-import { GAME_IDS, GameId, GAMES } from "@/lib/games.ts";
-import { useState } from "octane/server";
-import { Draw, GameMode, OFFICIAL_RESULTS, Player, PLAYER_COLORS, Ticket } from "@/lib/lotto.ts";
-import { readStoredTheme, ThemeId, ThemeMode } from "@/lib/theme.ts";
 import { isAppPagePath } from "@/lib/routing/app-pages.ts";
-import { navigate, usePathname } from "@/lib/navigation.ts";
+import { navigate, usePathname } from "@/lib/routing/navigation";
 import { gameRoutePath } from "@/lib/routing/app-pages.ts";
 import Button from "@/components/ui/button.btsx";
-import { applyTheme } from "../../lib/theme.ts";
 import { cn } from '@/lib/utils.ts';
-import AppHead from "../topbar/AppHead.btsx";
+import AppHeader from "../topbar/AppHeader.btsx";
+import { Link } from '@octanejs/tanstack-router';
 
 component HeroImage
   props {className}: {className?: ClassValue}
@@ -27,87 +22,38 @@ component HeroImage
         ~ decoding='async'
         ~ className='w-full aspect-auto rounded-[3rem] select-none'
         ~ )
+component HeroCTA
+  props {route}: {route: string}
+  div(className='hero-rise [--hero-delay:260ms] w-full flex items-center md:justify-start justify-center md:translate-y-0 translate-y-8')
+    div(className='group/cta relative w-fit flex items-center justify-center px-3 py-2')
+      div(aria-hidden={true} className='pointer-events-none absolute size-full border-3 border-[#82d006]/80 skew-12 scale-90 transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.87]')
+      div(aria-hidden={true} className='pointer-events-none absolute size-full border-4 dark:border-white/80 bg-[#ddfe24]/20 -skew-4 scale-90 drop-shadow-sm transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.875]')
+      div(aria-hidden={true} className='pointer-events-none absolute size-full border-3 dark:border-white/50 bg-[#ddfe24]/20 -skew-2 scale-88 transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.855]')
+      div(aria-hidden={true} className='pointer-events-none absolute size-full dark:bg-white bg-foreground skew-3 scale-84 transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.82]')
+      Link(
+        ~ to={route}
+        ~ className='rounded-none bg-transparent relative z-10 w-full transition-transform duration-[160ms] ease-out-strong active:scale-[0.97] text-background'
+        ~ )
+        span Enter Game
 props {}: {}
 setup
   const pathname = usePathname();
-  const [gameId, setGameId, getGameId] = useState<GameId>('6/42');
-  const game = GAMES[gameId];
-  const pool = game.pool;
-
-  const [jackpots, setJackpots, getJackpots] = useState<Record<GameId, number>>(() => {
-      const seed = {} as Record<GameId, number>;
-      for (const id of GAME_IDS) seed[id] = OFFICIAL_RESULTS[id][0]?.jackpot ?? GAMES[id].baseJackpot;
-      return seed;
-    });
-
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [mode, setMode] = useState<GameMode>('solo');
-
-  const stored = readStoredTheme();
-  const [theme, setTheme] = useState<ThemeId>(stored.theme);
-  const [themeMode, setThemeMode] = useState<ThemeMode>(stored.mode);
-  const toggleTheme = () => {
-      const next: ThemeMode = themeMode === 'dark' ? 'light' : 'dark';
-      applyTheme({ theme, mode: next });
-      setThemeMode(next);
-      // playTone(next==='dark'?520:900,0.16,'sine',0.12);
-    };
-  const [tickets, setTickets, getTickets] = useState<Ticket[]>([]);
-    const [players, setPlayers, getPlayers] = useState<Player[]>(() => {
-      return [{ id: 'p1', name: 'You', color: PLAYER_COLORS[0], avatar: 'Y', tickets: [], winnings: 0, winCount: 0 }];
-    });
-
-  const [draws, setDraws] = useState<Draw[]>([]);
-  const session = { tickets, players, draws, mode };
+  const session = {};
 div(className='app-shell')
   div(className="app-frame relative z-10 w-full max-w-[1480px] mx-auto px-4 py-4 md:py-2 overflow-x-hidden")
       AnalyticsSessionContext(value={session})
-        AppHead
-        // AppHead(
-        //   ~ pool={pool}
-        //   ~ gameName={game.name}
-        //   ~ game={game}
-        //   ~ gameId={gameId}
-        //   ~ jackpots={jackpots}
-        //   ~ isDrawing={isDrawing}
-        //   ~ onSwitchGame={undefined}
-        //   ~ mode={mode}
-        //   ~ onSelectMode={undefined}
-        //   ~ soundOn={true}
-        //   ~ onToggleSound={undefined}
-        //   ~ theme={theme}
-        //   ~ themeMode={undefined}
-        //   ~ onToggleThemeMode={toggleTheme}
-        //   ~ onPickTheme={undefined}
-        //   ~ onNotify={undefined}
-        //   ~ )
-        Outlet
+        AppHeader
+
       if !isAppPagePath(pathname)
         fragment
           div(className='font-sans grid grid-cols-1 md:grid-cols-5 md:items-center md:border-t size-full pt-6 md:pt-0 md:max-w-6xl mx-auto')
-
             HeroImage(className='flex md:hidden h-72')
-
             div(className='col-span-2 gap-6 flex flex-col justify-center min-h-80 md:min-h-100')
               h1(className={"text-5xl md:text-6xl font-black tracking-tight md:block flex flex-col items-center"})
                 span(className='hero-rise [--hero-delay:40ms] block font-ark font-bold text-[#92fb06] text-8xl md:text-9xl tracking-tight leading-24 md:leading-28') #{"360x"}
                 div(className='hero-rise [--hero-delay:100ms]')
                   span(className='block font-ark font-bold leading-10 md:leading-12') #{"Super"}
                   span(className='block md:translate-x-4 font-ark font-black') #{"Jackpot"}
-                // span(className='block font-ark font-bold leading-6') #{"up to"}
-              // p(className='text-sm text-muted-foreground') Lucky Pick 3 Lottery
-
-              div(className='hero-rise [--hero-delay:260ms] w-full flex items-center md:justify-start justify-center md:translate-y-0 translate-y-8')
-                div(className='group/cta relative w-fit flex items-center justify-center px-3 py-2')
-                  div(aria-hidden={true} className='pointer-events-none absolute size-full border-3 border-[#82d006]/80 skew-12 scale-90 transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.87]')
-                  div(aria-hidden={true} className='pointer-events-none absolute size-full border-4 dark:border-white/80 bg-[#ddfe24]/20 -skew-4 scale-90 drop-shadow-sm transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.875]')
-                  div(aria-hidden={true} className='pointer-events-none absolute size-full border-3 dark:border-white/50 bg-[#ddfe24]/20 -skew-2 scale-88 transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.855]')
-                  div(aria-hidden={true} className='pointer-events-none absolute size-full dark:bg-white bg-foreground skew-3 scale-84 transition-transform duration-[160ms] ease-out-strong group-active/cta:scale-[0.82]')
-                  Button(
-                    ~ size='xl'
-                    ~ onClick={() => navigate(gameRoutePath)}
-                    ~ className='rounded-none bg-transparent relative z-10 w-full transition-transform duration-[160ms] ease-out-strong active:scale-[0.97]'
-                    ~ )
-                    span Enter Game
-
+              HeroCTA(route='/tickets')
             HeroImage(className='hidden md:flex [--hero-delay:160ms]')
+      Outlet

@@ -389,7 +389,7 @@ MotionDiv(
     ~ )
   if suffix
     span(
-      ~ className="font-mono [color:color-mix(in_srgb,currentColor_45%,transparent)] light:text-foreground!"
+      ~ className="font-mono [color:color-mix(in_srgb,currentColor_45%,transparent)]"
       ~ aria-hidden="true"
       ~ )
       | #{suffix}

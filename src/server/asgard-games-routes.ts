@@ -1,5 +1,5 @@
 import { GAME_IDS, type BetType, type GameId } from '@/lib/games'
-import { BET_TYPE_VALUES, MAX_STAKE_OPTIONS, isTicketCost } from '@/lib/game-settings'
+import { BET_TYPE_VALUES, MAX_STAKE_OPTIONS, isStake, isTicketCost } from '@/lib/game-settings'
 import { AdminIdTokenError, mintAdminIdToken } from '@/lib/firebase-admin/admin-id-token'
 import { getFirebaseAdminAuth } from '@/lib/firebase-admin/admin'
 import { getVerifiedGodSession } from '@/lib/firebase-admin/server-auth'
@@ -132,7 +132,7 @@ function readGamesWrite(body: unknown): { write: GamesWrite } | { error: string 
     if (!Array.isArray(payload.stakes) || payload.stakes.length > MAX_STAKE_OPTIONS) {
       return { error: 'That is not a valid list of stakes.' }
     }
-    if (!payload.stakes.every(isTicketCost)) return { error: 'Every stake must be a whole peso amount.' }
+    if (!payload.stakes.every(isStake)) return { error: 'Every stake must be a whole peso amount.' }
     write.stakes = payload.stakes
   }
 

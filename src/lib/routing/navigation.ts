@@ -1,9 +1,10 @@
 import { useRouterState } from '@octanejs/tanstack-router'
-import { analyticsRouter } from './analytics-router'
+import { router } from './router'
 
-export const usePathname = () => useRouterState({
-  select: state => state.location.pathname.replace(/\/$/, '') || '/',
-})
+export const usePathname = () =>
+  useRouterState({
+    select: (state) => state.location.pathname.replace(/\/$/, '') || '/'
+  })
 
 export function navigate(path: string) {
   void analyticsRouter.navigate({ to: path, hash: true })

@@ -1,4 +1,5 @@
 import { ConvexError, v } from 'convex/values'
+import { stakesForCost } from '../../src/lib/game-settings'
 import { GAME_IDS } from '../../src/lib/games'
 import { mutation } from '../_generated/server'
 import { betTypeSchema, gameIdSchema } from './d'
@@ -59,7 +60,8 @@ export const setGameEnabled = mutation({
  * what one of its tickets costs, and the stakes a player may pick between.
  *
  * Every field is optional, so the console can toggle a cell without resending
- * its price. A call that changes nothing is refused rather than writing a row
+ * its price. Sending a price without stakes resets the stakes to that price's
+ * multiples. A call that changes nothing is refused rather than writing a row
  * and an operator trail for no change.
  */
 export const updateBetType = mutation({
@@ -83,7 +85,14 @@ export const updateBetType = mutation({
       // The cost is settled first: the stakes a cell offers always include what
       // a ticket actually costs, so the new cost is what they are checked against.
       const nextCost = ticketCost === undefined ? cell.ticketCost : readTicketCost(ticketCost)
-      const nextStakes = stakes === undefined ? readStakes(cell.stakes, nextCost) : readStakes(stakes, nextCost)
+      // Setting a price resets the stakes to its multiples (30 → 30, 60, 90,
+      // 120). Stakes sent in the same call are an explicit override and win.
+      const nextStakes =
+        stakes !== undefined
+          ? readStakes(stakes, nextCost)
+          : ticketCost !== undefined
+            ? stakesForCost(nextCost)
+            : readStakes(cell.stakes, nextCost)
 
       return {
         betType: cell.betType,

@@ -64,7 +64,7 @@ export const practiceSeedSchema = v.object({
 /**
  * What one ticket cost, in pesos. No longer a fixed set of three: the house
  * configures a price per game per bet type in the `games` table, so any whole
- * amount within the bounds of `isTicketCost` (`src/lib/game-settings.ts`) is a
+ * amount within the bounds of `isStake` (`src/lib/game-settings.ts`) is a
  * real stake. `record` is what refuses the rest — a fractional or out-of-range
  * cost is not a price anything charged.
  */

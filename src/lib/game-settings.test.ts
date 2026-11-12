@@ -3,6 +3,7 @@ import { GAME_IDS } from './games'
 import {
   DEFAULT_STAKES,
   DEFAULT_TICKET_COST,
+  MAX_STAKE,
   MAX_STAKE_OPTIONS,
   MAX_TICKET_COST,
   betTypeSettings,
@@ -11,6 +12,7 @@ import {
   enabledGameIds,
   isTicketCost,
   normalizeStakes,
+  stakesForCost,
   resolveGameSettings,
   stakesFor,
   ticketCostFor
@@ -39,12 +41,23 @@ describe('normalizeStakes', () => {
   })
 
   test('drops anything that is not a price', () => {
-    expect(normalizeStakes([25, 0, 20.5, MAX_TICKET_COST + 1], 25)).toEqual([25])
+    expect(normalizeStakes([25, 0, 20.5, MAX_STAKE + 1], 25)).toEqual([25])
   })
 
   test('caps the list', () => {
     const many = Array.from({ length: MAX_STAKE_OPTIONS + 4 }, (_, index) => index + 1)
     expect(normalizeStakes(many, 1)).toHaveLength(MAX_STAKE_OPTIONS)
+  })
+})
+
+describe('stakesForCost', () => {
+  test('offers the price and its next three multiples', () => {
+    expect(stakesForCost(30)).toEqual([30, 60, 90, 120])
+  })
+
+  test('the dearest ticket still yields stakes that are all valid', () => {
+    const stakes = stakesForCost(MAX_TICKET_COST)
+    expect(normalizeStakes(stakes, MAX_TICKET_COST)).toEqual(stakes)
   })
 })
 
