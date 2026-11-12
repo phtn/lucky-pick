@@ -1,53 +1,44 @@
-
 import BankerPanel from "../components/tickets/BankerPanel.btsx";
 import NewBetPanel from "../components/sim/NewBetPanel.btsx";
 import NewTicketList from "../components/sim/NewTicketList.btsx";
-import { usePathname } from "@/lib/routing/navigation";
-import { readStoredTheme } from "@/lib/theme";
-import { BetType, GAME_IDS, GameId, GAMES } from "@/lib/games";
+import { GAME_IDS, GAMES, type BetType, type GameId } from "@/lib/games";
 import { useEffect, useState, useRef } from "octane";
-import { BetCost, OFFICIAL_RESULTS, Ticket, WinEntry } from "@/lib/lotto";
+import { MAX_TICKETS, OFFICIAL_RESULTS, type BetCost, type Draw, type Ticket } from "@/lib/lotto";
 import { useGameSettings } from "@/hooks/use-game-settings";
 import { enabledBetTypes, enabledGameIds, stakesFor, ticketCostFor } from "@/lib/game-settings";
-import { evenOddPick, randomPick } from "@/lib/rng";
+import { evenOddPick, randomPick, randomPicks } from "@/lib/rng";
+import { formatPeso } from "@/lib/format";
 
-
-props {}: {}
 setup
-  const pathname = usePathname();
-  const stored = readStoredTheme();
-  const [gameId, setGameId, getGameId] = useState<GameId>('6/42');
+  const [gameId, setGameId] = useState<GameId>('6/42');
   const [betType, setBetType] = useState<BetType>(6);
   // What the player picked out of the stakes this cell offers. Null — and a
   // stake the house has since withdrawn — falls back to the configured price.
   const [stakeChoice, setStakeChoice] = useState<BetCost | null>(null);
   const [selected, setSelected] = useState<number[]>([9,10,11]);
-  const [tickets, setTickets, getTickets] = useState<Ticket[]>([]);
-  const [currentPlayerIdx, setCurrentPlayerIdx] = useState(0);
-  const [drawGameId, setDrawGameId] = useState<GameId | null>(null);
-  const [currentBallAnim, setCurrentBallAnim] = useState<number | null>(null);
-  const [winList, setWinList] = useState<WinEntry[]>([]);
-  const [soundOn, setSoundOn] = useState(true);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  // This page sells tickets but does not run a draw yet, so nothing sets these.
+  // They are state, not constants, so the draw can be wired in without
+  // reshaping what the panels below are handed.
+  const [draws] = useState<Draw[]>([]);
+  const [drawnBalls] = useState<number[]>([]);
+  const [drawGameId] = useState<GameId | null>(null);
+  const [isDrawing] = useState(false);
+  const [soundOn] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
-  const [jackpots, setJackpots, getJackpots] = useState<Record<GameId, number>>(() => {
+  const [jackpots] = useState<Record<GameId, number>>(() => {
     const seed = {} as Record<GameId, number>;
     for (const id of GAME_IDS) seed[id] = OFFICIAL_RESULTS[id][0]?.jackpot ?? GAMES[id].baseJackpot;
     return seed;
   });
-  const [jackpotAnim, setJackpotAnim] = useState(false);
-  const [officialInput, setOfficialInput] = useState('');
-  const [newPlayerName, setNewPlayerName] = useState('');
-  const [chatInput, setChatInput] = useState('');
   const audioCtxRef = useRef<AudioContext | null>(null);
   const masterGainRef = useRef<GainNode | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const confettiRef = useRef<number | null>(null);
   const idCounterRef = useRef(1);
   const voiceIdRef = useRef(0);
   const voiceMapRef = useRef<Map<number, { osc: OscillatorNode; gain: GainNode }>>(new Map());
   const timersRef = useRef(new Set<number>());
 
-  // Draw, sound, toast, and chat timers belong to this mounted application.
+  // Sound and toast timers belong to this mounted page.
   const schedule = (callback: VoidFunction, delay: number) => {
     const timer = window.setTimeout(() => {
       timersRef.current.delete(timer);
@@ -57,11 +48,10 @@ setup
     return timer;
   };
 
-  // Canvas colours are resolved values, not live vars, so anything painted
-  // there re-reads its palette when this key changes.
   const required = betType;
   const game = GAMES[gameId];
   const pool = game.pool;
+  const jackpot = jackpots[gameId];
 
   // What the house currently sells, from the `games` table in Convex. An
   // unconfigured deployment resolves to the static config, so every game and
@@ -123,7 +113,6 @@ setup
     return () => {
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('pageshow', onVis);
-      if (confettiRef.current) cancelAnimationFrame(confettiRef.current);
       timersRef.current.forEach(timer => window.clearTimeout(timer));
       timersRef.current.clear();
       voiceMapRef.current.clear();
@@ -147,19 +136,6 @@ setup
       schedule(()=>{ if(voiceMapRef.current.get(id)?.osc===osc) voiceMapRef.current.delete(id); },(dur+0.15)*1000);
     }catch{}
   };
-  const playMixRumble=()=>{
-    if(!soundOn) return;
-    try{
-      const ctx=getAudio(); const osc=ctx.createOscillator(); const g=ctx.createGain();
-      osc.type='sawtooth'; osc.frequency.setValueAtTime(90,ctx.currentTime); osc.frequency.linearRampToValueAtTime(60,ctx.currentTime+2.8);
-      g.gain.setValueAtTime(0.0001,ctx.currentTime); g.gain.linearRampToValueAtTime(0.08,ctx.currentTime+0.2); g.gain.linearRampToValueAtTime(0.04,ctx.currentTime+2.8); g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+3);
-      osc.connect(g).connect(masterGainRef.current!); osc.start(); osc.stop(ctx.currentTime+3.1);
-    }catch{}
-  };
-  const playWinSeq=()=>{
-    if(!soundOn) return;
-    [261,329,392,523,659,784,1046].forEach((f,i)=> schedule(()=>playTone(f,0.8,i%2?'triangle':'sine',0.22), i*100));
-  };
 
   const toggleNumber = (n:number) => {
     setSelected(prev=>{
@@ -178,14 +154,14 @@ setup
     setSelected(await evenOddPick(required, pool));
   };
 
+
   const addTicket = () => {
     if(selected.length!==required) return;
     const nowTime=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
     const base: Ticket = { id:idCounterRef.current++, numbers:[...selected].sort((a,b)=>a-b), game:gameId, betType, required, status:'pending', hits:0, time:nowTime, cost:betCost };
     setTickets(prev=>[base,...prev]);
-    }
     playTone(900,0.25,'triangle',0.16);
-    showToast(mode==='party' ? `Added for ${currentPlayer?.name}` : 'Ticket added!');
+    showToast('Ticket added!');
   };
 
   // Random-bet multipliers: buy 1, 10, 20 ... 200 machine picks in one tap.
@@ -209,224 +185,12 @@ setup
       time: nowTime,
       cost: betCost,
     }));
-    if(mode==='solo'){
-      setTickets(prev=>[...batch,...prev]);
-    } else {
-      setPlayers(prev=>prev.map((p,i)=> i===currentPlayerIdx ? {...p, tickets:[...batch.map(t=>({...t, playerId:p.id})), ...p.tickets]} : p));
-    }
+    setTickets(prev=>[...batch,...prev]);
     setSelected(batch[0].numbers);
     playTone(880,0.22,'triangle',0.15);
     schedule(()=>playTone(1180,0.18,'sine',0.12),90);
     const clipped = size < count ? ` (capped from ×${count})` : '';
     showToast(`×${size} random ${game.id} bets • ${formatPeso(size*betCost)}${clipped}`);
-  };
-
-  const addPlayer = () => {
-    if(!newPlayerName.trim()) return;
-    if(players.length>=8){ showToast('Max 8 players'); return; }
-    const col = PLAYER_COLORS[players.length % PLAYER_COLORS.length];
-    const p: Player = { id:'p'+Date.now(), name:newPlayerName.trim().slice(0,12), color:col, avatar:newPlayerName.trim()[0].toUpperCase(), tickets:[], winnings:0, winCount:0 };
-    setPlayers(prev=>[...prev,p]); setNewPlayerName(''); setCurrentPlayerIdx(players.length);
-    setChat(prev=>[...prev,{ id:Date.now().toString(), name:p.name, color:col, text:`Joined the party! 🎉`, time:new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) }]);
-    showToast(`${p.name} joined!`);
-  };
-
-  const parseOfficialInput = (str:string): number[] | null => {
-    const cleaned=str.trim().replace(/\s/g,'');
-    const parts=cleaned.split(/[-,]/).map(s=>parseInt(s,10)).filter(n=>!isNaN(n));
-    if(parts.length!==6) return null;
-    if(parts.some(n=>n<1||n>pool)) return null;
-    if(new Set(parts).size!==6) return null;
-    return parts;
-  };
-
-  const evaluateTickets = (finalDraw:number[], drawGame:GameId, isOfficialDraw=false, seed?:DrawSeed) => {
-    const config = GAMES[drawGame];
-    const drawJackpot = getJackpots()[drawGame];
-    const sorted=[...finalDraw].sort((a,b)=>a-b);
-    const draw:Draw={ id:Date.now(), game:drawGame, numbers:[...finalDraw], sorted, time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}), dateLabel:new Date().toLocaleDateString('en-PH',{month:'short',day:'numeric'}), isOfficial:isOfficialDraw, seed };
-    setDraws(prev=>[draw,...prev].slice(0,6));
-
-    const wins: WinEntry[]=[];
-    // Only the evaluation itself knows which tickets THIS draw settled: once
-    // flipped to 'won'/'lost' they are indistinguishable from an earlier
-    // draw's, so they are collected here rather than re-read off the list.
-    // Nothing is recorded when signed out, so nothing is collected then either:
-    // a draw can settle up to MAX_TICKETS tickets, and a wrapper object apiece
-    // is work this thread would only throw away. The guard at the write site
-    // below stays; this one just stops paying for it in advance.
-    const shouldRecord = Boolean(convexClient && auth?.currentUser);
-    const settled: SettledTicket[]=[];
-
-    const calcPrize = (t:Ticket, hits:number): { won:boolean; prize:number } => {
-      if(t.betType===6){
-        if(hits===6) return { won:true, prize:drawJackpot };
-        if(hits>=3) return { won:true, prize:config.secondary[hits as 3|4|5] };
-        return { won:false, prize:0 };
-      } else {
-        if(hits===t.required) return { won:true, prize:betPrize(config, t.betType, drawJackpot, t.cost) };
-        return { won:false, prize:0 };
-      }
-    };
-
-    if(mode==='solo'){
-      const updatedTickets = getTickets().map(t=>{
-          if(t.status!=='pending' || t.game!==drawGame) return t;
-          const hits=t.numbers.filter(n=>finalDraw.includes(n)).length;
-          const {won,prize}=calcPrize(t,hits);
-          if(won){
-            const nt={...t,hits,status:'won' as const, prizeWon:prize};
-            wins.push({ticket:nt, prize});
-            if(shouldRecord) settled.push({ticket:nt});
-            return nt;
-          } else {
-            const nt={...t,hits,status:'lost' as const, prizeWon:0};
-            if(shouldRecord) settled.push({ticket:nt});
-            return nt;
-          }
-      });
-      setTickets(updatedTickets);
-    } else {
-        const updatedPlayers = getPlayers().map(p=>{
-          let w= p.winnings; let wc=p.winCount;
-          const newTickets = p.tickets.map(t=>{
-            if(t.status!=='pending' || t.game!==drawGame) return t;
-            const hits=t.numbers.filter(n=>finalDraw.includes(n)).length;
-            const {won,prize}=calcPrize(t,hits);
-            if(won){
-              w+=prize; wc+=1;
-              const nt={...t,hits,status:'won' as const, prizeWon:prize};
-              wins.push({ticket:nt, player:p, prize});
-              if(shouldRecord) settled.push({ticket:nt, playerName:p.name});
-              return nt;
-            } else {
-              const nt={...t,hits,status:'lost' as const, prizeWon:0};
-              if(shouldRecord) settled.push({ticket:nt, playerName:p.name});
-              return nt;
-            }
-          });
-          return {...p, tickets:newTickets, winnings:w, winCount:wc};
-        });
-        setPlayers(updatedPlayers);
-    }
-
-    if(wins.length>0){
-      const jackpotWin = wins.find(w=>w.ticket.betType===6 && w.ticket.hits===6);
-      if(jackpotWin){
-        setWinnerJackpot(jackpotWin);
-        setWinList(wins);
-        triggerConfetti(true,false);
-        playWinSeq();
-      } else {
-        setWinList(wins);
-        triggerConfetti(false,true);
-        playTone(650,0.6,'sine',0.2); schedule(()=>playTone(850,0.6,'triangle',0.18),180);
-        if(wins.some(w=>w.prize>=1000)) setShowMoneyRain(true);
-      }
-    } else {
-      // no winner -> jackpot rollover
-      if(!isOfficialDraw){
-        void randomRollover(config.rollover).then(bump=>{
-          setJackpots(prev=>({ ...prev, [drawGame]: prev[drawGame] + bump }));
-          setJackpotAnim(true); schedule(()=>setJackpotAnim(false),1200);
-          showToast(`No ${drawGame} jackpot winner! Rolled over +${formatCompactPeso(bump)}`);
-        });
-      }
-    }
-
-    // History only: fire-and-forget so nothing here can delay the reveal, and
-    // a lost row stays in the console rather than reaching the player.
-    if(shouldRecord && convexClient && auth?.currentUser){
-      const play = buildPracticePlay({ draw, mode, settled });
-      if(play) void convexClient.mutation(api.plays.m.record, play).catch(err=>console.error('Failed to record the practice play', err));
-    }
-
-    setIsDrawing(false); setCurrentBallAnim(null);
-  };
-
-  const startDraw = async (overrideNumbers?: number[]) => {
-    if(isDrawing) return;
-    const drawGame = getGameId();
-    setIsDrawing(true); setIsMixing(true); setDrawnBalls([]); setDrawGameId(drawGame); setCurrentBallAnim(null); setWinnerJackpot(null); setWinList([]); setShowMoneyRain(false);
-    playMixRumble();
-
-    // The six balls come off the seeded generator, committed before the drum
-    // even starts mixing. Draw order stays unsorted so the balls reveal the way
-    // the drum spat them out. A pasted official result skips the generator.
-    const rolled = overrideNumbers ? null : await drawBalls(GAMES[drawGame].pool);
-    const finalDraw = overrideNumbers ?? rolled!.numbers;
-
-    schedule(()=>{
-      setIsMixing(false);
-      let idx=0;
-      const reveal=()=>{
-        if(idx>=6){
-          evaluateTickets(finalDraw, drawGame, !!overrideNumbers, rolled?.seed);
-          return;
-        }
-        const num=finalDraw[idx];
-        setDrawnBalls(prev=>[...prev,num]);
-        setCurrentBallAnim(num);
-        playTone(320+idx*70+(num%12)*10,0.55,'sine',0.22);
-        schedule(()=>setCurrentBallAnim(null),600);
-        idx++;
-        schedule(reveal,1100);
-      };
-      reveal();
-    }, 2600);
-  };
-
-  const handleUseOfficialInput = () => {
-    const nums=parseOfficialInput(officialInput);
-    if(!nums){ showToast(`Invalid format. Six unique numbers 1-${pool}, e.g. 08-27-06-25-13-22`); return; }
-    showToast(`Using official draw: ${nums.join('-')}`);
-    startDraw(nums);
-  };
-
-  const handleCopyInvite = async () => {
-    const url=`${window.location.origin}${window.location.pathname}#${roomCode}`;
-    try{ await navigator.clipboard.writeText(url); showToast(`Invite copied • Room ${roomCode}`); }
-    catch{ showToast(url); }
-  };
-
-  const handleSendChat=()=>{
-    if(!chatInput.trim()) return;
-    const msg:ChatMsg={ id:Date.now().toString(), name:currentPlayer?.name||'You', color:currentPlayer?.color||'--primary', text:chatInput.trim().slice(0,120), time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) };
-    setChat(prev=>[...prev.slice(-20),msg]); setChatInput('');
-    if(Math.random()>0.45){
-      schedule(()=>{
-        const hype=['LETS GOOO! 🔥','Jackpot incoming!','I got 6/6 feeling!','P50M 😳','Watch 27!','Good luck! 🍀'];
-        const p = players[Math.floor(Math.random()*players.length)] || currentPlayer;
-        if(!p) return;
-        setChat(prev=>[...prev.slice(-20),{ id:(Date.now()+1).toString(), name:p.name, color:p.color, text:hype[Math.floor(Math.random()*hype.length)], time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) }]);
-      }, 900 + Math.random()*1200);
-    }
-  };
-
-  const stats = useMemo<SessionTotals>(()=>{
-    if(mode==='solo'){
-      const total=tickets.length; const wins=tickets.filter(t=>t.status==='won').length; const rate= total? Math.round((wins/total)*100):0;
-      const wonAmount=tickets.filter(t=>t.status==='won').reduce((s,t)=>s+(t.prizeWon||0),0);
-      return { total,wins,rate,wonAmount };
-    } else {
-      const total=players.reduce((s,p)=>s+p.tickets.length,0);
-      const wins=players.reduce((s,p)=>s+p.tickets.filter(t=>t.status==='won').length,0);
-      const rate= total? Math.round((wins/total)*100):0;
-      const wonAmount=players.reduce((s,p)=>s+p.winnings,0);
-      return { total,wins,rate,wonAmount };
-    }
-  },[tickets,players,mode]);
-
-  // Keep the live session available to the analytics outlet.
-  const session = useMemo(()=>({ tickets, players, draws, mode }),[tickets,players,draws,mode]);
-
-  // Party mode buys for the selected player; solo buys for you.
-  const buyerTag = mode === 'party' && currentPlayer ? `• ${currentPlayer.name}` : '';
-  const buyerLabel = mode === 'party' ? (currentPlayer?.name ?? 'this player') : 'you';
-
-  const selectMode = (next: GameMode) => {
-    setMode(next);
-    showToast(next === 'party' ? `Party mode • Room ${roomCode} • ${players.length} players` : 'Solo mode • Your tickets');
   };
 
   // A bet type is also the size of a ticket, so the selection is trimmed to fit.
@@ -436,12 +200,10 @@ setup
     setSelected(prev => prev.slice(0, bt).sort((a, b) => a - b));
   };
 
-  const clearPlayerTickets = () => {
-    setPlayers(players.map(p => p.id === currentPlayer?.id ? { ...p, tickets: [] } : p));
-    showToast(`Cleared ${currentPlayer?.name}'s tickets`);
-  };
-
 div(className="app-main-grid grid grid-cols-1 xl:grid-cols-[360px_1fr_380px] gap-4 md:gap-8 items-start")
+  if toast
+    div(className="fixed top-5 right-5 z-[9999] max-w-[min(20rem,calc(100vw-2.5rem))] px-4 py-2.5 rounded-full bg-ball text-ball-ink text-[13px] font-bold shadow-[0_8px_24px_rgba(0,0,0,0.4)] animate-[winnerPop_0.4s_ease]")
+      | #{toast}
 
   // BANKER COLUMN
   div(className="app-column app-column--bet order-2 xl:order-1 space-y-4")
@@ -459,8 +221,8 @@ div(className="app-main-grid grid grid-cols-1 xl:grid-cols-[360px_1fr_380px] gap
       ~ onSelectStake={setStakeChoice}
       ~ selected={selected}
       ~ ticketCount={ticketCount}
-      ~ buyerTag={buyerTag}
-      ~ buyerLabel={buyerLabel}
+      ~ buyerTag=""
+      ~ buyerLabel="you"
       ~ isDrawing={isDrawing}
       ~ onSelectBetType={selectBetType}
       ~ onToggleNumber={toggleNumber}

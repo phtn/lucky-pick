@@ -31,9 +31,6 @@ export const MAX_STAKE = MAX_TICKET_COST * Math.max(...STAKE_MULTIPLES)
 /** How many stakes one cell may offer. Enough for the PCSO history, not a menu. */
 export const MAX_STAKE_OPTIONS = 8
 
-/** The three prices the game has charged, newest last. */
-export const DEFAULT_STAKES: number[] = [20, 24, 25]
-
 /** What a ticket costs where nothing has been configured: today's PCSO price. */
 export const DEFAULT_TICKET_COST = 25
 
@@ -65,6 +62,9 @@ export const isStake = (value: unknown): value is number =>
 
 /** The stakes a price implies: the price itself and its multiples, ascending. */
 export const stakesForCost = (ticketCost: number): number[] => STAKE_MULTIPLES.map((multiple) => multiple * ticketCost)
+
+/** What a never-configured cell offers: the default price and its multiples. */
+export const DEFAULT_STAKES: number[] = stakesForCost(DEFAULT_TICKET_COST)
 
 /**
  * Ascending, de-duplicated, stakes only, capped at `MAX_STAKE_OPTIONS`. A cell
@@ -170,5 +170,5 @@ export const stakesFor = (map: GameSettingsMap, gameId: GameId, betType: BetType
 /** The games a game record covers, for a console that lists them side by side. */
 export const gameConfigFor = (gameId: GameId): GameConfig => GAMES[gameId]
 
-/** `20, 24, 25` — how a stake list reads in one line. */
+/** `₱25 · ₱50 · ₱75` — how a stake list reads in one line. */
 export const formatStakes = (stakes: readonly number[]) => stakes.map((stake) => `₱${stake}`).join(' · ')

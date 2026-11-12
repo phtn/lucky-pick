@@ -24,7 +24,7 @@ module
 
   const betTypeLabel = (betType: BetType) => (betType === 6 ? '6/6' : `${betType}/6`)
 
-  /** `20, 24, 25` — how a stake list is typed and read back. */
+  /** `25, 50, 75` — how a stake list is typed and read back. */
   const stakesText = (stakes: readonly number[]) => stakes.join(', ')
 
   /**

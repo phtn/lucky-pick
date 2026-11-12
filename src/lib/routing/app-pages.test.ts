@@ -9,6 +9,7 @@ describe('app page paths', () => {
     assert.equal(isAppPagePath('/trx'), true)
     assert.equal(isAppPagePath('/me/'), true)
     assert.equal(isAppPagePath('/trx/'), true)
+    assert.equal(isAppPagePath('/tickets/'), true)
   })
 
   test('leaves the game and the consoles alone', () => {
