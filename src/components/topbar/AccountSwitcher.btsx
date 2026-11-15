@@ -35,6 +35,9 @@ setup
   // The houses this user is the linked contact of, which is what makes them a
   // banker. `undefined` until read, and the admin row stays hidden until then.
   const houses = useConvexQuery(api.accounts.q.myHouses, {}, { enabled: user !== null })
+  // The caller's own credit wallet: `undefined` until read, `null` when no
+  // credits were ever allocated.
+  const wallet = useConvexQuery(api.ledger.q.myWallet, {}, { enabled: user !== null })
 
   const notify = useCallback((message: string | null) => {
     if (message) onNotify?.(message)
@@ -129,11 +132,10 @@ setup
       ]
     : []
 
-  // Every signed-in user has a profile page. It is a page of the app, not a
-  // console, so it is reached with the in-app navigation rather than a handoff.
+
   const actions: SwitcherAction[] = user
     ? [
-        { id: 'profile', label: 'Profile', icon: 'user-settings', onSelect: () => navigate('/me') },
+        { id: 'profile', label: 'Profile', icon: 'user-settings', meta: `₱${wallet?.available ?? 0}`, onSelect: () => navigate('/me') },
         ...trxAction,
         ...adminAction,
         ...asgardAction

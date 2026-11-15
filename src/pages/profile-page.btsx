@@ -465,7 +465,7 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
                   if wallet
                     div(className='grid grid-cols-2 gap-6')
                       StatTile(label='Held' value={`${formatCredits(wallet.held)} CR`} caption='Committed to open plays.')
-                      StatTile(label='Total' value={`${formatCredits(wallet.available + wallet.held)} CR`} caption='Balance plus held.')
+                      // StatTile(label='Total' value={`${formatCredits(wallet.available + wallet.held)} CR`} caption='Balance plus held.')
                 div(className='lg:col-span-3')
                   if entries.length === 0
                     Blank(message={hasReadMovements ? 'No credit has moved on your account yet.' : UNREAD_MOVEMENTS})
