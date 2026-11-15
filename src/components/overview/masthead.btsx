@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 module
   export interface MastheadProps {
     /** The surface this page belongs to, in small caps above the title. */
-    eyebrow: string
+    eyebrow?: string
     title: string
     titleClass?: ClassValue
     badgeClass?: ClassValue
@@ -19,15 +19,16 @@ props { eyebrow, title, description, children, className, titleClass, titleLeadi
 
 header(className={cn('overview-masthead flex items-end justify-between w-full gap-x-8 gap-y-6', className)})
   div(className='min-w-0 w-full')
-    div(className='flex items-center gap-2.5')
-      span(aria-hidden={true} className={cn('h-3 w-0.5 rounded-full bg-active', badgeClass)})
-      p(className='font-mono text-2xs uppercase tracking-[0.24em] text-muted-foreground') #{eyebrow}
+    if (eyebrow)
+      div(className='flex items-center gap-2.5')
+        span(aria-hidden={true} className={cn('h-3 w-0.5 rounded-full bg-active', badgeClass)})
+        p(className='font-mono text-2xs uppercase tracking-[0.24em] text-muted-foreground') #{eyebrow}
     if titleLeading
       div #{titleLeading}
     h1(className={cn('smooth-reveal inline-block max-w-[min(64vw,64rem)] overview-title mt-5 font-sans font-medium text-foreground leading-none tracking-tight', titleClass)})
       span #{title}
     if description
-      p(className='mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground') #{description}
+      p(className='mt-3 max-w-4xl text-sm leading-relaxed text-muted-foreground') #{description}
   div(className='flex shrink-0 items-center gap-3')
     | #{children}
   span(className='overview-rule_' aria-hidden={true})

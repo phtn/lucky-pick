@@ -5,6 +5,7 @@ import { api } from '../_generated/api'
 import { auditWallets } from '../ledger/audit'
 import { god, member } from '../lib/testIdentities'
 import schema from '../schema'
+import { nextDrawDate } from './d'
 
 // A root-absolute glob: `../**/*.ts` keys this directory's own files as `./x.ts`, which convex-test cannot place.
 const modules = import.meta.glob('/convex/**/*.ts')
@@ -61,6 +62,10 @@ test('buying tickets holds the stake and stores each ticket as pending', async (
     [10, 20, 30, 40, 41, 42]
   ])
   expect(mine[0]).toMatchObject({ accountId, game: '6/42', betType: 6, cost: 25, status: 'pending', hits: 0, prizeWon: null })
+  // Both tickets of one purchase are entered in the same draw.
+  expect(mine[0].drawDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  expect(mine[1].drawDate).toBe(mine[0].drawDate)
+  expect(mine.map((ticket) => ticket.drawTime)).toEqual(['21:00', '21:00'])
   expect(await t.run((ctx) => auditWallets(ctx))).toEqual({ total: 0, mismatched: [] })
   // Nobody else sees them.
   expect(await t.withIdentity(ben).query(api.tickets.q.mine, {})).toEqual([])
@@ -108,4 +113,40 @@ test('a game or bet type the house switched off cannot be bought', async () => {
 
   await expect(buy(t, ana, [[1, 2, 3]], { betType: 3 })).rejects.toThrow('That game is not on sale right now.')
   expect(await buy(t, ana, [[1, 2]], { betType: 2, requestId: 'req-00000002' })).toEqual({ bought: 1, spent: 25 })
+})
+
+test('a ticket is entered in the next 9PM Manila draw of its game', () => {
+  // 6/42 draws on Tuesday, Thursday and Saturday. 2026-11-15 is a Sunday.
+  const days = [2, 4, 6]
+  const at = (iso: string) => Date.parse(iso)
+
+  expect(nextDrawDate(days, at('2026-11-15T12:00:00Z'))).toBe('2026-11-17')
+  // Already Tuesday in Manila, though still Monday in UTC.
+  expect(nextDrawDate(days, at('2026-11-16T16:30:00Z'))).toBe('2026-11-17')
+  // A minute before the draw is still tonight's; at 9PM it is the next one's.
+  expect(nextDrawDate(days, at('2026-11-17T12:59:00Z'))).toBe('2026-11-17')
+  expect(nextDrawDate(days, at('2026-11-17T13:00:00Z'))).toBe('2026-11-19')
+  // Saturday night rolls over a week boundary to Tuesday.
+  expect(nextDrawDate(days, at('2026-11-21T13:00:00Z'))).toBe('2026-11-24')
+  expect(nextDrawDate([], at('2026-11-15T12:00:00Z'))).toBeNull()
+})
+
+test('atMyHouses shows a banker the tickets placed at their house, and nobody else', async () => {
+  const { t, accountId, anaId } = await setup()
+  await buy(t, ana, [[1, 2, 3, 4, 5, 6], [10, 20, 30, 40, 41, 42]])
+
+  const houses = await t.withIdentity(owner).query(api.tickets.q.atMyHouses, {})
+  expect(houses.map((h) => [h.accountId, h.name, h.truncated, h.tickets.length])).toEqual([[accountId, 'Casa Uno', false, 2]])
+  expect(houses[0].tickets[0]).toMatchObject({ userId: anaId, game: '6/42', cost: 25, status: 'pending', drawTime: '21:00' })
+  // A display name and picture, and nothing else about the player.
+  expect(Object.keys(houses[0].tickets[0]).sort()).toEqual([
+    'betType', 'cost', 'createdAt', 'drawDate', 'drawTime', 'game', 'hits', 'numbers',
+    'playerImageUrl', 'playerName', 'prizeWon', 'status', 'ticketId', 'userId'
+  ])
+
+  // A player is nobody's banker, a suspended house lists nothing, and a signed-out caller is refused.
+  expect(await t.withIdentity(ana).query(api.tickets.q.atMyHouses, {})).toEqual([])
+  await t.run((ctx) => ctx.db.patch(accountId, { status: 'suspended' }))
+  expect(await t.withIdentity(owner).query(api.tickets.q.atMyHouses, {})).toEqual([])
+  await expect(t.query(api.tickets.q.atMyHouses, {})).rejects.toThrow('Unauthorized.')
 })

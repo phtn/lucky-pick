@@ -17,6 +17,7 @@ import { replaceRoute } from '@/lib/routing/navigation'
 import type { PracticePlayRow } from '@/lib/profile/record'
 import { readPracticeStats } from '@/lib/profile/stats'
 import { clearPendingTronAccount } from '@/lib/tronweb/pending-account'
+import { formatDraw } from '@/lib/tickets/format'
 import { cn } from '@/lib/utils'
 import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
@@ -25,11 +26,13 @@ import { DEFAULT_PLAY_PAGE, PLAY_HISTORY_LIMIT, TICKET_DETAIL_LIMIT } from '../.
 
 module
   type Movement = FunctionReturnType<typeof api.ledger.q.myLedgerHistory>[number]
+  type MyTicket = FunctionReturnType<typeof api.tickets.q.mine>[number]
 
   // A read that has not answered yet, or one that failed, is `undefined`. Each
   // panel falls back to its own empty list, so no panel can empty another.
   const EMPTY_MOVEMENTS: Movement[] = []
   const EMPTY_PLAYS: PracticePlayRow[] = []
+  const EMPTY_TICKETS: MyTicket[] = []
 
   // Both panels are fixed-height, so both reads are capped rather than paged.
   // The plays read takes the backend's own default page: a row carries up to
@@ -39,9 +42,12 @@ module
   const MOVEMENT_ARGS = { limit: MY_HISTORY_LIMIT }
   const PLAYS_ARGS = { limit: DEFAULT_PLAY_PAGE }
   const PLAY_FEED_LIMIT = 10
+  // The newest tickets only: `tickets.q.mine` can return up to its own cap of
+  // 500 for the board, which is more than a profile tab should subscribe to.
+  const TICKETS_ARGS = { limit: 50 }
 
   const readingLabelClass = 'font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground'
-  const chipClass = 'rounded-xs px-1.5 py-0.5 font-mono text-2xs uppercase tracking-wider'
+  const chipClass = 'rounded px-1.5 py-0.5 font-mono text-2xs uppercase tracking-wider'
   const blankClass = 'rounded-lg border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground'
 
   // A credit that came in, or a draw that paid: never colour alone, since each
@@ -73,6 +79,14 @@ module
   // the two states are never given the same sentence.
   const UNREAD_MOVEMENTS = 'Your credit movements have not been read on this load.'
   const UNREAD_PLAYS = 'Your practice draws have not been read on this load.'
+  const UNREAD_TICKETS = 'Your tickets have not been read on this load.'
+
+  // A ticket's state is carried by the word, with colour only as a second cue.
+  const TICKET_STATUS_TONE: Record<MyTicket['status'], string> = {
+    pending: 'bg-orange-500/15 text-orange-700 dark:text-orange-200',
+    won: 'bg-chart-good/15 text-emerald-700 dark:text-emerald-400',
+    lost: 'bg-foreground/5 text-muted-foreground'
+  }
 
 // A labelled line of the record: whatever the account has, or an em dash.
 component Reading
@@ -123,6 +137,7 @@ setup
   const movements = useConvexQuery(api.ledger.q.myLedgerHistory, MOVEMENT_ARGS, { enabled: isSignedIn })
   const plays = useConvexQuery(api.plays.q.mine, PLAYS_ARGS, { enabled: isSignedIn })
   const myHouses = useConvexQuery(api.accounts.q.myHouses, {}, { enabled: isSignedIn })
+  const tickets = useConvexQuery(api.tickets.q.mine, TICKETS_ARGS, { enabled: isSignedIn })
   const claimableTopups = useConvexQuery(api.money.topups.claimable, {}, { enabled: isSignedIn })
   // A claimed top-up lands in the house's float, not in the caller's own
   // wallet, so the Wallet tab reads both. Empty for anyone who fronts no house.
@@ -167,6 +182,16 @@ setup
   // nothing has ever happened on it.
   const hasReadMovements = movements !== undefined
   const hasReadPlays = plays !== undefined
+  const hasReadTickets = tickets !== undefined
+  const ticketRows = tickets ?? EMPTY_TICKETS
+  const pendingTicketCount = ticketRows.filter((ticket) => ticket.status === 'pending').length
+  const ticketsMeta = !hasReadTickets
+    ? 'Not read yet'
+    : ticketRows.length === 0
+      ? 'No tickets'
+      : pendingTicketCount > 0
+        ? `Newest ${formatCount(ticketRows.length)} · ${formatCount(pendingTicketCount)} pending`
+        : `Newest ${formatCount(ticketRows.length)}`
 
   // What the Practice panel counts, said truthfully. The window is the newest
   // DEFAULT_PLAY_PAGE draws — which is every draw when the account holds fewer
@@ -211,6 +236,7 @@ setup
   const tabs: TabItem[] = [
     ...(hasBankers ? [{ id: 'bankers', label: topupsToClaim.length > 0 ? `Bankers (${topupsToClaim.length})` : 'Bankers' }] : []),
     { id: 'wallet', label: 'Wallet' },
+    { id: 'tickets', label: 'Tickets' },
     // { id: 'practice', label: 'Practice' },
     { id: 'plays', label: 'Recent plays' },
     // { id: 'real', label: 'Real plays' }
@@ -453,32 +479,32 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
                               span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) held
                             span(className={cn('w-20 shrink-0 text-right font-mono text-sm tabular-nums', entry.amount < 0 ? 'text-destructive' : POSITIVE_TONE)}) #{formatLedgerAmount(entry.amount)}
                             span(className='hidden w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 lg:inline') #{formatCredits(entry.balanceAfter)}
-            Panel(title={houseWallets.length > 0 ? 'Your own wallet' : 'Wallet'} collapsible={false} description='Your own credit balance to play with, and how it has moved. 1 credit is worth ₱1.' meta={!hasReadMovements ? 'Not read yet' : entries.length === 0 ? 'No movements' : `Newest ${formatCount(entries.length)}`})
-              div(className='grid gap-10 lg:grid-cols-5 lg:gap-8')
-                div(className='grid content-start gap-8 lg:col-span-2')
-                  StatTile(
-                    ~ hero={true}
-                    ~ label='Balance'
-                    ~ value={balanceValue}
-                    ~ caption={balanceCaption}
-                    ~ )
-                  if wallet
-                    div(className='grid grid-cols-2 gap-6')
-                      StatTile(label='Held' value={`${formatCredits(wallet.held)} CR`} caption='Committed to open plays.')
-                      // StatTile(label='Total' value={`${formatCredits(wallet.available + wallet.held)} CR`} caption='Balance plus held.')
-                div(className='lg:col-span-3')
-                  if entries.length === 0
-                    Blank(message={hasReadMovements ? 'No credit has moved on your account yet.' : UNREAD_MOVEMENTS})
-                  else
-                    ul(className='overview-feed')
-                      each entry in entries key entry._id
-                        li(className='flex flex-wrap items-center gap-x-3 gap-y-1')
-                          span(className='w-20 shrink-0 font-mono text-2xs text-muted-foreground') #{formatRelativeTime(entry.createdAt, now)}
-                          span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{formatLedgerLabel(entry)}
-                          if entry.bucket === 'held'
-                            span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) held
-                          span(className={cn('w-20 shrink-0 text-right font-mono text-sm tabular-nums', entry.amount < 0 ? 'text-destructive' : POSITIVE_TONE)}) #{formatLedgerAmount(entry.amount)}
-                          span(className='hidden w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 lg:inline') #{formatCredits(entry.balanceAfter)}
+            // Panel(title={houseWallets.length > 0 ? 'Your own wallet' : ''} collapsible={false} description='' meta={!hasReadMovements ? 'Not read yet' : entries.length === 0 ? 'No movements' : `Newest ${formatCount(entries.length)}`})
+            div(className='grid gap-10 lg:grid-cols-5 lg:gap-8')
+              div(className='grid content-start gap-8 lg:col-span-2')
+                StatTile(
+                  ~ hero={true}
+                  ~ label='Balance'
+                  ~ value={balanceValue}
+                  ~ caption={balanceCaption}
+                  ~ )
+                if wallet
+                  div(className='grid grid-cols-2 gap-6')
+                    StatTile(label='Held' value={`${formatCredits(wallet.held)} CR`} caption='Committed to open plays.')
+                    // StatTile(label='Total' value={`${formatCredits(wallet.available + wallet.held)} CR`} caption='Balance plus held.')
+              div(className='lg:col-span-3')
+                if entries.length === 0
+                  Blank(message={hasReadMovements ? 'No credit has moved on your account yet.' : UNREAD_MOVEMENTS})
+                else
+                  ul(className='overview-feed')
+                    each entry in entries key entry._id
+                      li(className='flex flex-wrap items-center gap-x-3 gap-y-1')
+                        span(className='w-20 shrink-0 font-mono text-2xs text-muted-foreground') #{formatRelativeTime(entry.createdAt, now)}
+                        span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{formatLedgerLabel(entry)}
+                        if entry.bucket === 'held'
+                          span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) held
+                        span(className={cn('w-20 shrink-0 text-right font-mono text-sm tabular-nums', entry.amount < 0 ? 'text-destructive' : POSITIVE_TONE)}) #{formatLedgerAmount(entry.amount)}
+                        span(className='hidden w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 lg:inline') #{formatCredits(entry.balanceAfter)}
         elseif activeTab === 'practice'
           Panel(
             ~ title='Practice'
@@ -523,6 +549,45 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
                     ~ caption={`Tickets by numbers matched. Counted from the ticket detail each draw stores — at most ${formatCount(TICKET_DETAIL_LIMIT)} tickets of a draw — so a larger draw is represented by those rather than by every ticket it held.`}
                     ~ )
 
+        elseif activeTab === 'tickets'
+          // Panel(title='Tickets' collapsible={false} description='Tickets you bought with credits, newest first. 1 credit is worth ₱1.' meta={ticketsMeta})
+          div
+            if ticketRows.length === 0
+              Blank(message={hasReadTickets ? 'You have not bought a ticket yet.' : UNREAD_TICKETS})
+            else
+              fragment
+                // Column headers. Each cell repeats the width of the cell below
+                // it, so the two must change together. Hidden below `xl`, where a
+                // row wraps and there are no columns left to head.
+                div(className='hidden items-center gap-x-4 pb-2 xl:flex')
+                  span(className={cn(readingLabelClass, 'w-40 shrink-0')}) Game
+                  span(className={cn(readingLabelClass, 'flex-1 px-4')}) Numbers
+                  span(className={cn(readingLabelClass, 'w-28 shrink-0 text-center')}) Status
+                  span(className={cn(readingLabelClass, 'w-40 shrink-0 text-left')}) Draw
+                  span(className={cn(readingLabelClass, 'w-24 shrink-0 text-right')}) Cost
+                  span(className={cn(readingLabelClass, 'w-24 shrink-0 text-right')}) Payout
+                  span(className={cn(readingLabelClass, 'w-20 shrink-0 text-right')}) Bought
+                ul(className='overview-feed')
+                  each ticket in ticketRows key ticket.ticketId
+                    li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
+                      div(className='w-40 min-w-0 shrink-0')
+                        p(className='truncate text-sm text-foreground') #{GAMES[ticket.game].name}
+                        // p(className='truncate font-mono text-xs text-muted-foreground') #{formatDraw(ticket.drawDate, ticket.drawTime)}
+                      div(className='flex items-center flex-1 h-10 gap-4 px-4')
+                        each n in ticket.numbers
+                          span(key={n} className='flex items-center justify-center bg-foreground font-[550] text-lg text-background size-10 rounded-full') #{n}
+
+
+                      div(className='w-28 shrink-0 flex items-center justify-center')
+                        span(className={cn(chipClass, TICKET_STATUS_TONE[ticket.status])}) #{ticket.status}
+                      // Hits mean nothing until the draw has run, so a pending
+                      // ticket shows none rather than a zero it has not earned.
+                      // span(className='w-16 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{ticket.status === 'pending' ? '—' : formatHits(ticket.hits)}
+                      span(className='w-40 shrink-0 text-left font-mono text-xs tabular-nums text-muted-foreground') #{formatDraw(ticket.drawDate, ticket.drawTime)}
+                      span(className='w-24 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-foreground') #{`₱${formatCredits(ticket.cost)}`}
+                      span(className='w-24 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-muted-foreground') #{`₱${formatCredits(ticket.cost * 360)}`}
+                      // span(className={cn('w-24 shrink-0 text-right font-mono text-sm tabular-nums', ticket.prizeWon ? POSITIVE_TONE : 'text-muted-foreground/70')}) #{ticket.status === 'pending' ? '—' : `${formatCredits(ticket.prizeWon ?? (ticket.cost * 360))} CR`}
+                      span(className='w-20 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{formatRelativeTime(ticket.createdAt, now)}
         elseif activeTab === 'plays'
           Panel(title='Recent plays' collapsible={false} description='One row per resolved draw, newest first.' meta={!hasReadPlays ? 'Not read yet' : rows.length === 0 ? 'No draws' : `${formatCount(playFeed.length)} of ${formatCount(rows.length)}`})
             if playFeed.length === 0

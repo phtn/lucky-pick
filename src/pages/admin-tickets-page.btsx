@@ -1,0 +1,114 @@
+import { Link } from '@octanejs/tanstack-router'
+import { Masthead, Panel } from '@/components/overview'
+import { useConvexQuery } from '@/hooks/use-convex-query'
+import { adminPlayerPath } from '@/lib/admin/console-paths'
+import { useFirebaseUser } from '@/lib/firebase/auth'
+import { GAMES } from '@/lib/games'
+import { Icon } from '@/lib/icons'
+import { formatCount, formatRelativeTime } from '@/lib/overview/metrics'
+import { formatDraw } from '@/lib/tickets/format'
+import { cn } from '@/lib/utils'
+import type { FunctionReturnType } from 'convex/server'
+import { api } from '../../convex/_generated/api'
+
+module
+  type HouseTicket = FunctionReturnType<typeof api.tickets.q.atMyHouses>[number]['tickets'][number]
+
+  const blankClass = 'rounded-lg border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground'
+  const headClass = 'font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground'
+  const chipClass = 'rounded-xs px-1.5 py-0.5 font-mono text-2xs uppercase tracking-wider'
+
+  // A ticket's state is carried by the word, with colour only as a second cue.
+  const STATUS_TONE: Record<HouseTicket['status'], string> = {
+    pending: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+    won: 'bg-chart-good/15 text-emerald-700 dark:text-emerald-400',
+    lost: 'bg-foreground/5 text-muted-foreground'
+  }
+
+  const formatCredits = (value: number) => `${value.toLocaleString('en-US')} CR`
+  const formatNumbers = (numbers: readonly number[]) => numbers.join(' · ')
+
+setup
+  const { user, isLoading } = useFirebaseUser()
+  const isSignedIn = user !== null
+  const hostname = typeof window === 'undefined' ? '' : window.location.hostname
+  // Like the players page, the query answers from the caller's own identity:
+  // it lists the tickets of the houses they are the linked contact of, and
+  // nothing for anyone else.
+  const houses = useConvexQuery(api.tickets.q.atMyHouses, {}, { enabled: isSignedIn })
+  const ticketCount = (houses ?? []).reduce((total, house) => total + house.tickets.length, 0)
+  const isTruncated = (houses ?? []).some((house) => house.truncated)
+  const now = Date.now()
+
+section(className='relative overview-page px-4 pb-16 md:px-6')
+  div(className='overview-content')
+    Masthead(
+      ~ title='Tickets'
+      ~ description=''
+      ~ )
+      if houses !== undefined
+        div(className='flex items-center justify-between gap-4')
+          div(className='flex items-center gap-2 rounded-full border border-border/50 px-3 py-1.5')
+            span(className={headClass}) 6/42 Lotto
+          div(className='flex items-center gap-2 rounded-full border border-border/50 px-3 py-1.5')
+            span(className={headClass}) Tuesday, Nov, 17
+
+    div(className='overview-sections')
+      if !isSignedIn
+        p(className={blankClass}) #{isLoading ? 'Checking your session…' : 'Sign in as a banker to see your tickets.'}
+      elseif houses === undefined
+        div(className='flex items-center gap-3 py-10')
+          Icon(name='spinner' size={16} className='animate-spin text-muted-foreground')
+          p(className='text-sm text-muted-foreground') Reading your tickets…
+      elseif houses.length === 0
+        p(className={blankClass}) You are not the contact of a confirmed or active house, so there are no tickets to list.
+      else
+        each house in houses key house.accountId
+          Panel(
+            ~ title={house.name}
+            ~ collapsible={false}
+            ~ meta={`${formatCount(house.tickets.length)}${house.truncated ? '+' : ''} ${house.tickets.length === 1 ? 'ticket' : 'tickets'}`}
+            ~ )
+            if house.tickets.length === 0
+              p(className={blankClass}) Nobody has bought a ticket at this house yet.
+            else
+              fragment
+                // Each header cell repeats the width and breakpoint of the cell
+                // below it, so the two must change together.
+                div(className='flex items-center gap-x-4 pb-2')
+                  span(className={cn(headClass, 'min-w-0 flex-1')}) Player
+                  span(className={cn(headClass, 'hidden w-44 shrink-0 lg:inline')}) Game · draw
+                  span(className={cn(headClass, 'hidden w-44 shrink-0 md:inline')}) Numbers
+                  span(className={cn(headClass, 'w-16 shrink-0')}) Status
+                  span(className={cn(headClass, 'w-20 shrink-0 text-right')}) Cost
+                  span(className={cn(headClass, 'hidden w-24 shrink-0 text-right sm:inline')}) Prize
+                  span(className={cn(headClass, 'hidden w-20 shrink-0 text-right xl:inline')}) Bought
+                ul(className='overview-feed')
+                  each ticket in house.tickets key ticket.ticketId
+                    li(className='flex items-center gap-x-4')
+                      Link(
+                        ~ to={adminPlayerPath(hostname, house.accountId, ticket.userId)}
+                        ~ aria-label={`Open ${ticket.playerName}`}
+                        ~ className='-mx-2 flex min-w-0 flex-1 items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                        ~ )
+                        if ticket.playerImageUrl
+                          img(src={ticket.playerImageUrl} alt='' referrerPolicy='no-referrer' className='size-7 shrink-0 rounded-full border object-cover')
+                        else
+                          div(className='grid size-7 shrink-0 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
+                            Icon(name='person' size={14})
+                        p(className='truncate text-sm text-foreground') #{ticket.playerName}
+                      div(className='hidden w-44 min-w-0 shrink-0 lg:block')
+                        p(className='truncate text-sm text-foreground') #{GAMES[ticket.game].name}
+                        p(className='truncate font-mono text-xs text-muted-foreground') #{formatDraw(ticket.drawDate, ticket.drawTime)}
+                      span(className='hidden w-44 shrink-0 truncate font-mono text-xs tabular-nums text-foreground md:inline') #{formatNumbers(ticket.numbers)}
+                      div(className='w-16 shrink-0')
+                        span(className={cn(chipClass, STATUS_TONE[ticket.status])}) #{ticket.status}
+                      span(className='w-20 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{formatCredits(ticket.cost)}
+                      // A prize is unknown until the draw has run, so a pending
+                      // ticket shows none rather than a zero it has not earned.
+                      span(className={cn('hidden w-24 shrink-0 text-right font-mono text-sm tabular-nums sm:inline', ticket.prizeWon ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground/70')}) #{ticket.status === 'pending' ? '—' : formatCredits(ticket.prizeWon ?? 0)}
+                      span(className='hidden w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 xl:inline') #{formatRelativeTime(ticket.createdAt, now)}
+                if house.truncated
+                  p(className='mt-4 text-xs text-muted-foreground') Showing the newest #{formatCount(house.tickets.length)} tickets of this house.
+
+    div(aria-hidden={true} className='h-20 w-full')

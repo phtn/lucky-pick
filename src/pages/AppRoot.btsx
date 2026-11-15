@@ -20,6 +20,7 @@ setup
   const isOwnSurface = isConsoleSurface || isGameRoutePath(pathname)
 
 if isOwnSurface
+
   Outlet
 else
   Main

@@ -8,7 +8,7 @@ import { getGameByGameId } from '../games/helpers'
 import { post } from '../ledger/post'
 import { findUserWallet } from '../ledger/wallets'
 import { getUserByTokenIdentifier } from '../users/q'
-import { MAX_TICKETS_PER_PURCHASE } from './d'
+import { DRAW_TIME, MAX_TICKETS_PER_PURCHASE, nextDrawDate } from './d'
 
 /**
  * Buys one or more tickets with the caller's credits at the house they have
@@ -102,6 +102,8 @@ export const buy = mutation({
     // A replay already wrote its tickets the first time.
     if (!replayed) {
       const now = Date.now()
+      // One purchase is one moment, so every ticket in it is in the same draw.
+      const drawDate = nextDrawDate(row?.drawDays ?? GAMES[game].drawDays, now)
       for (const numbers of tickets) {
         await ctx.db.insert('tickets', {
           userId: user._id,
@@ -112,7 +114,8 @@ export const buy = mutation({
           cost,
           status: 'pending',
           hits: 0,
-          createdAt: now
+          createdAt: now,
+          ...(drawDate ? { drawDate, drawTime: DRAW_TIME } : {})
         })
       }
     }

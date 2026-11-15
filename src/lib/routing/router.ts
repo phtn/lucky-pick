@@ -42,6 +42,7 @@ const adminShell = lazyPage(() => import('@/pages/admin-page.btsx'))
 const adminOverview = lazyPage(() => import('@/pages/admin-overview-page.btsx'))
 const adminPlayers = lazyPage(() => import('@/pages/admin-players-page.btsx'))
 const adminPlayer = lazyPage(() => import('@/pages/admin-player-page.btsx'))
+const adminTickets = lazyPage(() => import('@/pages/admin-tickets-page.btsx'))
 
 function createAdminRouteTree() {
   const rootRoute = createRootRoute({ component: adminShell })
@@ -66,7 +67,13 @@ function createAdminRouteTree() {
     component: adminPlayer
   })
 
-  return rootRoute.addChildren([overviewRoute, playersRoute, playerRoute])
+  const ticketsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/tickets',
+    component: adminTickets
+  })
+
+  return rootRoute.addChildren([overviewRoute, playersRoute, playerRoute, ticketsRoute])
 }
 
 function createAsgardRouteTree() {
@@ -207,6 +214,12 @@ function createAppRouteTree() {
     component: adminPlayer
   })
 
+  const adminTicketsRoute = createRoute({
+    getParentRoute: () => adminRoute,
+    path: 'tickets',
+    component: adminTickets
+  })
+
   return rootRoute.addChildren([
     landingRoute,
     ticketsRoute,
@@ -215,7 +228,7 @@ function createAppRouteTree() {
     profileRoute,
     trxRoute,
     asgardRoute.addChildren([asgardIndexRoute, asgardAccountsRoute, asgardAccountRoute, asgardGamesRoute]),
-    adminRoute.addChildren([adminIndexRoute, adminPlayersRoute, adminPlayerRoute])
+    adminRoute.addChildren([adminIndexRoute, adminPlayersRoute, adminPlayerRoute, adminTicketsRoute])
   ])
 }
 

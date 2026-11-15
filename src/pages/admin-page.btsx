@@ -17,7 +17,8 @@ module
    */
   const navPages = [
     { to: '', label: 'Overview', icon: 'chart', exact: true },
-    { to: '/players', label: 'Players', icon: 'user' }
+    { to: '/players', label: 'Players', icon: 'user' },
+    { to: '/tickets', label: 'Tickets', icon: 'dice' }
   ] as AdminNavItem[]
 
   const toNavItems = (base: string): AdminNavItem[] =>
