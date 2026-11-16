@@ -47,7 +47,7 @@ module
   const TICKETS_ARGS = { limit: 50 }
 
   const readingLabelClass = 'font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground'
-  const chipClass = 'rounded px-1.5 py-0.5 font-mono text-2xs uppercase tracking-wider'
+  const chipClass = 'rounded px-1.5 py-1 font-mono text-2xs uppercase tracking-wider'
   const blankClass = 'rounded-lg border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground'
 
   // A credit that came in, or a draw that paid: never colour alone, since each
@@ -353,7 +353,7 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
       Masthead(
         ~ eyebrow={email || 'No email on this account'}
         ~ title={name || 'Your profile'}
-        ~ description='Monitor tickets and review recent bets.'
+        ~ description='Monitor your wallet & tickets activity.'
         ~ titleClass='ml-12 text-4xl!'
         ~ )
         // States the one fact the whole page depends on, so empty panels are read
@@ -559,14 +559,14 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
                 // Column headers. Each cell repeats the width of the cell below
                 // it, so the two must change together. Hidden below `xl`, where a
                 // row wraps and there are no columns left to head.
-                div(className='hidden items-center gap-x-4 pb-2 xl:flex')
+                div(className='hidden items-center gap-x-4 py-6 xl:flex')
                   span(className={cn(readingLabelClass, 'w-40 shrink-0')}) Game
                   span(className={cn(readingLabelClass, 'flex-1 px-4')}) Numbers
-                  span(className={cn(readingLabelClass, 'w-28 shrink-0 text-center')}) Status
+                  span(className={cn(readingLabelClass, 'w-32 shrink-0 text-center')}) Status
                   span(className={cn(readingLabelClass, 'w-40 shrink-0 text-left')}) Draw
-                  span(className={cn(readingLabelClass, 'w-24 shrink-0 text-right')}) Cost
-                  span(className={cn(readingLabelClass, 'w-24 shrink-0 text-right')}) Payout
-                  span(className={cn(readingLabelClass, 'w-20 shrink-0 text-right')}) Bought
+                  span(className={cn(readingLabelClass, 'w-28 shrink-0 text-right')}) Stake
+                  span(className={cn(readingLabelClass, 'w-28 shrink-0 text-right')}) Payout
+                  span(className={cn(readingLabelClass, 'w-24 shrink-0 text-right')}) Bought
                 ul(className='overview-feed')
                   each ticket in ticketRows key ticket.ticketId
                     li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
@@ -578,16 +578,16 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
                           span(key={n} className='flex items-center justify-center bg-foreground font-[550] text-lg text-background size-10 rounded-full') #{n}
 
 
-                      div(className='w-28 shrink-0 flex items-center justify-center')
+                      div(className='w-32 shrink-0 flex items-center justify-center')
                         span(className={cn(chipClass, TICKET_STATUS_TONE[ticket.status])}) #{ticket.status}
                       // Hits mean nothing until the draw has run, so a pending
                       // ticket shows none rather than a zero it has not earned.
                       // span(className='w-16 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{ticket.status === 'pending' ? '—' : formatHits(ticket.hits)}
                       span(className='w-40 shrink-0 text-left font-mono text-xs tabular-nums text-muted-foreground') #{formatDraw(ticket.drawDate, ticket.drawTime)}
-                      span(className='w-24 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-foreground') #{`₱${formatCredits(ticket.cost)}`}
-                      span(className='w-24 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-muted-foreground') #{`₱${formatCredits(ticket.cost * 360)}`}
+                      span(className='w-28 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-foreground') #{`₱${formatCredits(ticket.cost)}`}
+                      span(className='w-28 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-muted-foreground') #{`₱${formatCredits(ticket.cost * 360)}`}
                       // span(className={cn('w-24 shrink-0 text-right font-mono text-sm tabular-nums', ticket.prizeWon ? POSITIVE_TONE : 'text-muted-foreground/70')}) #{ticket.status === 'pending' ? '—' : `${formatCredits(ticket.prizeWon ?? (ticket.cost * 360))} CR`}
-                      span(className='w-20 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{formatRelativeTime(ticket.createdAt, now)}
+                      span(className='w-24 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{formatRelativeTime(ticket.createdAt, now)}
         elseif activeTab === 'plays'
           Panel(title='Recent plays' collapsible={false} description='One row per resolved draw, newest first.' meta={!hasReadPlays ? 'Not read yet' : rows.length === 0 ? 'No draws' : `${formatCount(playFeed.length)} of ${formatCount(rows.length)}`})
             if playFeed.length === 0

@@ -1,9 +1,11 @@
 import { Link } from '@octanejs/tanstack-router'
+import { useState } from 'octane'
 import { Masthead, Panel } from '@/components/overview'
+import DropdownMenu, { DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu.btsx'
 import { useConvexQuery } from '@/hooks/use-convex-query'
 import { adminPlayerPath } from '@/lib/admin/console-paths'
 import { useFirebaseUser } from '@/lib/firebase/auth'
-import { GAMES } from '@/lib/games'
+import { GAME_IDS, GAMES } from '@/lib/games'
 import { Icon } from '@/lib/icons'
 import { formatCount, formatRelativeTime } from '@/lib/overview/metrics'
 import { formatDraw } from '@/lib/tickets/format'
@@ -16,17 +18,50 @@ module
 
   const blankClass = 'rounded-lg border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground'
   const headClass = 'font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground'
-  const chipClass = 'rounded-xs px-1.5 py-0.5 font-mono text-2xs uppercase tracking-wider'
+  const chipClass = 'rounded px-1.5 py-1 font-mono text-2xs uppercase tracking-wider'
 
   // A ticket's state is carried by the word, with colour only as a second cue.
   const STATUS_TONE: Record<HouseTicket['status'], string> = {
-    pending: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+    pending: 'bg-orange-500/15 text-orange-700 dark:text-orange-200',
     won: 'bg-chart-good/15 text-emerald-700 dark:text-emerald-400',
     lost: 'bg-foreground/5 text-muted-foreground'
   }
 
-  const formatCredits = (value: number) => `${value.toLocaleString('en-US')} CR`
+  const formatCredits = (value: number) => `₱${value.toLocaleString('en-US')}`
   const formatNumbers = (numbers: readonly number[]) => numbers.join(' · ')
+
+  interface FilterOption {
+    value: string
+    label: string
+  }
+
+  /** The filter value that means no filter, and its option. */
+  const ALL = 'all'
+  const ALL_OPTION: FilterOption = { value: ALL, label: 'All' }
+  /** Stands in for a ticket bought before draws were recorded on tickets. */
+  const NO_DRAW = 'none'
+
+// One filter: a pill that names what is selected and opens a menu of every
+// value the table holds, led by "All".
+component FilterMenu
+  props { id, label, options, value, onSelect }: { id: string; label: string; options: FilterOption[]; value: string; onSelect: (value: string) => void }
+  DropdownMenu
+    DropdownMenuTrigger(
+      ~ id={id}
+      ~ aria-label={`Filter by ${label}`}
+      ~ className='flex items-center gap-2 rounded-full border border-border/80 px-3 py-1.5 transition-colors hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-foreground/5'
+      ~ )
+      span(className={headClass}) #{label}
+      span(className={cn(headClass, 'text-foreground')}) #{options.find((option) => option.value === value)?.label ?? ALL_OPTION.label}
+      Icon(name='select-caret' className='size-2.5 text-muted-foreground')
+    DropdownMenuContent(className='min-w-44 bg-background' align='end' side='bottom' sideOffset={6})
+      DropdownMenuGroup
+        each option in options key option.value
+          DropdownMenuItem(onClick={() => onSelect(option.value)} className='gap-2 p-2 hover:bg-foreground/10!')
+            div(className='flex size-4 items-center justify-center')
+              if option.value === value
+                Icon(name='check' className='size-3.5')
+            span(className='font-sans text-sm -tracking-[0.02em] whitespace-nowrap') #{option.label}
 
 setup
   const { user, isLoading } = useFirebaseUser()
@@ -36,9 +71,52 @@ setup
   // it lists the tickets of the houses they are the linked contact of, and
   // nothing for anyone else.
   const houses = useConvexQuery(api.tickets.q.atMyHouses, {}, { enabled: isSignedIn })
-  const ticketCount = (houses ?? []).reduce((total, house) => total + house.tickets.length, 0)
-  const isTruncated = (houses ?? []).some((house) => house.truncated)
   const now = Date.now()
+
+  // The options are whatever the table holds, so a filter can never be set to
+  // something that would empty the page on its own.
+  const allTickets = (houses ?? []).flatMap((house) => house.tickets)
+  const gamesHeld = new Set(allTickets.map((ticket) => ticket.game))
+  const gameOptions: FilterOption[] = [
+    ALL_OPTION,
+    ...GAME_IDS.filter((game) => gamesHeld.has(game)).map((game) => ({ value: game, label: GAMES[game].name }))
+  ]
+  // Newest draw first; `YYYY-MM-DD` sorts as text. Tickets with no draw get one
+  // option of their own at the end, so they stay reachable.
+  const drawsHeld = [...new Set(allTickets.map((ticket) => ticket.drawDate ?? NO_DRAW))]
+  const drawOptions: FilterOption[] = [
+    ALL_OPTION,
+    ...drawsHeld
+      .filter((draw) => draw !== NO_DRAW)
+      .sort((a, b) => b.localeCompare(a))
+      .map((draw) => ({ value: draw, label: formatDraw(draw, null) })),
+    ...(drawsHeld.includes(NO_DRAW) ? [{ value: NO_DRAW, label: 'No draw recorded' }] : [])
+  ]
+
+  // A pick whose option has since left the table (its last ticket went away)
+  // falls back to "All" rather than filtering on something no longer offered.
+  const [selectedGame, setSelectedGame] = useState(ALL)
+  const [selectedDraw, setSelectedDraw] = useState(ALL)
+  const gameFilter = gameOptions.some((option) => option.value === selectedGame) ? selectedGame : ALL
+  const drawFilter = drawOptions.some((option) => option.value === selectedDraw) ? selectedDraw : ALL
+  const isFiltered = gameFilter !== ALL || drawFilter !== ALL
+
+  const visibleHouses = (houses ?? []).map((house) => ({
+    ...house,
+    tickets: house.tickets.filter(
+      (ticket) =>
+        (gameFilter === ALL || ticket.game === gameFilter) &&
+        (drawFilter === ALL || (ticket.drawDate ?? NO_DRAW) === drawFilter)
+    )
+  }))
+
+  // What the tickets on screen cost, so the figure follows the filters. Every
+  // ticket counts, whatever its status: a sale is a sale once it is bought.
+  // A house past its cap has older tickets that are not loaded, and the `+`
+  // says the true figure is at least this.
+  const visibleTickets = visibleHouses.flatMap((house) => house.tickets)
+  const totalSales = visibleTickets.reduce((total, ticket) => total + ticket.cost, 0)
+  const isSalesPartial = visibleHouses.some((house) => house.truncated)
 
 section(className='relative overview-page px-4 pb-16 md:px-6')
   div(className='overview-content')
@@ -47,11 +125,12 @@ section(className='relative overview-page px-4 pb-16 md:px-6')
       ~ description=''
       ~ )
       if houses !== undefined
-        div(className='flex items-center justify-between gap-4')
-          div(className='flex items-center gap-2 rounded-full border border-border/50 px-3 py-1.5')
-            span(className={headClass}) 6/42 Lotto
-          div(className='flex items-center gap-2 rounded-full border border-border/50 px-3 py-1.5')
-            span(className={headClass}) Tuesday, Nov, 17
+        div(className='flex items-start justify-between gap-8')
+          div#sales(className='flex items-center gap-2 rounded-full border border-border/50 px-3 py-1.5' title={`${formatCount(visibleTickets.length)} ${visibleTickets.length === 1 ? 'ticket' : 'tickets'}`})
+            span(className={headClass}) Sales
+            span(className={cn(headClass, 'tabular-nums text-foreground')}) #{formatCredits(totalSales)}#{isSalesPartial ? '+' : ''}
+          FilterMenu(id='games' label='Game' options={gameOptions} value={gameFilter} onSelect={setSelectedGame})
+          FilterMenu(id='draws' label='Draw' options={drawOptions} value={drawFilter} onSelect={setSelectedDraw})
 
     div(className='overview-sections')
       if !isSignedIn
@@ -63,26 +142,27 @@ section(className='relative overview-page px-4 pb-16 md:px-6')
       elseif houses.length === 0
         p(className={blankClass}) You are not the contact of a confirmed or active house, so there are no tickets to list.
       else
-        each house in houses key house.accountId
+        each house in visibleHouses key house.accountId
           Panel(
             ~ title={house.name}
             ~ collapsible={false}
             ~ meta={`${formatCount(house.tickets.length)}${house.truncated ? '+' : ''} ${house.tickets.length === 1 ? 'ticket' : 'tickets'}`}
             ~ )
             if house.tickets.length === 0
-              p(className={blankClass}) Nobody has bought a ticket at this house yet.
+              p(className={blankClass}) #{isFiltered ? 'No ticket at this house matches these filters.' : 'Nobody has bought a ticket at this house yet.'}
             else
               fragment
                 // Each header cell repeats the width and breakpoint of the cell
                 // below it, so the two must change together.
                 div(className='flex items-center gap-x-4 pb-2')
                   span(className={cn(headClass, 'min-w-0 flex-1')}) Player
-                  span(className={cn(headClass, 'hidden w-44 shrink-0 lg:inline')}) Game · draw
                   span(className={cn(headClass, 'hidden w-44 shrink-0 md:inline')}) Numbers
-                  span(className={cn(headClass, 'w-16 shrink-0')}) Status
-                  span(className={cn(headClass, 'w-20 shrink-0 text-right')}) Cost
-                  span(className={cn(headClass, 'hidden w-24 shrink-0 text-right sm:inline')}) Prize
-                  span(className={cn(headClass, 'hidden w-20 shrink-0 text-right xl:inline')}) Bought
+                  span(className={cn(headClass, 'hidden w-24 shrink-0 lg:inline')}) Game
+                  span(className={cn(headClass, 'hidden w-44 shrink-0 lg:inline')}) Draw Date
+                  span(className={cn(headClass, 'w-28 shrink-0 text-right')}) Status
+                  span(className={cn(headClass, 'w-28 shrink-0 text-right')}) Stake
+                  span(className={cn(headClass, 'hidden w-28 shrink-0 text-right sm:inline')}) Payout
+                  span(className={cn(headClass, 'hidden w-24 shrink-0 text-right xl:inline')}) Bought
                 ul(className='overview-feed')
                   each ticket in house.tickets key ticket.ticketId
                     li(className='flex items-center gap-x-4')
@@ -97,18 +177,19 @@ section(className='relative overview-page px-4 pb-16 md:px-6')
                           div(className='grid size-7 shrink-0 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
                             Icon(name='person' size={14})
                         p(className='truncate text-sm text-foreground') #{ticket.playerName}
+                      span(className='hidden w-44 shrink-0 truncate font-sans font-[450] text-base tabular-nums text-foreground md:inline') #{formatNumbers(ticket.numbers)}
+                      div(className='hidden w-24 min-w-0 shrink-0 lg:block')
+                        p(className='truncate text-sm text-muted-foreground') #{GAMES[ticket.game].name}
                       div(className='hidden w-44 min-w-0 shrink-0 lg:block')
-                        p(className='truncate text-sm text-foreground') #{GAMES[ticket.game].name}
-                        p(className='truncate font-mono text-xs text-muted-foreground') #{formatDraw(ticket.drawDate, ticket.drawTime)}
-                      span(className='hidden w-44 shrink-0 truncate font-mono text-xs tabular-nums text-foreground md:inline') #{formatNumbers(ticket.numbers)}
-                      div(className='w-16 shrink-0')
+                        p(className='truncate font-mono text-sm text-muted-foreground') #{formatDraw(ticket.drawDate, ticket.drawTime)}
+                      div(className='w-28 shrink-0 text-right')
                         span(className={cn(chipClass, STATUS_TONE[ticket.status])}) #{ticket.status}
-                      span(className='w-20 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{formatCredits(ticket.cost)}
+                      span(className='w-28 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-muted-foreground') #{formatCredits(ticket.cost)}
                       // A prize is unknown until the draw has run, so a pending
                       // ticket shows none rather than a zero it has not earned.
-                      span(className={cn('hidden w-24 shrink-0 text-right font-mono text-sm tabular-nums sm:inline', ticket.prizeWon ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground/70')}) #{ticket.status === 'pending' ? '—' : formatCredits(ticket.prizeWon ?? 0)}
-                      span(className='hidden w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 xl:inline') #{formatRelativeTime(ticket.createdAt, now)}
+                      span(className={cn('hidden w-28 shrink-0 text-right font-mono text-sm tabular-nums sm:inline', ticket.prizeWon ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground')}) #{`${formatCredits(ticket.cost * 360)}`}
+                      span(className='hidden w-24 shrink-0 text-right font-mono text-sm tabular-nums text-muted-foreground xl:inline') #{formatRelativeTime(ticket.createdAt, now)}
                 if house.truncated
-                  p(className='mt-4 text-xs text-muted-foreground') Showing the newest #{formatCount(house.tickets.length)} tickets of this house.
+                  p(className='mt-4 text-xs text-muted-foreground') #{isFiltered ? 'Filtered from the newest tickets of this house; older ones are not loaded.' : `Showing the newest ${formatCount(house.tickets.length)} tickets of this house.`}
 
     div(aria-hidden={true} className='h-20 w-full')
