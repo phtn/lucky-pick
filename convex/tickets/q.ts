@@ -1,10 +1,13 @@
 import { ConvexError, v } from 'convex/values'
 import { canUseAccount } from '../../src/lib/accounts/accounts'
+import { GAMES } from '../../src/lib/games'
 import type { Doc, Id } from '../_generated/dataModel'
 import { query } from '../_generated/server'
 import { betTypeSchema, gameIdSchema } from '../games/d'
+import { getGameByGameId } from '../games/helpers'
 import { getUserByTokenIdentifier } from '../users/q'
 import {
+  DRAW_TIME,
   HOUSE_TICKETS_LIMIT,
   MY_TICKET_HOUSES_LIMIT,
   MY_TICKETS_LIMIT,
@@ -13,6 +16,7 @@ import {
   RESULT_HOUSES_LIMIT,
   RESULT_TICKETS_LIMIT,
   RESULT_WINNING_NUMBERS_LIMIT,
+  nextDrawDate,
   ticketStatusSchema
 } from './d'
 
@@ -280,5 +284,76 @@ export const recentResults = query({
     }
 
     return results
+  }
+})
+
+/**
+ * The next draw of every game on sale, soonest first, each with what the
+ * caller's houses have sold into it so far. The draw a ticket bought right now
+ * would be entered in is the one listed, because both come from `nextDrawDate`.
+ *
+ * `now` is an argument because a query must not read the clock: it is not
+ * rerun when time passes, so a draw would stay "upcoming" after it was held.
+ * The client sends the current hour. Draws are held on the hour, so that is
+ * exact, and it changes rarely enough to keep the subscription stable.
+ */
+export const upcomingDraws = query({
+  args: { now: v.number() },
+  returns: v.array(
+    v.object({
+      game: gameIdSchema,
+      drawDate: v.string(),
+      drawTime: v.string(),
+      /** Tickets entered in this draw at the caller's houses so far. */
+      tickets: v.number(),
+      /** What those tickets cost in all, in whole credits. */
+      sales: v.number(),
+      /** True when a house holds more tickets on this draw than were counted. */
+      partial: v.boolean()
+    })
+  ),
+  handler: async (ctx, { now }) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new ConvexError('Unauthorized.')
+    if (!Number.isFinite(now)) throw new ConvexError('This request is malformed. Reload and try again.')
+
+    const accounts = await ctx.db
+      .query('accounts')
+      .withIndex('by_primaryContact_tokenIdentifier', (q) =>
+        q.eq('primaryContact.tokenIdentifier', identity.tokenIdentifier)
+      )
+      .take(RESULT_HOUSES_LIMIT)
+    const houses = accounts.filter((account) => canUseAccount(account.status))
+
+    const draws = []
+    for (const game of Object.values(RESULT_GAME_IDS)) {
+      // The same reading `buy` makes: an unseeded table plays as the static
+      // config, and a game switched off sells into no draw.
+      const row = await getGameByGameId(ctx, game)
+      if (row?.enabled === false) continue
+      const drawDate = nextDrawDate(row?.drawDays ?? GAMES[game].drawDays, now)
+      if (drawDate === null) continue
+
+      let tickets = 0
+      let sales = 0
+      let partial = false
+      for (const house of houses) {
+        const held = await ctx.db
+          .query('tickets')
+          .withIndex('by_accountId_and_game_and_drawDate', (q) =>
+            q.eq('accountId', house._id).eq('game', game).eq('drawDate', drawDate)
+          )
+          .take(RESULT_TICKETS_LIMIT + 1)
+        if (held.length > RESULT_TICKETS_LIMIT) partial = true
+        for (const ticket of held.slice(0, RESULT_TICKETS_LIMIT)) {
+          tickets += 1
+          sales += ticket.cost
+        }
+      }
+
+      draws.push({ game, drawDate, drawTime: DRAW_TIME, tickets, sales, partial })
+    }
+
+    return draws.sort((a, b) => a.drawDate.localeCompare(b.drawDate) || a.game.localeCompare(b.game))
   }
 })

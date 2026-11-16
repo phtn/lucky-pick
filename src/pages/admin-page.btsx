@@ -1,11 +1,17 @@
-import { useState } from 'octane'
+import { useCallback, useState } from 'octane'
 import { Outlet, useRouterState } from '@octanejs/tanstack-router'
 import { Group, Panel, Separator, usePanelRef, type PanelSize } from '@octanejs/resizable-panels'
 import { Sidebar, ThemeToggle } from '@/components/admin'
 import type { AdminNavItem } from '@/components/admin'
+import { useConvexQuery } from '@/hooks/use-convex-query'
+import { readAdminGate } from '@/lib/admin/access'
+import { convexClient } from '@/lib/convex-client'
+import { isFirebaseConfigured } from '@/lib/firebase'
+import { describeAuthError, signInWithGoogle, useFirebaseUser } from '@/lib/firebase/auth'
 import { Icon } from '@/lib/icons'
 import { adminRoutePrefix, isAdminSubdomainHostname } from '@/lib/routing/admin-subdomain'
 import { buildAppUrl } from '@/lib/routing/app-url'
+import { api } from '../../convex/_generated/api'
 
 module
   /**
@@ -34,12 +40,54 @@ module
   const COMPACT_AT_PX = 90
   const EXPANDED_SIZE = '238px'
 
+  const blockClass = 'grid min-h-[80vh] place-items-center px-6 text-center'
+
+// What the console shows instead of a page to someone it does not open for.
+component Blocked
+  props { title, detail, homeUrl, children }: { title: string; detail: string; homeUrl: string; children?: unknown }
+  div(className={blockClass})
+    div(className='max-w-md')
+      div(className='mx-auto mb-5 grid size-10 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
+        Icon(name='key' size={18})
+      p(className='text-sm text-foreground') #{title}
+      p(className='mt-2 text-xs text-muted-foreground') #{detail}
+      div(className='mt-6 flex flex-wrap items-center justify-center gap-2')
+        | #{children}
+        a(href={homeUrl} className='inline-flex h-10 items-center rounded-full border border-border px-5 text-sm font-medium text-foreground') Return to Lucky Pick
+
 setup
-  // Deliberately ungated: the console is open to anyone who reaches this host
-  // while its UI is being built, unlike Asgard, which verifies a god session
-  // before it renders anything. The session check belongs here, around the
-  // `Outlet` below, and nothing privileged should be wired into these pages
-  // until it exists.
+  // The console opens for a banker — the linked contact of a confirmed or
+  // active house — and for the `admin` claim; `readAdminGate` holds the rule.
+  // No page renders for anyone else. This is the door, not the lock: every
+  // query and mutation the pages call authorizes the caller on the server from
+  // their own identity, so nothing here is what keeps the data private.
+  const { user, isLoading: isAuthLoading, customClaims } = useFirebaseUser()
+  const isSignedIn = user !== null
+  const houses = useConvexQuery(api.accounts.q.myHouses, {}, { enabled: isSignedIn })
+  const gate = readAdminGate({
+    isAuthLoading,
+    isSignedIn,
+    claims: customClaims,
+    houses,
+    canReadHouses: convexClient !== null
+  })
+
+  // Firebase auth is per-origin, so on the console's own subdomain a banker
+  // may arrive with no session at all; signing in here is the way in.
+  const [isSigningIn, setIsSigningIn] = useState(false)
+  const [signInError, setSignInError] = useState<string | null>(null)
+  const startSignIn = useCallback(async () => {
+    setIsSigningIn(true)
+    setSignInError(null)
+    try {
+      await signInWithGoogle()
+    } catch (error) {
+      setSignInError(describeAuthError(error))
+    } finally {
+      setIsSigningIn(false)
+    }
+  }, [])
+
   const [isSidebarCompact, setIsSidebarCompact] = useState(false)
   const navItems =
     typeof window !== 'undefined' && !isAdminSubdomainHostname(window.location.hostname)
@@ -88,9 +136,37 @@ main(className='admin-frame')
 
     Separator(id='admin-sidebar-resize-separator' aria-label='Resize admin sidebar' className='admin-resize-separator')
 
-    Panel(id='admin-content-panel' minSize='0px' className='admin-content-panel' style={{ overflow: 'auto' }})
+    Panel(id='admin-content-panel' minSize='0px' className='admin-content-panel pt-3' style={{ overflow: 'auto' }})
       section(className='admin-content')
-        div(className='admin-open-gate' role='status')
-          Icon(name='alert-triangle' size={13})
-          span Open to everyone — no administrator session is checked on this console yet.
-        Outlet
+        if gate === 'open'
+          Outlet
+        elseif gate === 'loading'
+          div(className='flex min-h-[80vh] items-center justify-center gap-2.5')
+            Icon(name='spinner' size={16} className='animate-spin text-muted-foreground')
+            p(className='text-sm text-muted-foreground') Checking your access
+        elseif gate === 'signed-out'
+          Blocked(
+            ~ title='Sign in to open the admin console.'
+            ~ detail={signInError ?? (isFirebaseConfigured ? 'It is open to bankers and administrators.' : 'Sign-in is not configured on this deployment.')}
+            ~ homeUrl={homeUrl}
+            ~ )
+            if isFirebaseConfigured
+              button(
+                ~ type='button'
+                ~ onClick={() => void startSignIn()}
+                ~ disabled={isSigningIn}
+                ~ aria-busy={isSigningIn || undefined}
+                ~ className='inline-flex h-10 items-center rounded-full bg-foreground px-5 text-sm font-medium text-background transition-opacity disabled:opacity-60'
+                ~ ) #{isSigningIn ? 'Signing in…' : 'Sign in with Google'}
+        elseif gate === 'unavailable'
+          Blocked(
+            ~ title='The admin console is not answering on this deployment.'
+            ~ detail='There is no backend here to read your houses from.'
+            ~ homeUrl={homeUrl}
+            ~ )
+        else
+          Blocked(
+            ~ title='This account cannot open the admin console.'
+            ~ detail='It is open to the contact of a confirmed or active house, and to administrators.'
+            ~ homeUrl={homeUrl}
+            ~ )

@@ -100,9 +100,9 @@ setup
 
 section(className='relative overview-page px-4 pb-16 md:px-6')
   div(className='overview-content')
-    Link(to={playersPath} className='mb-4 inline-flex items-center gap-1.5 font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground')
+    Link(to={playersPath} className='mt-3 flex items-center gap-1.5 font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground')
       Icon(name='chevron-right' size={12} className='rotate-180')
-      span Players
+      span Back to Players
 
     Masthead(
       ~ eyebrow={player ? `Player · ${player.houseName}` : 'Player'}

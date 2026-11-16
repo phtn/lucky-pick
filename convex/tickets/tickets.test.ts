@@ -195,3 +195,39 @@ test('recentResults lists the newest draws with what the banker’s house held a
   expect((await t.withIdentity(owner).query(api.tickets.q.recentResults, {}))[0]).toMatchObject({ tickets: 0, status: 'none' })
   await expect(t.query(api.tickets.q.recentResults, {})).rejects.toThrow('Unauthorized.')
 })
+
+test('upcomingDraws lists the next draw of each game with what the banker’s house has sold into it', async () => {
+  const { t } = await setup()
+  await buy(t, ana, [[1, 2, 3, 4, 5, 6], [10, 20, 30, 40, 41, 42]])
+
+  // Sunday 8PM in Manila: the Sunday games draw tonight, the rest later in the week.
+  const sunday = Date.parse('2026-11-15T12:00:00Z')
+  expect(
+    (await t.withIdentity(owner).query(api.tickets.q.upcomingDraws, { now: sunday })).map((d) => [d.game, d.drawDate, d.drawTime])
+  ).toEqual([
+    ['6/49', '2026-11-15', '21:00'],
+    ['6/58', '2026-11-15', '21:00'],
+    ['6/45', '2026-11-16', '21:00'],
+    ['6/55', '2026-11-16', '21:00'],
+    ['6/42', '2026-11-17', '21:00']
+  ])
+  // An hour later those draws have been held, and the next ones take their place.
+  expect((await t.withIdentity(owner).query(api.tickets.q.upcomingDraws, { now: sunday + 3_600_000 }))[0]).toMatchObject({
+    game: '6/45', drawDate: '2026-11-16'
+  })
+
+  // Asked at the hour the tickets were bought, their draw carries them.
+  const now = Math.floor(Date.now() / 3_600_000) * 3_600_000
+  const lotto = (who: typeof ana) =>
+    t.withIdentity(who).query(api.tickets.q.upcomingDraws, { now }).then((draws) => draws.find((d) => d.game === '6/42'))
+  expect(await lotto(owner)).toMatchObject({ tickets: 2, sales: 50, partial: false })
+  // A player sees the schedule with nothing against it; a signed-out caller is refused.
+  expect(await lotto(ana)).toMatchObject({ tickets: 0, sales: 0 })
+  await expect(t.query(api.tickets.q.upcomingDraws, { now })).rejects.toThrow('Unauthorized.')
+
+  // A game switched off sells into no draw.
+  await t.withIdentity(god).mutation(api.games.m.setGameEnabled, { gameId: '6/49', enabled: false })
+  expect((await t.withIdentity(owner).query(api.tickets.q.upcomingDraws, { now: sunday })).map((d) => d.game)).toEqual([
+    '6/58', '6/45', '6/55', '6/42'
+  ])
+})

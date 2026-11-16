@@ -290,18 +290,3 @@
   }
 }
 
-/* The console is open to everyone while its UI is being built. The strip
-   says so on every page, so an unguarded console is never mistaken for a
-   gated one. */
-.admin-open-gate {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 16px;
-  background: color-mix(in oklab, var(--chart-warn) 16%, transparent);
-  color: var(--foreground);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}

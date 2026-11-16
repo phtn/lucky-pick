@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'octane'
 import { Masthead, Panel } from '@/components/overview'
 import { useConvexQuery } from '@/hooks/use-convex-query'
 import { useFirebaseUser } from '@/lib/firebase/auth'
@@ -38,9 +39,22 @@ module
   const DRAW_TIMES: Record<string, string> = { '2PM': '14:00', '5PM': '17:00', '9PM': '21:00' }
   const formatResultDraw = (result: DrawResult) => formatDraw(result.date, result.time === null ? null : DRAW_TIMES[result.time] ?? null)
 
+  // The upcoming draws are asked for by the hour: draws are held on the hour,
+  // so that is exact, and the query's arguments stay put in between.
+  const HOUR_MS = 3_600_000
+  const readHour = () => Math.floor(Date.now() / HOUR_MS) * HOUR_MS
+
 setup
   const { user, isLoading } = useFirebaseUser()
   const isSignedIn = user !== null
+  // Checked every minute so a page left open across a draw moves on to the
+  // next one; the state only changes when the hour does.
+  const [hour, setHour] = useState(readHour)
+  useEffect(() => {
+    const timer = setInterval(() => setHour(readHour()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  const upcoming = useConvexQuery(api.tickets.q.upcomingDraws, { now: hour }, { enabled: isSignedIn })
   // The results are public; the ticket figures beside each one are the
   // caller's own houses', derived from their identity on the server.
   const results = useConvexQuery(api.tickets.q.recentResults, {}, { enabled: isSignedIn })
@@ -60,52 +74,83 @@ section(className='relative overview-page px-4 pb-16 md:px-6')
           Icon(name='spinner' size={16} className='animate-spin text-muted-foreground')
           p(className='text-sm text-muted-foreground') Reading draw results…
       else
-        Panel(
-          ~ title='Recent draws'
-          ~ collapsible={false}
-          ~ meta={`${formatCount(results.length)} ${results.length === 1 ? 'result' : 'results'}`}
-          ~ )
-          if results.length === 0
-            p(className={blankClass}) No draw result has been imported yet.
-          else
-            fragment
-              // Each header cell repeats the width and breakpoint of the cell
-              // below it, so the two must change together.
-              div(className='flex items-center gap-x-4 pb-2')
-                span(className={cn(headClass, 'min-w-0 flex-1')}) Result numbers
-                span(className={cn(headClass, 'hidden w-24 shrink-0 lg:inline')}) Game
-                span(className={cn(headClass, 'hidden w-44 shrink-0 md:inline')}) Draw Date
-                span(className={cn(headClass, 'w-20 shrink-0 text-right')}) Winners
-                span(className={cn(headClass, 'hidden w-44 shrink-0 md:inline')}) Numbers
-                span(className={cn(headClass, 'hidden w-24 shrink-0 text-right xl:inline')}) Tickets sold
-                span(className={cn(headClass, 'hidden w-28 shrink-0 text-right lg:inline')}) Sales
-                span(className={cn(headClass, 'hidden w-28 shrink-0 text-right sm:inline')}) Payout
-                span(className={cn(headClass, 'w-28 shrink-0 text-right')}) Status
-              ul(className='overview-feed')
-                each result in results key result.drawId
-                  li(className='flex items-center gap-x-4')
-                    span(className='min-w-0 flex-1 truncate font-sans font-[450] text-base tabular-nums text-foreground') #{formatNumbers(result.numbers)}
-                    div(className='hidden w-24 min-w-0 shrink-0 lg:block')
-                      p(className='truncate text-sm text-muted-foreground') #{GAMES[result.game].name}
-                    div(className='hidden w-44 min-w-0 shrink-0 md:block')
-                      p(className='truncate font-mono text-sm text-muted-foreground') #{formatResultDraw(result)}
-                    // A `+` marks a draw with more tickets than were counted.
-                    span(className={cn('w-20 shrink-0 text-right font-sans font-[450] text-sm tabular-nums', result.winners > 0 ? 'text-foreground' : 'text-muted-foreground')}) #{formatCount(result.winners)}#{result.partial ? '+' : ''}
-                    // The numbers a winning player held. One ticket per line; a
-                    // draw with more winners than are carried says how many more.
-                    div(className='hidden w-44 min-w-0 shrink-0 md:block')
-                      if result.winningNumbers.length === 0
-                        p(className='text-sm text-muted-foreground') —
-                      else
-                        fragment
-                          each numbers, index in result.winningNumbers key index
-                            p(className='truncate font-sans font-[450] text-sm tabular-nums text-foreground') #{formatNumbers(numbers)}
-                          if result.winners > result.winningNumbers.length
-                            p(className='font-mono text-2xs text-muted-foreground') +#{formatCount(result.winners - result.winningNumbers.length)} more
-                    span(className='hidden w-24 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-muted-foreground xl:inline') #{formatCount(result.tickets)}#{result.partial ? '+' : ''}
-                    span(className='hidden w-28 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-muted-foreground lg:inline') #{formatCredits(result.sales)}#{result.partial ? '+' : ''}
-                    span(className={cn('hidden w-28 shrink-0 text-right font-mono text-sm tabular-nums sm:inline', result.payout > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground')}) #{formatCredits(result.payout)}#{result.partial ? '+' : ''}
-                    div(className='w-28 shrink-0 text-right')
-                      span(className={cn(chipClass, STATUS_TONE[result.status])}) #{STATUS_LABEL[result.status]}
+        fragment
+          // A failed or late read of the schedule leaves this panel out rather
+          // than holding back the results below it.
+          if upcoming !== undefined
+            Panel(
+              ~ title='Upcoming draws'
+              ~ collapsible={false}
+              ~ meta={`${formatCount(upcoming.length)} ${upcoming.length === 1 ? 'draw' : 'draws'}`}
+              ~ )
+              if upcoming.length === 0
+                p(className={blankClass}) No game is on sale, so no draw is coming up.
+              else
+                fragment
+                  // Each header cell repeats the width and breakpoint of the cell
+                  // below it, so the two must change together.
+                  div(className='flex items-center gap-x-4 pb-2')
+                    span(className={cn(headClass, 'min-w-0 flex-1')}) Game
+                    span(className={cn(headClass, 'w-44 shrink-0')}) Draw Date
+                    span(className={cn(headClass, 'hidden w-24 shrink-0 text-right sm:inline')}) Tickets sold
+                    span(className={cn(headClass, 'w-28 shrink-0 text-right')}) Sales
+                    span(className={cn(headClass, 'hidden w-28 shrink-0 text-right md:inline')}) Status
+                  ul(className='overview-feed')
+                    each draw in upcoming key draw.game
+                      li(className='flex items-center gap-x-4')
+                        span(className='min-w-0 flex-1 truncate font-sans font-[450] text-base text-foreground') #{GAMES[draw.game].name}
+                        div(className='w-44 min-w-0 shrink-0')
+                          p(className='truncate font-mono text-sm text-muted-foreground') #{formatDraw(draw.drawDate, draw.drawTime)}
+                        span(className='hidden w-24 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-muted-foreground sm:inline') #{formatCount(draw.tickets)}#{draw.partial ? '+' : ''}
+                        span(className={cn('w-28 shrink-0 text-right font-sans font-[450] text-sm tabular-nums', draw.sales > 0 ? 'text-foreground' : 'text-muted-foreground')}) #{formatCredits(draw.sales)}#{draw.partial ? '+' : ''}
+                        div(className='hidden w-28 shrink-0 text-right md:block')
+                          span(className={cn(chipClass, 'bg-amber-500/15 text-amber-700 dark:text-amber-400')}) open
+          Panel(
+            ~ title='Recent draws'
+            ~ collapsible={false}
+            ~ meta={`${formatCount(results.length)} ${results.length === 1 ? 'result' : 'results'}`}
+            ~ )
+            if results.length === 0
+              p(className={blankClass}) No draw result has been imported yet.
+            else
+              fragment
+                // Each header cell repeats the width and breakpoint of the cell
+                // below it, so the two must change together.
+                div(className='flex items-center gap-x-4 pb-2')
+                  span(className={cn(headClass, 'min-w-0 flex-1')}) Result numbers
+                  span(className={cn(headClass, 'hidden w-24 shrink-0 lg:inline')}) Game
+                  span(className={cn(headClass, 'hidden w-44 shrink-0 md:inline')}) Draw Date
+                  span(className={cn(headClass, 'w-20 shrink-0 text-right')}) Winners
+                  span(className={cn(headClass, 'hidden w-44 shrink-0 md:inline')}) Numbers
+                  span(className={cn(headClass, 'hidden w-24 shrink-0 text-right xl:inline')}) Tickets sold
+                  span(className={cn(headClass, 'hidden w-28 shrink-0 text-right lg:inline')}) Sales
+                  span(className={cn(headClass, 'hidden w-28 shrink-0 text-right sm:inline')}) Payout
+                  span(className={cn(headClass, 'w-28 shrink-0 text-right')}) Status
+                ul(className='overview-feed')
+                  each result in results key result.drawId
+                    li(className='flex items-center gap-x-4')
+                      span(className='min-w-0 flex-1 truncate font-sans font-[450] text-base tabular-nums text-foreground') #{formatNumbers(result.numbers)}
+                      div(className='hidden w-24 min-w-0 shrink-0 lg:block')
+                        p(className='truncate text-sm text-muted-foreground') #{GAMES[result.game].name}
+                      div(className='hidden w-44 min-w-0 shrink-0 md:block')
+                        p(className='truncate font-mono text-sm text-muted-foreground') #{formatResultDraw(result)}
+                      // A `+` marks a draw with more tickets than were counted.
+                      span(className={cn('w-20 shrink-0 text-right font-sans font-[450] text-sm tabular-nums', result.winners > 0 ? 'text-foreground' : 'text-muted-foreground')}) #{formatCount(result.winners)}#{result.partial ? '+' : ''}
+                      // The numbers a winning player held. One ticket per line; a
+                      // draw with more winners than are carried says how many more.
+                      div(className='hidden w-44 min-w-0 shrink-0 md:block')
+                        if result.winningNumbers.length === 0
+                          p(className='text-sm text-muted-foreground') —
+                        else
+                          fragment
+                            each numbers, index in result.winningNumbers key index
+                              p(className='truncate font-sans font-[450] text-sm tabular-nums text-foreground') #{formatNumbers(numbers)}
+                            if result.winners > result.winningNumbers.length
+                              p(className='font-mono text-2xs text-muted-foreground') +#{formatCount(result.winners - result.winningNumbers.length)} more
+                      span(className='hidden w-24 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-muted-foreground xl:inline') #{formatCount(result.tickets)}#{result.partial ? '+' : ''}
+                      span(className='hidden w-28 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-muted-foreground lg:inline') #{formatCredits(result.sales)}#{result.partial ? '+' : ''}
+                      span(className={cn('hidden w-28 shrink-0 text-right font-mono text-sm tabular-nums sm:inline', result.payout > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground')}) #{formatCredits(result.payout)}#{result.partial ? '+' : ''}
+                      div(className='w-28 shrink-0 text-right')
+                        span(className={cn(chipClass, STATUS_TONE[result.status])}) #{STATUS_LABEL[result.status]}
 
     div(aria-hidden={true} className='h-20 w-full')

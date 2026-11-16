@@ -25,7 +25,7 @@
 
 .overview-masthead {
   position: relative;
-  padding-block: clamp(32px, 5vh, 64px) 32px;
+  padding-block: clamp(32px, 5vh, 36px) 32px;
   /*animation: overview-enter 480ms cubic-bezier(0.22, 1, 0.36, 1) both;*/
 }
 

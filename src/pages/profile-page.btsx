@@ -23,6 +23,7 @@ import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
 import { MY_HISTORY_LIMIT } from '../../convex/ledger/d'
 import { DEFAULT_PLAY_PAGE, PLAY_HISTORY_LIMIT, TICKET_DETAIL_LIMIT } from '../../convex/plays/d'
+import { Link } from '@octanejs/tanstack-router';
 
 module
   type Movement = FunctionReturnType<typeof api.ledger.q.myLedgerHistory>[number]
@@ -333,10 +334,11 @@ setup
 
 
 
-section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll')
-  div(className='px-4 pb-16')
+section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll pt-10')
+
+  div(className='px-4 pb-8')
     div(className='flex items-center w-full')
-      div(className='translate-x-12 size-12 flex items-end ')
+      div(className='translate-x-10 size-10 _border border-white flex items-center justify-center')
         if avatarUrl
           img(
             ~ src={avatarUrl}
@@ -347,7 +349,7 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
             ~ )
         else
           div(className='grid size-8 shrink-0 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
-            Icon(name='account' size={20})
+            Icon(name='person' className='size-7')
       // `||`, not `??`: `??` falls through only on null/undefined, and a Google
       // account can carry `displayName: ''`, which would leave the page titleless.
       Masthead(
@@ -563,10 +565,10 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
                   span(className={cn(readingLabelClass, 'w-40 shrink-0')}) Game
                   span(className={cn(readingLabelClass, 'flex-1 px-4')}) Numbers
                   span(className={cn(readingLabelClass, 'w-32 shrink-0 text-center')}) Status
-                  span(className={cn(readingLabelClass, 'w-40 shrink-0 text-left')}) Draw
+                  span(className={cn(readingLabelClass, 'w-44 shrink-0 text-left')}) Draw
                   span(className={cn(readingLabelClass, 'w-28 shrink-0 text-right')}) Stake
                   span(className={cn(readingLabelClass, 'w-28 shrink-0 text-right')}) Payout
-                  span(className={cn(readingLabelClass, 'w-24 shrink-0 text-right')}) Bought
+                  span(className={cn(readingLabelClass, 'w-28 shrink-0 text-right')}) Bought
                 ul(className='overview-feed')
                   each ticket in ticketRows key ticket.ticketId
                     li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
@@ -583,11 +585,11 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
                       // Hits mean nothing until the draw has run, so a pending
                       // ticket shows none rather than a zero it has not earned.
                       // span(className='w-16 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{ticket.status === 'pending' ? '—' : formatHits(ticket.hits)}
-                      span(className='w-40 shrink-0 text-left font-mono text-xs tabular-nums text-muted-foreground') #{formatDraw(ticket.drawDate, ticket.drawTime)}
+                      span(className='w-44 shrink-0 text-left font-mono text-sm tabular-nums text-muted-foreground') #{formatDraw(ticket.drawDate, ticket.drawTime)}
                       span(className='w-28 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-foreground') #{`₱${formatCredits(ticket.cost)}`}
                       span(className='w-28 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-muted-foreground') #{`₱${formatCredits(ticket.cost * 360)}`}
                       // span(className={cn('w-24 shrink-0 text-right font-mono text-sm tabular-nums', ticket.prizeWon ? POSITIVE_TONE : 'text-muted-foreground/70')}) #{ticket.status === 'pending' ? '—' : `${formatCredits(ticket.prizeWon ?? (ticket.cost * 360))} CR`}
-                      span(className='w-24 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{formatRelativeTime(ticket.createdAt, now)}
+                      span(className='w-28 shrink-0 text-right font-mono text-sm tabular-nums text-muted-foreground') #{formatRelativeTime(ticket.createdAt, now)}
         elseif activeTab === 'plays'
           Panel(title='Recent plays' collapsible={false} description='One row per resolved draw, newest first.' meta={!hasReadPlays ? 'Not read yet' : rows.length === 0 ? 'No draws' : `${formatCount(playFeed.length)} of ${formatCount(rows.length)}`})
             if playFeed.length === 0
