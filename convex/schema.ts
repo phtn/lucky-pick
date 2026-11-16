@@ -67,7 +67,9 @@ export default defineSchema({
   // a house reads everything placed at it.
   tickets: defineTable(ticketFields)
     .index('by_userId_and_createdAt', ['userId', 'createdAt'])
-    .index('by_accountId_and_createdAt', ['accountId', 'createdAt']),
+    .index('by_accountId_and_createdAt', ['accountId', 'createdAt'])
+    // What a house holds against one draw of one game.
+    .index('by_accountId_and_game_and_drawDate', ['accountId', 'game', 'drawDate']),
   practicePlays: defineTable(practicePlayFields).index('by_userId_and_drawnAt', ['userId', 'drawnAt']),
   notifications: defineTable(notificationFields).index('by_userId_and_createdAt', ['userId', 'createdAt']),
 })

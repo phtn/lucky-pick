@@ -31,6 +31,27 @@ export const MY_TICKETS_LIMIT = 500
 export const HOUSE_TICKETS_LIMIT = 100
 export const MY_TICKET_HOUSES_LIMIT = 50
 
+/** Draw results `recentResults` returns. */
+export const RECENT_RESULTS_LIMIT = 10
+/** Houses it reads tickets for, and tickets per house per draw: together they bound what one read touches. */
+export const RESULT_HOUSES_LIMIT = 5
+export const RESULT_TICKETS_LIMIT = 200
+/** Winning tickets whose numbers `recentResults` carries per draw; `winners` still counts them all. */
+export const RESULT_WINNING_NUMBERS_LIMIT = 10
+
+/**
+ * The games tickets are sold on, keyed by the PCSO results vocabulary that
+ * `historicalResults.game` uses. The digit games (`2d`, `3d`, …) are absent:
+ * no ticket can be bought on them.
+ */
+export const RESULT_GAME_IDS = {
+  lotto: '6/42',
+  mega: '6/45',
+  super: '6/49',
+  grand: '6/55',
+  ultra: '6/58'
+} as const
+
 export const ticketFields = {
   userId: v.id('users'),
   accountId: v.id('accounts'),

@@ -150,3 +150,48 @@ test('atMyHouses shows a banker the tickets placed at their house, and nobody el
   expect(await t.withIdentity(owner).query(api.tickets.q.atMyHouses, {})).toEqual([])
   await expect(t.query(api.tickets.q.atMyHouses, {})).rejects.toThrow('Unauthorized.')
 })
+
+test('recentResults lists the newest draws with what the banker’s house held against each', async () => {
+  const { t, accountId } = await setup()
+  await buy(t, ana, [[1, 2, 3, 4, 5, 6], [10, 20, 30, 40, 41, 42]])
+  const [first, second] = await t.withIdentity(ana).query(api.tickets.q.mine, {})
+  const drawDate = first.drawDate!
+
+  const result = (drawId: string, game: 'lotto' | 'mega' | '3d', date: string) => ({
+    drawId, game, date, time: null, numbers: [1, 2, 3, 4, 5, 6], rawNumbers: null,
+    jackpotCents: 0, winners: 0, importedBy: 'test', importedAt: 0
+  })
+  await t.run(async (ctx) => {
+    await ctx.db.insert('historicalResults', result('lotto:draw', 'lotto', drawDate))
+    await ctx.db.insert('historicalResults', result('mega:draw', 'mega', drawDate))
+    await ctx.db.insert('historicalResults', result('lotto:old', 'lotto', '2001-01-01'))
+    // A digit game sells no tickets, so its results are left out.
+    await ctx.db.insert('historicalResults', result('3d:draw', '3d', drawDate))
+    for (let day = 1; day <= 12; day++) {
+      await ctx.db.insert('historicalResults', result(`mega:${day}`, 'mega', `2000-01-${String(day).padStart(2, '0')}`))
+    }
+  })
+
+  let results = await t.withIdentity(owner).query(api.tickets.q.recentResults, {})
+  expect(results).toHaveLength(10)
+  expect(results.slice(0, 3).map((r) => [r.drawId, r.game, r.tickets, r.winners, r.payout, r.status])).toEqual([
+    ['lotto:draw', '6/42', 2, 0, 0, 'pending'],
+    ['mega:draw', '6/45', 0, 0, 0, 'none'],
+    ['lotto:old', '6/42', 0, 0, 0, 'none']
+  ])
+  expect(results[0]).toMatchObject({ date: drawDate, numbers: [1, 2, 3, 4, 5, 6], sales: 50, winningNumbers: [], partial: false })
+
+  // One ticket still pending keeps the draw pending; once both are settled it reads as settled.
+  await t.run((ctx) => ctx.db.patch(first.ticketId, { status: 'won', hits: 6, prizeWon: 500 }))
+  results = await t.withIdentity(owner).query(api.tickets.q.recentResults, {})
+  expect(results[0]).toMatchObject({ tickets: 2, sales: 50, winners: 1, winningNumbers: [first.numbers], payout: 500, status: 'pending' })
+  await t.run((ctx) => ctx.db.patch(second.ticketId, { status: 'lost' }))
+  results = await t.withIdentity(owner).query(api.tickets.q.recentResults, {})
+  expect(results[0]).toMatchObject({ tickets: 2, winners: 1, payout: 500, status: 'settled' })
+
+  // A player sees the public results with nothing against them, as does the banker of a suspended house.
+  expect((await t.withIdentity(ana).query(api.tickets.q.recentResults, {}))[0]).toMatchObject({ drawId: 'lotto:draw', tickets: 0, status: 'none' })
+  await t.run((ctx) => ctx.db.patch(accountId, { status: 'suspended' }))
+  expect((await t.withIdentity(owner).query(api.tickets.q.recentResults, {}))[0]).toMatchObject({ tickets: 0, status: 'none' })
+  await expect(t.query(api.tickets.q.recentResults, {})).rejects.toThrow('Unauthorized.')
+})

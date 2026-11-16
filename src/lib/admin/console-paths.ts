@@ -11,6 +11,8 @@ export const adminPlayersPath = (hostname: string) => `${adminConsoleBase(hostna
 
 export const adminTicketsPath = (hostname: string) => `${adminConsoleBase(hostname)}/tickets`
 
+export const adminResultsPath = (hostname: string) => `${adminConsoleBase(hostname)}/results`
+
 /** Convex ids are URL-safe, so neither segment needs escaping. */
 export const adminPlayerPath = (hostname: string, accountId: string, userId: string) =>
   `${adminPlayersPath(hostname)}/${accountId}/${userId}`

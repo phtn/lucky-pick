@@ -4,7 +4,17 @@ import type { Doc, Id } from '../_generated/dataModel'
 import { query } from '../_generated/server'
 import { betTypeSchema, gameIdSchema } from '../games/d'
 import { getUserByTokenIdentifier } from '../users/q'
-import { HOUSE_TICKETS_LIMIT, MY_TICKET_HOUSES_LIMIT, MY_TICKETS_LIMIT, ticketStatusSchema } from './d'
+import {
+  HOUSE_TICKETS_LIMIT,
+  MY_TICKET_HOUSES_LIMIT,
+  MY_TICKETS_LIMIT,
+  RECENT_RESULTS_LIMIT,
+  RESULT_GAME_IDS,
+  RESULT_HOUSES_LIMIT,
+  RESULT_TICKETS_LIMIT,
+  RESULT_WINNING_NUMBERS_LIMIT,
+  ticketStatusSchema
+} from './d'
 
 /**
  * The caller's own tickets, newest first. Derived from the identity, so there
@@ -156,5 +166,119 @@ export const atMyHouses = query({
     }
 
     return houses.sort((a, b) => a.name.localeCompare(b.name))
+  }
+})
+
+/**
+ * The most recent draw results of the games tickets are sold on, each with
+ * what the caller's houses held against it: how many tickets were entered,
+ * how many won, and what they paid.
+ *
+ * The results themselves are public (`resultsImport.list` serves them to
+ * anyone); the ticket figures come only from houses the caller is the linked
+ * contact of, matched on the identity's token like `atMyHouses`. Someone who
+ * fronts no house sees the results with nothing against them.
+ */
+export const recentResults = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      drawId: v.string(),
+      game: gameIdSchema,
+      date: v.string(),
+      time: v.union(v.string(), v.null()),
+      /** The drawn numbers, or `null` for a result imported without them. */
+      numbers: v.union(v.array(v.number()), v.null()),
+      /** Tickets entered in this draw at the caller's houses. */
+      tickets: v.number(),
+      /** What those tickets cost in all, in whole credits. */
+      sales: v.number(),
+      /** How many of those won. */
+      winners: v.number(),
+      /** The numbers on the winning tickets, one array each; capped, so it can be shorter than `winners`. */
+      winningNumbers: v.array(v.array(v.number())),
+      /** What those winners were paid, in whole credits. */
+      payout: v.number(),
+      /** `none`: no tickets. `pending`: some still unsettled. `settled`: all won or lost. */
+      status: v.union(v.literal('none'), v.literal('pending'), v.literal('settled')),
+      /** True when a house holds more tickets on this draw than were counted. */
+      partial: v.boolean()
+    })
+  ),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new ConvexError('Unauthorized.')
+
+    // The newest of each game, merged: the index orders one game at a time.
+    const newest = []
+    for (const [resultGame, game] of Object.entries(RESULT_GAME_IDS) as [
+      keyof typeof RESULT_GAME_IDS,
+      (typeof RESULT_GAME_IDS)[keyof typeof RESULT_GAME_IDS]
+    ][]) {
+      const rows = await ctx.db
+        .query('historicalResults')
+        .withIndex('by_game_and_date', (q) => q.eq('game', resultGame))
+        .order('desc')
+        .take(RECENT_RESULTS_LIMIT)
+      for (const row of rows) newest.push({ row, game })
+    }
+    newest.sort((a, b) => b.row.date.localeCompare(a.row.date) || a.game.localeCompare(b.game))
+
+    const accounts = await ctx.db
+      .query('accounts')
+      .withIndex('by_primaryContact_tokenIdentifier', (q) =>
+        q.eq('primaryContact.tokenIdentifier', identity.tokenIdentifier)
+      )
+      .take(RESULT_HOUSES_LIMIT)
+    const houses = accounts.filter((account) => canUseAccount(account.status))
+
+    const results = []
+    for (const { row, game } of newest.slice(0, RECENT_RESULTS_LIMIT)) {
+      let tickets = 0
+      let sales = 0
+      let winners = 0
+      const winningNumbers: number[][] = []
+      let payout = 0
+      let pending = 0
+      let partial = false
+
+      for (const house of houses) {
+        const held = await ctx.db
+          .query('tickets')
+          .withIndex('by_accountId_and_game_and_drawDate', (q) =>
+            q.eq('accountId', house._id).eq('game', game).eq('drawDate', row.date)
+          )
+          .take(RESULT_TICKETS_LIMIT + 1)
+        if (held.length > RESULT_TICKETS_LIMIT) partial = true
+
+        for (const ticket of held.slice(0, RESULT_TICKETS_LIMIT)) {
+          tickets += 1
+          sales += ticket.cost
+          if (ticket.status === 'pending') pending += 1
+          if (ticket.status === 'won') {
+            winners += 1
+            if (winningNumbers.length < RESULT_WINNING_NUMBERS_LIMIT) winningNumbers.push(ticket.numbers)
+            payout += ticket.prizeWon ?? 0
+          }
+        }
+      }
+
+      results.push({
+        drawId: row.drawId,
+        game,
+        date: row.date,
+        time: row.time,
+        numbers: row.numbers,
+        tickets,
+        sales,
+        winners,
+        winningNumbers,
+        payout,
+        status: tickets === 0 ? ('none' as const) : pending > 0 ? ('pending' as const) : ('settled' as const),
+        partial
+      })
+    }
+
+    return results
   }
 })
