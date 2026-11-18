@@ -2,7 +2,7 @@ import { paginationOptsValidator, paginationResultValidator, type UserIdentity }
 import { ConvexError, v } from 'convex/values'
 import { parseRawResults } from '../src/lib/results-import'
 import type { LotteryResult, ResultGameId } from '../src/lib/results'
-import { mutation, query, type QueryCtx } from './_generated/server'
+import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from './_generated/server'
 import { CSV_DRAW_IDS } from './csvBaseline'
 import { publicResult, resultGame } from './resultValidators'
 
@@ -104,30 +104,41 @@ export const list = query({
   },
 })
 
+const importResult = v.object({
+  added: v.number(),
+  skipped: v.number(),
+  byGame: v.array(v.object({ game: resultGame, added: v.number() })),
+})
+
+async function commitImport(ctx: MutationCtx, text: string, importedBy: string) {
+  const plan = await planImport(ctx, text)
+  if (plan.issues.length) {
+    const first = plan.issues[0]!
+    throw new ConvexError(`Line ${first.line}: ${first.message} Fix all invalid rows before importing.`)
+  }
+  const importedAt = Date.now()
+  // Each indexed read participates in this transaction. Concurrent imports
+  // conflict and retry rather than inserting the same draw twice.
+  for (const { game, record } of plan.records) {
+    const { id, ...fields } = record
+    await ctx.db.insert('historicalResults', { drawId: id, game, ...fields, importedBy, importedAt })
+  }
+  return { added: plan.added, skipped: plan.skipped, byGame: plan.byGame }
+}
+
 export const save = mutation({
   args: { text: v.string() },
-  returns: v.object({
-    added: v.number(),
-    skipped: v.number(),
-    byGame: v.array(v.object({ game: resultGame, added: v.number() })),
-  }),
+  returns: importResult,
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!canImport(identity)) throw new ConvexError('Sign in to import shared results.')
-    const plan = await planImport(ctx, args.text)
-    if (plan.issues.length) {
-      const first = plan.issues[0]!
-      throw new ConvexError(`Line ${first.line}: ${first.message} Fix all invalid rows before importing.`)
-    }
-    const importedAt = Date.now()
-    // Each indexed read participates in this transaction. Concurrent imports
-    // conflict and retry rather than inserting the same draw twice.
-    for (const { game, record } of plan.records) {
-      const { id, ...fields } = record
-      await ctx.db.insert('historicalResults', {
-        drawId: id, game, ...fields, importedBy: identity.tokenIdentifier, importedAt,
-      })
-    }
-    return { added: plan.added, skipped: plan.skipped, byGame: plan.byGame }
+    return commitImport(ctx, args.text, identity.tokenIdentifier)
   },
+})
+
+/** Server-side import for scheduled sources (e.g. the nightly PCSO sync). */
+export const importSystem = internalMutation({
+  args: { text: v.string(), source: v.string() },
+  returns: importResult,
+  handler: (ctx, args) => commitImport(ctx, args.text, `system:${args.source}`),
 })
