@@ -10,6 +10,15 @@
       ],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "gate-check",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "PUBLIC_ASGARD_OPEN=true bun run dev:web --port 3010"
+      ],
+      "port": 3010
     }
   ]
 }

@@ -1,6 +1,7 @@
 import { handleAsgardAccounts } from './server/asgard-account-routes'
 import { handleAsgardSession, handleAsgardSessionToken } from './server/asgard-auth-routes'
 import { handleAsgardGames } from './server/asgard-games-routes'
+import { handleAsgardOverview } from './server/asgard-overview-routes'
 import { handleAsgardResults } from './server/asgard-results-routes'
 import { handleAsgardUsers } from './server/asgard-user-routes'
 import { handleTrxBalance } from './server/trx-routes'
@@ -23,6 +24,7 @@ const ASGARD_USERS_PATH = '/api/asgard/users'
 const ASGARD_ACCOUNTS_PATH = '/api/asgard/accounts'
 const ASGARD_GAMES_PATH = '/api/asgard/games'
 const ASGARD_RESULTS_PATH = '/api/asgard/results'
+const ASGARD_OVERVIEW_PATH = '/api/asgard/overview'
 const TRX_BALANCE_PATH = '/api/trx/balance'
 
 const isSpaNavigation = (request: Request) =>
@@ -38,6 +40,7 @@ export default {
     if (pathname === ASGARD_USERS_PATH) return handleAsgardUsers(request)
     if (pathname === ASGARD_GAMES_PATH) return handleAsgardGames(request, { convexUrl: env.CONVEX_URL })
     if (pathname === ASGARD_RESULTS_PATH) return handleAsgardResults(request, { convexUrl: env.CONVEX_URL })
+    if (pathname === ASGARD_OVERVIEW_PATH) return handleAsgardOverview(request, { convexUrl: env.CONVEX_URL })
     // The accounts endpoint has pages beneath it (one per account), so the
     // whole subtree goes to its handler, which refuses the paths it does not
     // serve rather than letting them fall through to the client shell.
