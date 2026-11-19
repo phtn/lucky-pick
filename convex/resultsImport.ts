@@ -5,6 +5,7 @@ import type { LotteryResult, ResultGameId } from '../src/lib/results'
 import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from './_generated/server'
 import { CSV_DRAW_IDS } from './csvBaseline'
 import { publicResult, resultGame } from './resultValidators'
+import { scheduleSettlements } from './tickets/settle'
 
 const csvDrawIds = new Set(CSV_DRAW_IDS)
 const FIREBASE_ISSUER = 'https://securetoken.google.com/lucky-pick-345'
@@ -123,6 +124,8 @@ async function commitImport(ctx: MutationCtx, text: string, importedBy: string) 
     const { id, ...fields } = record
     await ctx.db.insert('historicalResults', { drawId: id, game, ...fields, importedBy, importedAt })
   }
+  // A new result settles every ticket entered in its draw.
+  await scheduleSettlements(ctx, plan.records.map(({ game, record }) => ({ game, date: record.date })))
   return { added: plan.added, skipped: plan.skipped, byGame: plan.byGame }
 }
 

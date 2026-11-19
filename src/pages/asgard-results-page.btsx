@@ -1,0 +1,142 @@
+import { useEffect, useState } from 'octane'
+import { Panel } from '@/components/overview'
+import Button from '@/components/ui/button.btsx'
+import { Icon } from '@/lib/icons'
+import { isAbortError, readErrorMessage } from '@/lib/asgard/errors'
+import { fetchResults, syncResults, type ResultsGame, type SyncSummary } from '@/lib/asgard/results'
+import { formatCount } from '@/lib/overview/metrics'
+import { formatDraw } from '@/lib/tickets/format'
+import { cn } from '@/lib/utils'
+
+module
+  /**
+   * The console's results: every game on sale, its ten latest draws, and the
+   * tickets that won each one across every house — whose numbers, which
+   * banker held them, and what they paid.
+   */
+  type Status = 'loading' | 'ready' | 'error'
+
+  const scrollerClass = 'px-4 pb-16 md:px-6 h-[calc(100dvh-60px)] overflow-scroll'
+  const blankClass = 'rounded-lg border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground'
+  const headClass = 'font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground'
+  const cellClass = 'font-sans font-[450] text-sm tabular-nums'
+
+  const formatCredits = (value: number) => `${value.toLocaleString('en-US')} CR`
+  // Ascending, the way a result is read out, whatever order it was stored in.
+  const formatNumbers = (numbers: readonly number[] | null) =>
+    numbers === null ? '—' : [...numbers].sort((a, b) => a - b).join(' · ')
+
+  /** What a sync did, in one line: the news first, the bookkeeping after. */
+  const describeSync = (sync: SyncSummary) => {
+    const found = sync.added === 0 ? 'No new results on PCSO.' : `Imported ${formatCount(sync.added)} new ${sync.added === 1 ? 'result' : 'results'}.`
+    const rejected = sync.rejected > 0 ? ` ${formatCount(sync.rejected)} unreadable ${sync.rejected === 1 ? 'row' : 'rows'} skipped.` : ''
+    return `${found}${rejected}`
+  }
+
+setup
+  const [status, setStatus] = useState<Status>('loading')
+  const [games, setGames] = useState<ResultsGame[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncNote, setSyncNote] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
+
+  const sync = async () => {
+    setIsSyncing(true)
+    setSyncNote(null)
+    try {
+      const body = await syncResults()
+      setGames(body.games)
+      setStatus('ready')
+      if (body.sync) setSyncNote({ tone: 'ok', text: describeSync(body.sync) })
+    } catch (reason) {
+      setSyncNote({ tone: 'error', text: readErrorMessage(reason, 'Could not sync from PCSO.') })
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchResults(controller.signal)
+      .then((body) => {
+        setGames(body.games)
+        setStatus('ready')
+      })
+      .catch((reason: unknown) => {
+        if (isAbortError(reason)) return
+        setError(readErrorMessage(reason, 'Could not load the results.'))
+        setStatus('error')
+      })
+    return () => controller.abort()
+  }, [])
+
+section(className='flex min-h-0 flex-col')
+  header(className='asgard-topbar')
+    div(className='min-w-0')
+      h1(className='font-sans text-base font-[450] leading-none tracking-tight text-foreground') Results
+    div(className='flex min-w-0 items-center gap-3')
+      if syncNote
+        p(
+          ~ role='status'
+          ~ className={cn('hidden truncate text-xs sm:block', syncNote.tone === 'error' ? 'text-destructive' : 'text-muted-foreground')}
+          ~ title={syncNote.text}
+          ~ )
+          | #{syncNote.text}
+      Button(type='button' size='sm' variant='secondary' disabled={isSyncing} onClick={() => void sync()})
+        Icon(name={isSyncing ? 'spinner' : 'refresh'} size={14} className={cn(isSyncing && 'animate-spin')})
+        span #{isSyncing ? 'Syncing…' : 'Sync from PCSO'}
+
+  div(className={scrollerClass})
+    if status === 'loading'
+      div(className='flex items-center gap-3 py-10')
+        Icon(name='spinner' size={16} className='animate-spin text-muted-foreground')
+        p(className='text-sm text-muted-foreground') Reading draw results…
+    elseif status === 'error'
+      p(className={blankClass}) #{error}
+    elseif games.length === 0
+      p(className={blankClass}) No game is on sale.
+    else
+      div(className='overview-sections')
+        each game in games key game.game
+          Panel(
+            ~ title={game.name}
+            ~ collapsible={false}
+            ~ meta={`${formatCount(game.draws.length)} ${game.draws.length === 1 ? 'draw' : 'draws'}`}
+            ~ )
+            if game.draws.length === 0
+              p(className={blankClass}) No draw result has been imported for this game yet.
+            else
+              fragment
+                // Each header cell repeats the width and breakpoint of the cell
+                // below it, so the two must change together.
+                div(className='flex items-center gap-x-4 pb-2')
+                  span(className={cn(headClass, 'w-40 shrink-0')}) Draw
+                  span(className={cn(headClass, 'w-20 shrink-0 text-right')}) Winners
+                  span(className={cn(headClass, 'min-w-0 flex-1')}) Numbers
+                  span(className={cn(headClass, 'hidden w-40 shrink-0 sm:inline')}) Banker
+                  span(className={cn(headClass, 'w-28 shrink-0 text-right')}) Payout
+                ul(className='overview-feed')
+                  each draw in game.draws key draw.drawId
+                    li(className='flex items-start gap-x-4')
+                      div(className='w-40 min-w-0 shrink-0')
+                        p(className='truncate font-mono text-sm text-foreground') #{formatDraw(draw.date, null)}
+                        p(className='truncate font-mono text-2xs text-muted-foreground' title='Drawn numbers') #{formatNumbers(draw.numbers)}
+                      // A `+` marks a draw with more winners than were read.
+                      span(className={cn('w-20 shrink-0 text-right', cellClass, draw.winners > 0 ? 'text-foreground' : 'text-muted-foreground')}) #{formatCount(draw.winners)}#{draw.partial ? '+' : ''}
+                      if draw.tickets.length === 0
+                        fragment
+                          p(className='min-w-0 flex-1 text-sm text-muted-foreground') —
+                          p(className='hidden w-40 shrink-0 text-sm text-muted-foreground sm:block') —
+                      else
+                        fragment
+                          // One winning ticket per line; its banker sits on the
+                          // same line in the next column.
+                          div(className='min-w-0 flex-1')
+                            each ticket in draw.tickets key ticket.ticketId
+                              p(className={cn('truncate text-foreground', cellClass)}) #{formatNumbers(ticket.numbers)}
+                          div(className='hidden w-40 min-w-0 shrink-0 sm:block')
+                            each ticket in draw.tickets key ticket.ticketId
+                              p(className='truncate text-sm text-muted-foreground' title={ticket.banker}) #{ticket.banker}
+                      span(className={cn('w-28 shrink-0 text-right font-mono text-sm tabular-nums', draw.payout > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground')}) #{formatCredits(draw.payout)}#{draw.partial ? '+' : ''}
+
+        div(aria-hidden={true} className='h-20 w-full')

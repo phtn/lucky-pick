@@ -231,3 +231,47 @@ test('upcomingDraws lists the next draw of each game with what the banker’s ho
     '6/58', '6/45', '6/55', '6/42'
   ])
 })
+
+test('resultsForAsgard lists each enabled game’s draws with every winning ticket and its banker', async () => {
+  const { t } = await setup()
+  await t.withIdentity(god).mutation(api.games.m.seed, {})
+  await t.withIdentity(god).mutation(api.games.m.setGameEnabled, { gameId: '6/45', enabled: false })
+  await buy(t, ana, [[1, 2, 3, 4, 5, 6], [10, 20, 30, 40, 41, 42], [7, 8, 9, 10, 11, 12]])
+  const [first, second, third] = await t.withIdentity(ana).query(api.tickets.q.mine, {})
+  const drawDate = first.drawDate!
+
+  const result = (drawId: string, game: 'lotto' | 'mega', date: string) => ({
+    drawId, game, date, time: null, numbers: [1, 2, 3, 4, 5, 6], rawNumbers: null,
+    jackpotCents: 0, winners: 0, importedBy: 'test', importedAt: 0
+  })
+  await t.run(async (ctx) => {
+    await ctx.db.insert('historicalResults', result('lotto:draw', 'lotto', drawDate))
+    await ctx.db.insert('historicalResults', result('mega:draw', 'mega', drawDate))
+    for (let day = 1; day <= 12; day++) {
+      await ctx.db.insert('historicalResults', result(`lotto:${day}`, 'lotto', `2000-01-${String(day).padStart(2, '0')}`))
+    }
+    await ctx.db.patch(first.ticketId, { status: 'won', hits: 6, prizeWon: 100 })
+    await ctx.db.patch(second.ticketId, { status: 'won', hits: 3, prizeWon: 900 })
+    await ctx.db.patch(third.ticketId, { status: 'lost' })
+  })
+
+  const games = await t.withIdentity(god).query(api.tickets.q.resultsForAsgard, {})
+  // Mega is off sale; every other game is listed, in console order.
+  expect(games.map((g) => g.game)).toEqual(['6/42', '6/49', '6/55', '6/58'])
+  const lotto = games[0]!
+  expect(lotto.draws).toHaveLength(10)
+  expect(lotto.draws[0]).toMatchObject({
+    drawId: 'lotto:draw', winners: 2, payout: 1_000, partial: false,
+    tickets: [
+      { ticketId: second.ticketId, numbers: second.numbers, banker: 'Casa Uno', prize: 900 },
+      { ticketId: first.ticketId, numbers: first.numbers, banker: 'Casa Uno', prize: 100 }
+    ]
+  })
+  expect(lotto.draws[1]).toMatchObject({ winners: 0, payout: 0, tickets: [] })
+
+  // Staff only: bankers, players and anonymous callers are refused.
+  for (const who of [owner, ana]) {
+    await expect(t.withIdentity(who).query(api.tickets.q.resultsForAsgard, {})).rejects.toThrow('Unauthorized.')
+  }
+  await expect(t.query(api.tickets.q.resultsForAsgard, {})).rejects.toThrow('Unauthorized.')
+})

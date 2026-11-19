@@ -39,6 +39,11 @@ export const RESULT_TICKETS_LIMIT = 200
 /** Winning tickets whose numbers `recentResults` carries per draw; `winners` still counts them all. */
 export const RESULT_WINNING_NUMBERS_LIMIT = 10
 
+/** Draws per game the console's results page lists. */
+export const ASGARD_RESULTS_PER_GAME = 10
+/** Winning tickets read per draw there; past it the row is marked partial. */
+export const ASGARD_RESULT_WINNERS_LIMIT = 200
+
 /**
  * The games tickets are sold on, keyed by the PCSO results vocabulary that
  * `historicalResults.game` uses. The digit games (`2d`, `3d`, …) are absent:

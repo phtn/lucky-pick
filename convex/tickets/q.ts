@@ -4,9 +4,11 @@ import { GAMES } from '../../src/lib/games'
 import type { Doc, Id } from '../_generated/dataModel'
 import { query } from '../_generated/server'
 import { betTypeSchema, gameIdSchema } from '../games/d'
-import { getGameByGameId } from '../games/helpers'
+import { getGameByGameId, requireStaffIdentity } from '../games/helpers'
 import { getUserByTokenIdentifier } from '../users/q'
 import {
+  ASGARD_RESULT_WINNERS_LIMIT,
+  ASGARD_RESULTS_PER_GAME,
   DRAW_TIME,
   HOUSE_TICKETS_LIMIT,
   MY_TICKET_HOUSES_LIMIT,
@@ -355,5 +357,108 @@ export const upcomingDraws = query({
     }
 
     return draws.sort((a, b) => a.drawDate.localeCompare(b.drawDate) || a.game.localeCompare(b.game))
+  }
+})
+
+const GAMES_LIMIT = Object.keys(GAMES).length
+
+/**
+ * The console's results: for every game on sale, its most recent draws, each
+ * with the tickets that won it across every house — whose numbers they were,
+ * which banker held them, and what they paid. Staff only.
+ */
+export const resultsForAsgard = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      game: gameIdSchema,
+      name: v.string(),
+      draws: v.array(
+        v.object({
+          drawId: v.string(),
+          date: v.string(),
+          /** The drawn numbers, or `null` for a result imported without them. */
+          numbers: v.union(v.array(v.number()), v.null()),
+          /** Winning tickets on this draw, across every house. */
+          winners: v.number(),
+          /** What those winners were paid in all, in whole credits. */
+          payout: v.number(),
+          tickets: v.array(
+            v.object({
+              ticketId: v.id('tickets'),
+              numbers: v.array(v.number()),
+              banker: v.string(),
+              prize: v.number()
+            })
+          ),
+          /** True when there were more winners than were read. */
+          partial: v.boolean()
+        })
+      )
+    })
+  ),
+  handler: async (ctx) => {
+    await requireStaffIdentity(ctx)
+
+    const games = (await ctx.db.query('games').withIndex('by_order').take(GAMES_LIMIT)).filter((game) => game.enabled)
+    const resultGameOf = Object.fromEntries(
+      Object.entries(RESULT_GAME_IDS).map(([resultGame, game]) => [game, resultGame])
+    ) as Record<Doc<'games'>['gameId'], keyof typeof RESULT_GAME_IDS>
+
+    const bankers = new Map<Id<'accounts'>, string>()
+    const bankerName = async (accountId: Id<'accounts'>) => {
+      let name = bankers.get(accountId)
+      if (name === undefined) {
+        name = (await ctx.db.get(accountId))?.name ?? 'Unknown banker'
+        bankers.set(accountId, name)
+      }
+      return name
+    }
+
+    const results = []
+    for (const game of games) {
+      const rows = await ctx.db
+        .query('historicalResults')
+        .withIndex('by_game_and_date', (q) => q.eq('game', resultGameOf[game.gameId]))
+        .order('desc')
+        .take(ASGARD_RESULTS_PER_GAME)
+
+      const draws = []
+      for (const row of rows) {
+        const won = await ctx.db
+          .query('tickets')
+          .withIndex('by_game_and_drawDate_and_status', (q) =>
+            q.eq('game', game.gameId).eq('drawDate', row.date).eq('status', 'won')
+          )
+          .take(ASGARD_RESULT_WINNERS_LIMIT + 1)
+        const counted = won.slice(0, ASGARD_RESULT_WINNERS_LIMIT)
+
+        const tickets = []
+        for (const ticket of counted) {
+          tickets.push({
+            ticketId: ticket._id,
+            numbers: ticket.numbers,
+            banker: await bankerName(ticket.accountId),
+            prize: ticket.prizeWon ?? 0
+          })
+        }
+        // Biggest prize first, the way a winners list is read.
+        tickets.sort((a, b) => b.prize - a.prize || a.banker.localeCompare(b.banker))
+
+        draws.push({
+          drawId: row.drawId,
+          date: row.date,
+          numbers: row.numbers,
+          winners: tickets.length,
+          payout: tickets.reduce((sum, ticket) => sum + ticket.prize, 0),
+          tickets,
+          partial: won.length > ASGARD_RESULT_WINNERS_LIMIT
+        })
+      }
+
+      results.push({ game: game.gameId, name: game.name, draws })
+    }
+
+    return results
   }
 })

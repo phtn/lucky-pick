@@ -45,6 +45,7 @@ import type * as resultsImport from "../resultsImport.js";
 import type * as tickets_d from "../tickets/d.js";
 import type * as tickets_m from "../tickets/m.js";
 import type * as tickets_q from "../tickets/q.js";
+import type * as tickets_settle from "../tickets/settle.js";
 import type * as users_m from "../users/m.js";
 import type * as users_q from "../users/q.js";
 import type * as users_v from "../users/v.js";
@@ -94,6 +95,7 @@ declare const fullApi: ApiFromModules<{
   "tickets/d": typeof tickets_d;
   "tickets/m": typeof tickets_m;
   "tickets/q": typeof tickets_q;
+  "tickets/settle": typeof tickets_settle;
   "users/m": typeof users_m;
   "users/q": typeof users_q;
   "users/v": typeof users_v;

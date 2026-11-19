@@ -27,6 +27,7 @@ const asgardOverview = lazyPage(() => import('@/pages/asgard-overview-page.btsx'
 const asgardAccounts = lazyPage(() => import('@/pages/asgard-accounts-page.btsx'))
 const asgardAccount = lazyPage(() => import('@/pages/asgard-account-page.btsx'))
 const asgardGames = lazyPage(() => import('@/pages/asgard-games-page.btsx'))
+const asgardResults = lazyPage(() => import('@/pages/asgard-results-page.btsx'))
 
 const profilePage = lazyPage(() => import('@/pages/profile-page.btsx'))
 const trxPage = lazyPage(() => import('@/pages/trx-page.btsx'))
@@ -112,7 +113,13 @@ function createAsgardRouteTree() {
     component: asgardGames
   })
 
-  return rootRoute.addChildren([overviewRoute, accountsRoute, accountRoute, gamesRoute])
+  const resultsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/results',
+    component: asgardResults
+  })
+
+  return rootRoute.addChildren([overviewRoute, accountsRoute, accountRoute, gamesRoute, resultsRoute])
 }
 
 function createAppRouteTree() {
@@ -193,6 +200,12 @@ function createAppRouteTree() {
     component: asgardGames
   })
 
+  const asgardResultsRoute = createRoute({
+    getParentRoute: () => asgardRoute,
+    path: 'results',
+    component: asgardResults
+  })
+
   // Where no `admin.` subdomain is in front of the app — the dev server, a
   // workers.dev origin — `/admin` is the console rather than a doorway to it,
   // so the whole surface hangs off this path. On a host that carries the
@@ -240,7 +253,7 @@ function createAppRouteTree() {
     analyticsRoute,
     profileRoute,
     trxRoute,
-    asgardRoute.addChildren([asgardIndexRoute, asgardAccountsRoute, asgardAccountRoute, asgardGamesRoute]),
+    asgardRoute.addChildren([asgardIndexRoute, asgardAccountsRoute, asgardAccountRoute, asgardGamesRoute, asgardResultsRoute]),
     adminRoute.addChildren([adminIndexRoute, adminPlayersRoute, adminPlayerRoute, adminTicketsRoute, adminResultsRoute])
   ])
 }

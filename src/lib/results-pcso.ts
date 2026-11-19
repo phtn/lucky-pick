@@ -18,6 +18,26 @@ export const PCSO_BROWSER_HEADERS: Record<string, string> = {
   'Upgrade-Insecure-Requests': '1',
 }
 
+/**
+ * Akamai blocks PCSO for datacenter (and likely non-Philippine) networks, so
+ * from Convex the page has to be fetched through a scraping API that sends it
+ * from a residential connection. The proxy is a URL template with `{url}`
+ * where the target goes, e.g.
+ *
+ *   https://api.scraperapi.com/?api_key=KEY&country_code=ph&url={url}
+ *   https://api.zenrows.com/v1/?apikey=KEY&premium_proxy=true&proxy_country=ph&url={url}
+ *   https://app.scrapingbee.com/api/v1/?api_key=KEY&premium_proxy=true&country_code=ph&url={url}
+ *
+ * Without one, PCSO is fetched directly (which works from a residential
+ * network, e.g. a local script, but not from Convex).
+ */
+export function pcsoRequestUrl(proxyTemplate: string | undefined): { url: string; proxied: boolean } {
+  const template = proxyTemplate?.trim()
+  if (!template) return { url: PCSO_RESULTS_URL, proxied: false }
+  if (!template.includes('{url}')) throw new Error('PCSO_PROXY_URL must contain a {url} placeholder for the PCSO address.')
+  return { url: template.replace('{url}', encodeURIComponent(PCSO_RESULTS_URL)), proxied: true }
+}
+
 const ENTITIES: Record<string, string> = { amp: '&', nbsp: ' ', lt: '<', gt: '>', quot: '"', '#39': "'", '#8369': '₱' }
 
 const cellText = (html: string) => html
@@ -48,10 +68,12 @@ export function extractPcsoRows(html: string): string[] {
  */
 export function pcsoImportText(html: string) {
   const rows = extractPcsoRows(html)
-  const { issues } = parseRawResults(rows.join('\n'))
+  const { issues, records } = parseRawResults(rows.join('\n'))
   const bad = new Set(issues.map(issue => issue.line))
   return {
     text: rows.filter((_, index) => !bad.has(index + 1)).join('\n'),
+    /** Every draw the page lists, new or already stored. */
+    draws: records.filter(item => !bad.has(item.line)).map(item => ({ game: item.game, date: item.record.date })),
     rows: rows.length,
     rejected: issues.map(issue => ({ row: rows[issue.line - 1] ?? '', message: issue.message })),
   }
