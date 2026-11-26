@@ -34,7 +34,9 @@ component TicketRow
             span(className="text-xs font-bold text-rose-400") LOST
       elseif liveHits > 0
         span(className="whitespace-nowrap text-xs font-bold tracking-tight text-blue-500") #{liveHits}x
-      span(className="px-1.5 py-0.5 font-sans text-base font-[500] text-foreground") #{ticket.cost}
+      div(className="flex items-center justify-end px-1.5 py-0.5 font-sans text-base font-[500] text-foreground space-x-3")
+        p(className='text-muted-foreground') #{ticket.game}
+        p(className='w-[36px]! text-right') #{ticket.cost}
 
 props { tickets, drawnBalls = emptyBalls, drawGame = null }: TicketListProps
 setup
