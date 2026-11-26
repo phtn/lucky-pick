@@ -115,7 +115,7 @@ component SwitcherRoot
             ~ className='size-6 shrink-0 rounded-full object-cover md:size-8 drop-shadow'
             ~ )
         else
-          Icon(name={isMobile && !keepIcon ? 'user-settings' : activeItem?.icon ?? icon ?? 'circle-plus'} className={cn('size-9 md:size-5', !tone && 'dark:text-foreground/70')})
+          Icon(name={isMobile && !keepIcon ? 'user-settings' : activeItem?.icon ?? icon ?? 'circle-plus'} className={cn('size-5 md:size-5', !tone && 'dark:text-foreground/70')})
       // div(className=' min-w-0 h-6 flex items-center max-[760px]:hidden')
         // span(className={cn('font-sans font-[450] text-sm tracking-tight truncate', !fullLabel && 'capitalize', !tone && 'dark:text-muted-foreground')} title={label}) #{fullLabel ? label : label.split(' ').shift()}
       // Icon(name='select-caret' className='size-2.75 ml-1 opacity-70 dark:text-foreground/40 hidden md:flex')

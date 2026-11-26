@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'octane'
 import type { FunctionReturnType } from 'convex/server'
-import { Distribution, Masthead, Panel, StatTile } from '@/components/overview'
+import { Distribution, Panel, StatTile } from '@/components/overview'
 import Tabs from '@/components/ui/Tabs.btsx'
 import type { TabItem } from '@/components/ui/Tabs.btsx'
 import { useConvexQuery } from '@/hooks/use-convex-query'
@@ -23,7 +23,6 @@ import { api } from '../../convex/_generated/api'
 import type { Id } from '../../convex/_generated/dataModel'
 import { MY_HISTORY_LIMIT } from '../../convex/ledger/d'
 import { DEFAULT_PLAY_PAGE, PLAY_HISTORY_LIMIT, TICKET_DETAIL_LIMIT } from '../../convex/plays/d'
-import { Link } from '@octanejs/tanstack-router';
 
 module
   type Movement = FunctionReturnType<typeof api.ledger.q.myLedgerHistory>[number]
@@ -50,6 +49,7 @@ module
   const readingLabelClass = 'font-mono text-2xs uppercase tracking-[0.18em] text-muted-foreground'
   const chipClass = 'rounded px-1.5 py-1 font-mono text-2xs uppercase tracking-wider'
   const blankClass = 'rounded-lg border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground'
+  const ticketColumns = 'xl:grid-cols-[minmax(0,1.1fr)_minmax(14rem,1.75fr)_minmax(0,.65fr)_minmax(0,1.2fr)_minmax(0,.6fr)_minmax(0,.75fr)_minmax(0,.85fr)]'
 
   // A credit that came in, or a draw that paid: never colour alone, since each
   // one sits beside a figure that carries its own sign.
@@ -89,30 +89,42 @@ module
     lost: 'bg-foreground/5 text-muted-foreground'
   }
 
-// A labelled line of the record: whatever the account has, or an em dash.
-component Reading
-  props { label, value }: { label: string; value: string }
-  div(className='flex flex-wrap items-baseline justify-between gap-2 py-2.5')
-    span(className={readingLabelClass}) #{label}
-    span(className='min-w-0 truncate text-right text-sm text-foreground') #{value || '—'}
+component TicketReading
+  props { label, value, className }: { label: string; value: string; className?: string }
+  div(className={cn('min-w-0', className)})
+    dt(className={cn(readingLabelClass, 'mb-0.5 xl:sr-only')}) #{label}
+    dd(className='text-xs tabular-nums sm:text-sm') #{value}
+
+component WalletMovements
+  props { entries, now }: { entries: Movement[]; now: number }
+  ul(className='overview-feed')
+    each entry in entries key entry._id
+      li(className='grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 lg:flex lg:items-center')
+        span(className='row-start-2 font-mono text-2xs text-muted-foreground lg:w-20 lg:shrink-0') #{formatRelativeTime(entry.createdAt, now)}
+        div(className='col-start-1 row-start-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 lg:flex-1')
+          span(className='min-w-0 text-sm text-foreground') #{formatLedgerLabel(entry)}
+          if entry.bucket === 'held'
+            span(className={cn(chipClass, 'bg-foreground/5 text-muted-foreground')}) held
+        span(className={cn('col-start-2 row-start-1 text-right font-mono text-sm tabular-nums lg:min-w-20', entry.amount < 0 ? 'text-destructive' : POSITIVE_TONE)}) #{formatLedgerAmount(entry.amount)}
+        span(className='hidden min-w-20 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 lg:inline') #{formatCredits(entry.balanceAfter)}
 
 // What a panel says when it has nothing to show, which is never an error here.
 component Blank
   props { message }: { message: string }
   p(className={blankClass}) #{message}
 component UserAvatar
-  props {avatarUrl, errorFn}: {avatarUrl?: string, errorFn?: VoidFunction}
+  props { avatarUrl, onError }: { avatarUrl: string | null; onError: VoidFunction }
   if avatarUrl
     img(
       ~ src={avatarUrl}
       ~ alt=''
       ~ referrerPolicy='no-referrer'
-      ~ onError={errorFn}
-      ~ className='size-8 shrink-0 rounded-full object-cover border'
+      ~ onError={onError}
+      ~ className='size-10 shrink-0 rounded-full border object-cover sm:size-12'
       ~ )
   else
-    div(className='grid size-8 shrink-0 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
-      Icon(name='account' size={20})
+    div(className='grid size-10 shrink-0 place-items-center rounded-full bg-foreground/5 text-muted-foreground sm:size-12')
+      Icon(name='person' className='size-7')
 
 
 setup
@@ -334,40 +346,22 @@ setup
 
 
 
-section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll pt-10')
-
-  div(className='px-4 pb-8')
-    div(className='flex items-center w-full')
-      div(className='translate-x-10 size-10 _border border-white flex items-center justify-center')
-        if avatarUrl
-          img(
-            ~ src={avatarUrl}
-            ~ alt=''
-            ~ referrerPolicy='no-referrer'
-            ~ onError={() => setBrokenPhotoUrl(photoUrl)}
-            ~ className='size-8 shrink-0 rounded-full aspect-square object-cover border'
-            ~ )
+section(className='overview-page relative min-w-0 pt-4 [overflow-wrap:anywhere] xl:min-h-0 xl:overflow-y-auto xl:pt-10')
+  div(className='pb-8 sm:px-4 xl:px-8')
+    header(className='flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between')
+      div(className='flex min-w-0 items-start gap-3 sm:gap-4')
+        UserAvatar(avatarUrl={avatarUrl} onError={() => setBrokenPhotoUrl(photoUrl)})
+        div(className='min-w-0')
+          h1(className='overview-title font-sans font-medium leading-tight text-foreground') #{name || 'Your profile'}
+          p(className='mt-1 font-mono text-xs text-muted-foreground') #{email || 'No email on this account'}
+          p(className='mt-2 text-sm text-muted-foreground') Monitor your wallet &amp; ticket activity.
+      div(className='flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:gap-x-5')
+        if isVerified
+          span(className={cn(chipClass, 'bg-chart-good/15 text-emerald-700 dark:text-emerald-400')}) verified
         else
-          div(className='grid size-8 shrink-0 place-items-center rounded-full bg-foreground/5 text-muted-foreground')
-            Icon(name='person' className='size-7')
-      // `||`, not `??`: `??` falls through only on null/undefined, and a Google
-      // account can carry `displayName: ''`, which would leave the page titleless.
-      Masthead(
-        ~ eyebrow={email || 'No email on this account'}
-        ~ title={name || 'Your profile'}
-        ~ description='Monitor your wallet & tickets activity.'
-        ~ titleClass='ml-12 text-4xl!'
-        ~ )
-        // States the one fact the whole page depends on, so empty panels are read
-        // as an empty account rather than as a page that failed.
-        div(className='flex items-center gap-3 md:gap-6 rounded-full px-3 py-1.5')
-          if isVerified
-            span(className={cn(chipClass, 'rounded bg-chart-good/15 text-emerald-700 dark:text-emerald-400')}) verified
-          else
-
-            span(className={cn(chipClass, 'bg-amber-500/15 text-amber-700 dark:text-amber-400')}) unverified
-          span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') joined #{formatMemberSince(memberSince)}
-          span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') #{accountRecordLabel}
+          span(className={cn(chipClass, 'bg-amber-500/15 text-amber-700 dark:text-amber-400')}) unverified
+        span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') joined #{formatMemberSince(memberSince)}
+        span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') #{accountRecordLabel}
 
     // Signed out is either still being checked or already on its way home.
     if !isSignedIn
@@ -375,7 +369,7 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
         Icon(name='spinner' size={16} className='animate-spin text-muted-foreground')
         p(className='text-sm text-muted-foreground') #{isAuthLoading ? 'Checking your session…' : 'Taking you home…'}
     else
-      div#profile-panel(className='overview-sections px-10')
+      div#profile-panel(className='overview-sections min-w-0 gap-5! pt-6! sm:gap-8! sm:pt-8!')
         // Not collapsible, and first: this is the only moment the key exists,
         // and a panel that can be folded away is one that can be missed.
         if pendingTronAccount
@@ -386,22 +380,22 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
                 p(className='text-sm leading-relaxed text-foreground') A TRON account was created for you. Its private key is held nowhere but this page — not on our servers, not in this browser's storage. Leave or reload without saving it and the account is gone for good.
               div(className='grid gap-1')
                 span(className={readingLabelClass}) address
-                code(className='block overflow-x-auto rounded-md bg-foreground/5 px-3 py-2 font-mono text-xs text-foreground') #{pendingTronAccount.address}
+                code(className='block min-w-0 rounded-md bg-foreground/5 px-3 py-2 font-mono text-xs text-foreground') #{pendingTronAccount.address}
               div(className='grid gap-1')
                 span(className={readingLabelClass}) private key
-                code(className='block overflow-x-auto rounded-md bg-foreground/5 px-3 py-2 font-mono text-xs text-foreground') #{pendingTronAccount.privateKey}
+                code(className='block min-w-0 rounded-md bg-foreground/5 px-3 py-2 font-mono text-xs text-foreground') #{pendingTronAccount.privateKey}
               div(className='flex flex-wrap items-center gap-2')
                 button(
                   ~ type='button'
                   ~ onClick={() => void copyTronKey(pendingTronAccount.privateKey)}
-                  ~ className='inline-flex h-9 items-center gap-2 rounded-full border border-border px-4 text-xs font-medium text-foreground'
+                  ~ className='inline-flex h-11 items-center gap-2 rounded-full border border-border px-4 text-xs font-medium text-foreground sm:h-9'
                   ~ )
                   Icon(name={copiedTronKey ? 'check' : 'key'} size={14})
                   span #{copiedTronKey ? 'Copied' : 'Copy key'}
                 button(
                   ~ type='button'
                   ~ onClick={() => downloadTronKey(pendingTronAccount.address, pendingTronAccount.privateKey)}
-                  ~ className='inline-flex h-9 items-center gap-2 rounded-full border border-border px-4 text-xs font-medium text-foreground'
+                  ~ className='inline-flex h-11 items-center gap-2 rounded-full border border-border px-4 text-xs font-medium text-foreground sm:h-9'
                   ~ )
                   Icon(name='arrow-right' size={14} className='rotate-90')
                   span Download
@@ -409,10 +403,16 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
                 button(
                   ~ type='button'
                   ~ onClick={() => clearPendingTronAccount()}
-                  ~ className='inline-flex h-9 items-center gap-2 rounded-full bg-foreground px-4 text-xs font-medium text-background'
+                  ~ className='inline-flex h-11 items-center gap-2 rounded-full bg-foreground px-4 text-xs font-medium text-background sm:h-9'
                   ~ )
                   span I have saved it
-        Tabs(activeId={activeTab} items={tabs} onSelect={setSelectedTab} label='Profile sections' className='w-full min-w-0 justify-between justify-self-start overflow-x-auto md:w-auto md:justify-start')
+        Tabs(
+          ~ activeId={activeTab}
+          ~ items={tabs}
+          ~ onSelect={setSelectedTab}
+          ~ label='Profile sections'
+          ~ className='w-full min-w-0 justify-self-start gap-1 sm:w-auto sm:gap-6 [&>[data-tab]]:min-h-11 [&>[data-tab]]:min-w-0 [&>[data-tab]]:flex-1 [&>[data-tab]>span]:whitespace-normal sm:[&>[data-tab]]:flex-none'
+          ~ )
 
         if activeTab === 'bankers'
           fragment
@@ -422,14 +422,14 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
                   each topup in topupsToClaim key topup.id
                     li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
                       div(className='min-w-0 flex-1')
-                        p(className='truncate text-sm text-foreground') #{topup.amount.toLocaleString('en-US')} CR
-                        p(className='truncate text-xs text-muted-foreground') #{topup.accountName}
+                        p(className='text-sm text-foreground') #{topup.amount.toLocaleString('en-US')} CR
+                        p(className='text-xs text-muted-foreground') #{topup.accountName}
                       button(
                         ~ type='button'
                         ~ onClick={() => void claimTopup(topup.id)}
                         ~ disabled={claimingTopupIds.has(topup.id)}
                         ~ aria-busy={claimingTopupIds.has(topup.id) || undefined}
-                        ~ className='inline-flex h-9 items-center rounded-full bg-foreground px-4 text-xs font-medium text-background transition-opacity disabled:opacity-60'
+                        ~ className='inline-flex h-11 shrink-0 items-center rounded-full bg-foreground px-4 text-xs font-medium text-background transition-opacity disabled:opacity-60 sm:h-9'
                         ~ )
                         span #{claimingTopupIds.has(topup.id) ? 'Claiming…' : 'Claim'}
                 if claimError
@@ -440,15 +440,15 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
                   each house in houseItems key house.id
                     li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
                       div(className='min-w-0 flex-1')
-                        p(className='truncate text-sm text-foreground') #{house.name}
-                        p(className='truncate text-xs text-muted-foreground') #{house.detail}
+                        p(className='text-sm text-foreground') #{house.name}
+                        p(className='text-xs text-muted-foreground') #{house.detail}
                       if house.canConfirm
                         button(
                           ~ type='button'
                           ~ onClick={() => void confirmHouse(house.id)}
                           ~ disabled={confirmingHouseIds.has(house.id)}
                           ~ aria-busy={confirmingHouseIds.has(house.id) || undefined}
-                          ~ className='inline-flex h-9 items-center rounded-full bg-foreground px-4 text-xs font-medium text-background transition-opacity disabled:opacity-60'
+                          ~ className='inline-flex h-11 shrink-0 items-center rounded-full bg-foreground px-4 text-xs font-medium text-background transition-opacity disabled:opacity-60 sm:h-9'
                           ~ )
                           span #{confirmingHouseIds.has(house.id) ? 'Confirming…' : 'Confirm'}
                 if houseError
@@ -457,33 +457,25 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
           fragment
             each house in houseWallets key house.accountId
               Panel(title={house.name} collapsible={false} description='Your house’s float: claimed top-ups land here.' meta={house.entries.length === 0 ? 'No movements' : `Newest ${formatCount(house.entries.length)}`})
-                div(className='grid gap-10 lg:grid-cols-5 lg:gap-8')
-                  div(className='grid content-start gap-8 lg:col-span-2')
+                div(className='grid grid-cols-1 gap-5 lg:grid-cols-5 lg:gap-8')
+                  div(className='grid min-w-0 content-start gap-4 lg:col-span-2 lg:gap-8')
                     StatTile(
                       ~ hero={true}
                       ~ label='House balance'
                       ~ value={house.float ? `${formatCredits(house.float.available)} CR` : '—'}
                       ~ caption={house.float ? 'Float available to hand out.' : 'This house has no float wallet yet.'}
                       ~ )
-                    div(className='grid grid-cols-2 gap-6')
+                    div(className='grid grid-cols-2 gap-3 sm:gap-6')
                       StatTile(label='Held' value={`${formatCredits(house.float?.held ?? 0)} CR`} caption='Float committed, not settled.')
                       StatTile(label='Earnings' value={`${formatCredits(house.earnings?.available ?? 0)} CR`} caption='Won from players.')
-                  div(className='lg:col-span-3')
+                  div(className='min-w-0 lg:col-span-3')
                     if house.entries.length === 0
                       Blank(message='This house’s float has not moved yet.')
                     else
-                      ul(className='overview-feed')
-                        each entry in house.entries key entry._id
-                          li(className='flex flex-wrap items-center gap-x-3 gap-y-1')
-                            span(className='w-20 shrink-0 font-mono text-2xs text-muted-foreground') #{formatRelativeTime(entry.createdAt, now)}
-                            span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{formatLedgerLabel(entry)}
-                            if entry.bucket === 'held'
-                              span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) held
-                            span(className={cn('w-20 shrink-0 text-right font-mono text-sm tabular-nums', entry.amount < 0 ? 'text-destructive' : POSITIVE_TONE)}) #{formatLedgerAmount(entry.amount)}
-                            span(className='hidden w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 lg:inline') #{formatCredits(entry.balanceAfter)}
+                      WalletMovements(entries={house.entries} now={now})
             // Panel(title={houseWallets.length > 0 ? 'Your own wallet' : ''} collapsible={false} description='' meta={!hasReadMovements ? 'Not read yet' : entries.length === 0 ? 'No movements' : `Newest ${formatCount(entries.length)}`})
-            div(className='grid gap-10 lg:grid-cols-5 lg:gap-8')
-              div(className='grid content-start gap-8 lg:col-span-2')
+            div(className='grid grid-cols-1 gap-5 lg:grid-cols-5 lg:gap-8')
+              div(className='grid min-w-0 content-start gap-4 lg:col-span-2 lg:gap-8')
                 StatTile(
                   ~ hero={true}
                   ~ label='Balance'
@@ -491,22 +483,12 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
                   ~ caption={balanceCaption}
                   ~ )
                 if wallet
-                  div(className='grid grid-cols-2 gap-6')
-                    StatTile(label='Held' value={`${formatCredits(wallet.held)} CR`} caption='Committed to open plays.')
-                    // StatTile(label='Total' value={`${formatCredits(wallet.available + wallet.held)} CR`} caption='Balance plus held.')
-              div(className='lg:col-span-3')
+                  StatTile(label='Held' value={`${formatCredits(wallet.held)} CR`} caption='Committed to open plays.' className='sm:max-w-xs')
+              div(className='min-w-0 lg:col-span-3')
                 if entries.length === 0
                   Blank(message={hasReadMovements ? 'No credit has moved on your account yet.' : UNREAD_MOVEMENTS})
                 else
-                  ul(className='overview-feed')
-                    each entry in entries key entry._id
-                      li(className='flex flex-wrap items-center gap-x-3 gap-y-1')
-                        span(className='w-20 shrink-0 font-mono text-2xs text-muted-foreground') #{formatRelativeTime(entry.createdAt, now)}
-                        span(className='min-w-0 flex-1 truncate text-sm text-foreground') #{formatLedgerLabel(entry)}
-                        if entry.bucket === 'held'
-                          span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) held
-                        span(className={cn('w-20 shrink-0 text-right font-mono text-sm tabular-nums', entry.amount < 0 ? 'text-destructive' : POSITIVE_TONE)}) #{formatLedgerAmount(entry.amount)}
-                        span(className='hidden w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 lg:inline') #{formatCredits(entry.balanceAfter)}
+                  WalletMovements(entries={entries} now={now})
         elseif activeTab === 'practice'
           Panel(
             ~ title='Practice'
@@ -558,38 +540,27 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
               Blank(message={hasReadTickets ? 'You have not bought a ticket yet.' : UNREAD_TICKETS})
             else
               fragment
-                // Column headers. Each cell repeats the width of the cell below
-                // it, so the two must change together. Hidden below `xl`, where a
-                // row wraps and there are no columns left to head.
-                div(className='hidden items-center gap-x-4 py-6 xl:flex')
-                  span(className={cn(readingLabelClass, 'w-40 shrink-0')}) Game
-                  span(className={cn(readingLabelClass, 'flex-1 px-4')}) Numbers
-                  span(className={cn(readingLabelClass, 'w-32 shrink-0 text-center')}) Status
-                  span(className={cn(readingLabelClass, 'w-44 shrink-0 text-left')}) Draw
-                  span(className={cn(readingLabelClass, 'w-28 shrink-0 text-right')}) Stake
-                  span(className={cn(readingLabelClass, 'w-28 shrink-0 text-right')}) Payout
-                  span(className={cn(readingLabelClass, 'w-28 shrink-0 text-right')}) Bought
+                div(aria-hidden='true' className={cn('hidden items-center gap-x-3 pb-2 xl:grid', ticketColumns)})
+                  span(className={readingLabelClass}) Game
+                  span(className={readingLabelClass}) Numbers
+                  span(className={readingLabelClass}) Status
+                  span(className={readingLabelClass}) Draw
+                  span(className={cn(readingLabelClass, 'text-right')}) Stake
+                  span(className={cn(readingLabelClass, 'text-right')}) Payout
+                  span(className={cn(readingLabelClass, 'text-right')}) Bought
                 ul(className='overview-feed')
                   each ticket in ticketRows key ticket.ticketId
-                    li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
-                      div(className='w-40 min-w-0 shrink-0')
-                        p(className='truncate text-sm text-foreground') #{GAMES[ticket.game].name}
-                        // p(className='truncate font-mono text-xs text-muted-foreground') #{formatDraw(ticket.drawDate, ticket.drawTime)}
-                      div(className='flex items-center flex-1 h-10 gap-4 px-4')
-                        each n in ticket.numbers
-                          span(key={n} className='flex items-center justify-center bg-foreground font-[550] text-lg text-background size-10 rounded-full') #{n}
-
-
-                      div(className='w-32 shrink-0 flex items-center justify-center')
-                        span(className={cn(chipClass, TICKET_STATUS_TONE[ticket.status])}) #{ticket.status}
-                      // Hits mean nothing until the draw has run, so a pending
-                      // ticket shows none rather than a zero it has not earned.
-                      // span(className='w-16 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{ticket.status === 'pending' ? '—' : formatHits(ticket.hits)}
-                      span(className='w-44 shrink-0 text-left font-mono text-sm tabular-nums text-muted-foreground') #{formatDraw(ticket.drawDate, ticket.drawTime)}
-                      span(className='w-28 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-foreground') #{`₱${formatCredits(ticket.cost)}`}
-                      span(className='w-28 shrink-0 text-right font-sans font-[450] text-sm tabular-nums text-muted-foreground') #{`₱${formatCredits(ticket.cost * 360)}`}
-                      // span(className={cn('w-24 shrink-0 text-right font-mono text-sm tabular-nums', ticket.prizeWon ? POSITIVE_TONE : 'text-muted-foreground/70')}) #{ticket.status === 'pending' ? '—' : `${formatCredits(ticket.prizeWon ?? (ticket.cost * 360))} CR`}
-                      span(className='w-28 shrink-0 text-right font-mono text-sm tabular-nums text-muted-foreground') #{formatRelativeTime(ticket.createdAt, now)}
+                    li(className={cn('grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3', ticketColumns)})
+                      p(className='col-start-1 row-start-1 min-w-0 text-sm font-medium text-foreground xl:col-auto xl:row-auto') #{GAMES[ticket.game].name}
+                      div(role='group' aria-label='Ticket numbers' className='col-span-2 row-start-2 flex min-w-0 flex-wrap gap-2 xl:col-span-1 xl:row-auto')
+                        each n in ticket.numbers key n
+                          span(className='grid size-8 shrink-0 place-items-center rounded-full bg-foreground text-sm font-medium text-background xl:size-9 xl:text-base') #{n}
+                      span(className={cn(chipClass, TICKET_STATUS_TONE[ticket.status], 'col-start-2 row-start-1 justify-self-end xl:col-auto xl:row-auto xl:justify-self-start')}) #{ticket.status}
+                      dl(className='col-span-2 row-start-3 grid grid-cols-2 gap-x-3 gap-y-2 xl:contents')
+                        TicketReading(label='Draw' value={formatDraw(ticket.drawDate, ticket.drawTime)} className='font-mono text-muted-foreground')
+                        TicketReading(label='Stake' value={`₱${formatCredits(ticket.cost)}`} className='text-right text-foreground')
+                        TicketReading(label='Payout' value={`₱${formatCredits(ticket.cost * 360)}`} className='text-muted-foreground xl:text-right')
+                        TicketReading(label='Bought' value={formatRelativeTime(ticket.createdAt, now)} className='text-right font-mono text-muted-foreground')
         elseif activeTab === 'plays'
           Panel(title='Recent plays' collapsible={false} description='One row per resolved draw, newest first.' meta={!hasReadPlays ? 'Not read yet' : rows.length === 0 ? 'No draws' : `${formatCount(playFeed.length)} of ${formatCount(rows.length)}`})
             if playFeed.length === 0
@@ -597,20 +568,19 @@ section(className='relative overview-page h-[calc(100dvh-100px)] overflow-scroll
             else
               ul(className='overview-feed')
                 each play in playFeed key play._id
-                  li(className='flex flex-wrap items-center gap-x-4 gap-y-1')
-                    div(className='min-w-0 flex-1')
-                      p(className='truncate text-sm text-foreground') #{GAMES[play.game].name}
-                      p(className='truncate font-mono text-xs text-muted-foreground') #{formatDrawnBalls(play.drawnBalls)}
-                    if play.isOfficial
-                      span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) official
-                    // A party row holds every player's tickets, so its stake and
-                    // ticket count mean something other than a solo row's.
-                    if play.mode === 'party'
-                      span(className={cn(chipClass, 'shrink-0 bg-foreground/5 text-muted-foreground')}) party
-                    span(className='w-24 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{`${formatCount(play.ticketCount)} tickets`}
-                    span(className='w-16 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground') #{formatHits(play.bestHits)}
-                    span(className={cn('w-24 shrink-0 text-right font-mono text-sm tabular-nums', play.won > 0 ? POSITIVE_TONE : 'text-muted-foreground/70')}) #{formatPeso(play.won)}
-                    span(className='w-20 shrink-0 text-right font-mono text-2xs tabular-nums text-muted-foreground/70') #{formatRelativeTime(play.drawnAt, now)}
+                  li(className='grid min-w-0 grid-cols-2 items-center gap-x-3 gap-y-2 lg:flex lg:gap-4')
+                    div(className='col-span-2 min-w-0 lg:flex-1')
+                      div(className='flex flex-wrap items-center gap-x-2 gap-y-1')
+                        p(className='text-sm font-medium text-foreground') #{GAMES[play.game].name}
+                        if play.isOfficial
+                          span(className={cn(chipClass, 'bg-foreground/5 text-muted-foreground')}) official
+                        if play.mode === 'party'
+                          span(className={cn(chipClass, 'bg-foreground/5 text-muted-foreground')}) party
+                      p(className='mt-1 font-mono text-xs text-muted-foreground') #{formatDrawnBalls(play.drawnBalls)}
+                    span(className='font-mono text-xs tabular-nums text-muted-foreground lg:min-w-24 lg:text-right') #{`${formatCount(play.ticketCount)} tickets`}
+                    span(className='text-right font-mono text-xs tabular-nums text-muted-foreground lg:min-w-16') #{formatHits(play.bestHits)}
+                    span(className={cn('font-mono text-sm tabular-nums lg:min-w-24 lg:text-right', play.won > 0 ? POSITIVE_TONE : 'text-muted-foreground/70')}) #{formatPeso(play.won)}
+                    span(className='text-right font-mono text-2xs tabular-nums text-muted-foreground/70 lg:min-w-20') #{formatRelativeTime(play.drawnAt, now)}
         else
           Panel(title='Real plays' collapsible={false} description='Tickets bought with credits, once they can be bought.' meta='Not yet playable')
             Blank(message='Credit-backed tickets are still being built. When they ship, every ticket you buy with credits is listed here with the draw it was entered in and what it settled for.')

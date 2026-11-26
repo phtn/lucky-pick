@@ -69,7 +69,7 @@ div(className="bet-panel bg-sunken p-6! portrait:p-4! border portrait:border-0 r
               button(
                 ~ onClick={() => onSelectStake && onSelectStake(stake)}
                 ~ aria-pressed={betCost === stake}
-                ~ className={`h-7 rounded-md px-2.5 text-sm font-black tracking-wide transition ${betCost === stake ? 'bg-primary text-primary-foreground' : 'bg-raised text-foreground/70 hover:bg-elevated hover:text-foreground'}`}
+                ~ className={`h-7 rounded-md px-2 text-sm font-black tracking-wide transition ${betCost === stake ? 'bg-primary text-primary-foreground' : 'bg-raised text-foreground/70 hover:bg-elevated hover:text-foreground'}`}
                 ~ )
                 | #{formatPeso(stake)}
     div(className='flex items-center justify-center')

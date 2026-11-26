@@ -55,12 +55,12 @@ setup
 header(className="app-header")
   div(className="app-header__layout")
     div(className="app-header__brand flex min-w-0 items-center gap-3")
-      div(className="brand-mark rounded-full!")
-        span(className="brand-mark__number")
-          | #{pool}
-        span(className="brand-mark__orbit animate-spin blur-xs" aria-hidden="true")
-        span(className="brand-mark__orbit -rotate-12 scale-130 opacity-20 animate-pulse" aria-hidden="true")
-        span(className="brand-mark__orbit" aria-hidden="true")
+      // div(className="brand-mark rounded-full!")
+      //   span(className="brand-mark__number")
+      //     | #{pool}
+      //   span(className="brand-mark__orbit animate-spin blur-xs" aria-hidden="true")
+      //   span(className="brand-mark__orbit -rotate-12 scale-130 opacity-20 animate-pulse" aria-hidden="true")
+      //   span(className="brand-mark__orbit" aria-hidden="true")
       div
         Link(to="/")
           h1(className="flex items-center gap-2 text-[22px] md:text-xl font-bold tracking-tighter leading-none")
