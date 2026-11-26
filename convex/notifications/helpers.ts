@@ -1,6 +1,6 @@
 import type { Id } from '../_generated/dataModel'
 import type { MutationCtx } from '../_generated/server'
-import { NOTIFICATION_HISTORY_LIMIT, type NotificationKind } from './d'
+import { NOTIFICATION_HISTORY_LIMIT, type NotificationKind, type notificationDrawSchema } from './d'
 
 /**
  * The only way a notification is written. It is a helper, not a mutation, so
@@ -16,6 +16,7 @@ export async function notify(
     accountId: Id<'accounts'> | null
     accountName: string
     amount?: number
+    draw?: typeof notificationDrawSchema.type
   }
 ): Promise<void> {
   const { userId } = args
@@ -28,6 +29,7 @@ export async function notify(
     accountName: args.accountName,
     // Convex rejects `undefined` against `v.union(v.number(), v.null())`.
     amount: args.amount ?? null,
+    ...(args.draw ? { draw: args.draw } : {}),
     readAt: null,
     createdAt: Date.now()
   })

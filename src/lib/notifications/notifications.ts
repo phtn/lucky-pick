@@ -1,4 +1,5 @@
 import { formatAccountCredits } from '../accounts/accounts'
+import { GAMES, type GameId } from '../games'
 
 /**
  * Mirrors `notificationKindSchema` in `convex/notifications/d.ts`. Re-declared rather than imported:
@@ -12,6 +13,15 @@ export type NotificationKind =
   | 'topup-approved'
   | 'topup-rejected'
   | 'transaction-reversed'
+  | 'ticket-won'
+
+/** The draw a `ticket-won` notification is about. */
+export interface NotificationDraw {
+  game: string
+  /** Manila calendar date, `YYYY-MM-DD`. */
+  drawDate: string
+  tickets: number
+}
 
 export interface NotificationRow {
   notificationId: string
@@ -19,6 +29,8 @@ export interface NotificationRow {
   accountId: string | null
   accountName: string
   amount: number | null
+  /** Older rows and the house kinds carry none. */
+  draw?: NotificationDraw | null
   readAt: number | null
   createdAt: number
 }
@@ -35,6 +47,22 @@ interface Copy {
   title: string
   detail: string | null
   href: string | null
+}
+
+const drawDay = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+
+/** `Nov 17` — the draw's own calendar day, read as a date rather than an instant. */
+const formatDrawDay = (date: string) => {
+  const day = new Date(`${date}T00:00:00Z`)
+  return Number.isNaN(day.getTime()) ? date : drawDay.format(day)
+}
+
+/** `Your Lotto 6/42 ticket won in the Nov 17 draw.` / `2 Lotto 6/42 tickets won …` */
+function winDetail(draw: NotificationDraw | null | undefined): string | null {
+  if (!draw) return null
+  const game = GAMES[draw.game as GameId]?.name ?? draw.game
+  const which = draw.tickets === 1 ? `Your ${game} ticket` : `${draw.tickets.toLocaleString()} ${game} tickets`
+  return `${which} won in the ${formatDrawDay(draw.drawDate)} draw.`
 }
 
 function copyFor(row: NotificationRow): Copy {
@@ -71,6 +99,13 @@ function copyFor(row: NotificationRow): Copy {
         title: `A transaction on ${name} was reversed`,
         detail: 'Check the ledger for the correction.',
         href: null
+      }
+    case 'ticket-won':
+      return {
+        // A win always has an amount; a missing one says "won" rather than "won 0 CR".
+        title: row.amount === null ? `You won at ${name}` : `You won ${formatAccountCredits(row.amount)} CR at ${name}`,
+        detail: winDetail(row.draw),
+        href: '/tickets'
       }
     default: {
       // Compile time: adding a kind to the union without a case above fails here.

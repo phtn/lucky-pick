@@ -12,6 +12,7 @@ export const RESULT_GAMES = [
 
 export type ResultGame = typeof RESULT_GAMES[number]
 export type ResultGameId = ResultGame['id']
+export const RECENT_RESULT_COUNT = 2
 
 export interface LotteryResult {
   id: string
@@ -39,7 +40,7 @@ export interface ResultIssue {
 
 export interface ResultsManifest {
   version: 1
-  games: Record<ResultGameId, { file: string; rows: number; excludedRows: number }>
+  games: Record<ResultGameId, { file: string; rows: number; excludedRows: number; recent?: LotteryResult[] }>
   report: string
 }
 
@@ -68,6 +69,13 @@ export function createResultsLoader(fetchFile: FetchResults) {
     const manifest = await getManifest()
     if (!/^report\.[a-f0-9]{16}\.json$/.test(manifest.report)) throw new Error('The data report is unavailable.')
     return `/results/generated/${manifest.report}`
+  }
+
+  async function loadRecentResults(): Promise<Partial<Record<ResultGameId, LotteryResult[]>>> {
+    const { games } = await getManifest()
+    const recent: Partial<Record<ResultGameId, LotteryResult[]>> = {}
+    for (const { id } of RESULT_GAMES) recent[id] = games[id]?.recent ?? []
+    return recent
   }
 
   /** Cache each game independently; a failed request can be retried. */
@@ -101,7 +109,7 @@ export function createResultsLoader(fetchFile: FetchResults) {
     datasets.set(game, request)
     return request
   }
-  return { loadResults, loadResultReportUrl }
+  return { loadResults, loadRecentResults, loadResultReportUrl }
 }
 
-export const { loadResults, loadResultReportUrl } = createResultsLoader((url, init) => fetch(url, init))
+export const { loadResults, loadRecentResults, loadResultReportUrl } = createResultsLoader((url, init) => fetch(url, init))

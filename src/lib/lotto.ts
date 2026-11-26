@@ -2,6 +2,7 @@ import { formatJackpot, formatPeso } from './format'
 import { BET_TYPE_VALUES } from './game-settings'
 import { formatOdds, matchAllOdds, tierOdds, type BetType, type GameConfig, type GameId } from './games'
 import type { DrawSeed } from './rng'
+import type { LotteryResult } from './results'
 
 export type { BetType } from './games'
 
@@ -76,8 +77,26 @@ export interface OfficialResult {
   numbers: number[]
   raw: string
   jackpot: number
-  winners: number
+  winners: number | null
   jackpotFormatted: string
+}
+
+const officialDate = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeZone: 'UTC' })
+const officialShortDate = new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+
+export function toOfficialResult(result: LotteryResult | undefined): OfficialResult | undefined {
+  if (!result?.numbers || !result.rawNumbers) return undefined
+  const date = new Date(result.date)
+  const jackpot = result.jackpotCents / 100
+  return {
+    date: officialDate.format(date),
+    dateShort: officialShortDate.format(date).toUpperCase(),
+    numbers: result.numbers,
+    raw: result.rawNumbers,
+    jackpot,
+    winners: result.winners,
+    jackpotFormatted: formatJackpot(jackpot)
+  }
 }
 
 /** A settled ticket and what it collected. `player` is set in party mode only. */
@@ -165,9 +184,14 @@ export const PLAYER_COLORS = [
 // numbers and collects on partial matches; a pick bet wins only if every
 // number it holds is drawn. Mixing their odds in one column read as a
 // contradiction, so each is shown on its own.
-export function jackpotLadder(game: GameConfig, jackpot: number) {
+export function jackpotLadder(game: GameConfig, jackpot: number | null, label = 'Jackpot • rolls over') {
   return [
-    { m: '6/6', prize: formatJackpot(jackpot), odds: formatOdds(tierOdds(game.pool, 6)), sub: 'Jackpot • rolls over' },
+    {
+      m: '6/6',
+      prize: jackpot === null ? '—' : formatJackpot(jackpot),
+      odds: formatOdds(tierOdds(game.pool, 6)),
+      sub: label
+    },
     {
       m: '5/6',
       prize: formatPeso(game.secondary[5]),
@@ -195,7 +219,7 @@ export function pickPaytable(game: GameConfig, stake: BetCost) {
     prize: formatPeso(Math.round(game.payout[k] * stake)),
     odds: formatOdds(matchAllOdds(game.pool, k)),
     bet: k as BetType,
-    sub: `×${game.payout[k].toLocaleString('en-PH')} your stake`
+    sub: `${game.payout[k].toLocaleString('en-PH')}x your stake`
   }))
 }
 

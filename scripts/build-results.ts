@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import { RESULT_GAMES, type ResultGameId, type ResultsManifest } from '../src/lib/results'
+import { RECENT_RESULT_COUNT, RESULT_GAMES, type ResultGameId, type ResultsManifest } from '../src/lib/results'
 import { parseResultCsv } from './results-csv'
 import { buildCsvBaseline } from './results-import-csv'
 
@@ -32,7 +32,12 @@ for (const { dataset } of parsed) {
   const hash = createHash('sha256').update(json).digest('hex').slice(0, 16)
   const file = `${dataset.game}.${hash}.json`
   await writeFile(`${outputDir}/${file}`, json)
-  games[dataset.game as ResultGameId] = { file, rows: dataset.records.length, excludedRows: dataset.excludedRows }
+  games[dataset.game] = {
+    file,
+    rows: dataset.records.length,
+    excludedRows: dataset.excludedRows,
+    recent: dataset.records.filter(record => record.numbers !== null).slice(0, RECENT_RESULT_COUNT),
+  }
 }
 const report = JSON.stringify({ version: 1, issues }, null, 2)
 const reportHash = createHash('sha256').update(report).digest('hex').slice(0, 16)

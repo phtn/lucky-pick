@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'octane';
-import AppHeader from '@/components/topbar/AppHeader.btsx';
+import Topbar from '@/components/topbar/Topbar.btsx';
 import { Outlet } from '@octanejs/tanstack-router';
 import { AnalyticsSessionContext } from '@/lib/analytics-session';
 import { usePathname } from '@/lib/navigation';
@@ -623,10 +623,9 @@ div(className="app-shell min-h-screen w-full max-w-[100vw] text-foreground overf
     div(className="fixed inset-0 pointer-events-none z-[90]")
   div(className="app-frame relative z-10 w-full max-w-[1480px] mx-auto px-4 py-2 overflow-x-hidden")
     AnalyticsSessionContext(value={session})
-      AppHeader(
+      Topbar(
         ~ pool={pool}
         ~ gameName={game.name}
-        ~ game={game}
         ~ gameId={gameId}
         ~ jackpots={jackpots}
         ~ isDrawing={isDrawing}

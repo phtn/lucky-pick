@@ -48,18 +48,18 @@ setup
     ? `${count / (count >= 1_000_000 ? 1_000_000 : 1_000)}${count >= 1_000_000 ? 'M' : 'K'}`
     : String(count);
 
-div(className="random-bets mt-3 rounded-[16px] bg-sunken p-3")
-  div(className="flex items-center justify-between gap-2 mb-6")
-    p(className="text-[10px] tracking-widest text-muted-foreground font-bold flex items-center gap-1.5")
-      | #{" RANDOM PICK"}
-    p(className="text-[10px] font-bold text-muted-foreground")
+div(className="random-bets mt-3 rounded-[16px] bg-sunken py-3")
+  div(className="flex items-center justify-between gap-2 portrait:mb-6 mb-2")
+    p(className="text-sm tracking-widest text-muted-foreground font-bold flex items-center gap-1.5")
+      | #{" LUCKY PICK"}
+    p#tickets-sold(className="hidden text-[10px] font-bold text-muted-foreground")
       | #{formatPeso(betCost)}
       | #{" / bet • "}
       | #{ticketCount}
       | /
       | #{MAX_TICKETS}
       | #{" bought"}
-  div(className="random-bets__options grid grid-cols-5 gap-1.5")
+  div(className="random-bets__options grid grid-cols-4 gap-1.5")
     each m in BET_MULTIPLIERS key m
       button(
         ~ onClick={() => void buyRandom(m)}
@@ -70,10 +70,10 @@ div(className="random-bets mt-3 rounded-[16px] bg-sunken p-3")
         ~ className="relative overflow-hidden h-16 rounded-md bg-raised flex flex-col items-center justify-center leading-none hover:bg-primary/15 hover:border-primary/30 active:scale-[0.97] transition disabled:opacity-30 disabled:cursor-not-allowed aria-busy:opacity-100 aria-busy:cursor-wait"
         ~ )
         span(className="text-base tracking-tight")
-          span(className="text-muted-foreground/80") #{'×'}
-          | #{compactCount(m)}
-        span(className="text-[9px] font-light text-foreground mt-0.5")
+          span(className="text-muted-foreground/80")
           | #{m * betCost >= 50_000 ? `₱${compactCount(m * betCost)}` : formatPeso(m * betCost)}
+        span(className="text-[12px] font-light text-foreground mt-0.5")
+          | #{compactCount(m)} #{`Ticket${m > 1 ? 's' : ''}`}
         if pendingCount === m
           span(className={cn("absolute size-8.5 backdrop-blur-[1px] rounded-full flex items-center justify-center bg-mist-300/50 text-primary", {'animate-spin': pendingCount === m})} aria-hidden={true})
             Icon(name="check-circle-fill" size={16} className="text-mist-700")
@@ -83,8 +83,8 @@ div(className="random-bets mt-3 rounded-[16px] bg-sunken p-3")
       ~ className="bet-submit h-16 rounded-md bg-primary text-primary-foreground shadow-[0_0_12px_var(--lp-glow)] flex flex-col items-center justify-center leading-none hover:brightness-110 active:scale-[0.97] transition disabled:opacity-30 disabled:cursor-not-allowed"
       ~ )
       span(className="text-sm font-black tracking-tight")
-        | BET
-      span(className="text-[9px] font-bold mt-1 opacity-80")
+        | Buy Ticket
+      span(className="text-[12px] font-bold mt-1 opacity-80")
         | #{buyerTag || formatPeso(betCost)}
   if buyError
     p(role="alert" className="mt-2 text-xs text-destructive") #{buyError}

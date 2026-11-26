@@ -23,6 +23,17 @@ test('shares the index and per-game requests while loading only selected games',
   expect(await loader.loadResultReportUrl()).toBe(`/results/generated/report.${hash}.json`)
 })
 
+test('loads recent draws from the shared index without downloading the archives', async () => {
+  const latest = { id: 'lotto:2026-10-06:daily', date: '2026-10-06', time: null, numbers: [7, 35, 41, 37, 8, 11], rawNumbers: '07-35-41-37-08-11', jackpotCents: 8031711363, winners: 0 }
+  const games = { ...manifest.games, lotto: { ...manifest.games.lotto, recent: [latest] } }
+  const fetchFile = mock(async () => json({ ...manifest, games }))
+  const loader = createResultsLoader(fetchFile)
+  const [recent] = await Promise.all([loader.loadRecentResults(), loader.loadResultReportUrl()])
+  expect(recent.lotto).toEqual([latest])
+  expect(recent.mega).toEqual([])
+  expect(fetchFile).toHaveBeenCalledTimes(1)
+})
+
 test('retries a failed index request without retaining a rejected cache entry', async () => {
   let indexCalls = 0
   const fetchFile = mock(async (url: string) => {

@@ -1,10 +1,10 @@
 import { ConvexError, v } from 'convex/values'
 import { query } from '../_generated/server'
 import { getUserByTokenIdentifier } from '../users/q'
-import { NOTIFICATION_HISTORY_LIMIT, notificationKindSchema } from './d'
+import { NOTIFICATION_HISTORY_LIMIT, notificationDrawSchema, notificationKindSchema } from './d'
 
 /**
- * The caller's inbox, newest first. Explicitly narrow: only the seven fields a
+ * The caller's inbox, newest first. Explicitly narrow: only the fields a
  * player needs, with the row id projected as `notificationId`.
  */
 export const mine = query({
@@ -16,6 +16,7 @@ export const mine = query({
       accountId: v.union(v.id('accounts'), v.null()),
       accountName: v.string(),
       amount: v.union(v.number(), v.null()),
+      draw: v.union(notificationDrawSchema, v.null()),
       readAt: v.union(v.number(), v.null()),
       createdAt: v.number()
     })
@@ -40,6 +41,7 @@ export const mine = query({
       accountId: row.accountId,
       accountName: row.accountName,
       amount: row.amount,
+      draw: row.draw ?? null,
       readAt: row.readAt,
       createdAt: row.createdAt
     }))

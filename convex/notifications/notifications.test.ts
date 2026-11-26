@@ -241,15 +241,17 @@ const seed = (t: T, userId: Id<'users'>, createdAt: number, amount: number | nul
     })
   )
 
-test('mine returns exactly the seven permitted keys', async () => {
+test('mine returns exactly the eight permitted keys', async () => {
   const t = makeT()
   const userId = await userIdOf(t, ana)
   await seed(t, userId, 1, 100)
   const rows = await t.withIdentity(ana).query(api.notifications.q.mine, {})
   expect(rows).toHaveLength(1)
   expect(Object.keys(rows[0]).sort()).toEqual(
-    ['accountId', 'accountName', 'amount', 'createdAt', 'kind', 'notificationId', 'readAt'].sort()
+    ['accountId', 'accountName', 'amount', 'createdAt', 'draw', 'kind', 'notificationId', 'readAt'].sort()
   )
+  // A row about no draw says so with null rather than leaving the key out.
+  expect(rows[0].draw).toBeNull()
 })
 
 test("mine returns only the caller's rows, newest first", async () => {

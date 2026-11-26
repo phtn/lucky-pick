@@ -1,6 +1,4 @@
-import NumberGrid from './NumberGrid.btsx';
 import Paytable from './Paytable.btsx';
-import RandomBets from './RandomBets.btsx';
 import { type BetType, type GameConfig } from '@/lib/games';
 import { BET_TYPES, type BetCost } from '@/lib/lotto';
 import { formatPeso } from '@/lib/format';
@@ -12,7 +10,8 @@ module
   // the bulk-buy shortcuts, and the confirm button.
   interface BetPanelProps {
     game: GameConfig;
-    jackpot: number;
+    jackpot: number | null;
+    jackpotLabel?: string;
     betType: BetType;
     betCost: BetCost;
     /**
@@ -40,7 +39,7 @@ module
     onAddTicket: () => void;
   }
 
-props { game, jackpot, betType, betCost, betTypes, stakes, onSelectStake, selected, ticketCount, buyerTag, buyerLabel, isDrawing, onSelectBetType, onToggleNumber, onQuickPick, onEvenOddMix, onClearSelection, onBuyRandom, onAddTicket }: BetPanelProps
+props { game, jackpot, jackpotLabel, betType, betCost, betTypes, stakes, onSelectStake, selected, ticketCount, buyerTag, buyerLabel, isDrawing, onSelectBetType, onToggleNumber, onQuickPick, onEvenOddMix, onClearSelection, onBuyRandom, onAddTicket }: BetPanelProps
 setup
   const pool = game.pool;
   // A bet type is also the count of numbers a ticket holds.
@@ -48,11 +47,11 @@ setup
   const sellable = betTypes ?? BET_TYPES;
   const stakeOptions = stakes ?? [];
 
-div(className="bet-panel bg-sunken p-8! border rounded-[2rem]")
+div(className="bet-panel bg-sunken p-6! portrait:p-4! border portrait:border-0 rounded-[2rem]")
   div(className='flex items-center justify-between mb-4')
     div
       div(className="flex items-center justify-between")
-        h2(className="text-xs font-bold tracking-[0.12em] flex items-center gap-2") STAKES
+        h2(className="text-xs font-bold tracking-[0.02em] flex items-center gap-2") STAKES
       div(className="mb-2")
         div(className="hidden _grid grid-cols-3 gap-1 p-1 rounded-[16px]")
           each bt in sellable key bt
@@ -78,6 +77,7 @@ div(className="bet-panel bg-sunken p-8! border rounded-[2rem]")
         ~ game={game}
         ~ betType={betType}
         ~ jackpot={jackpot}
+        ~ jackpotLabel={jackpotLabel}
         ~ betCost={betCost}
         ~ )
   NewNumberGrid(

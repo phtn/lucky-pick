@@ -371,7 +371,7 @@
 }
 
 .app-header {
-  margin-bottom: 1rem;
+  /*margin-bottom: 1rem;*/
 }
 
 .app-header__layout {
@@ -405,8 +405,7 @@
   width: 100%;
 }
 
-/* Game chips stay centered in the header and become a snap-scrolling rail when
-   the available width can no longer hold all five comfortably. */
+/* The rail centers the chips and lets them share the available width. */
 .game-rail {
   --rail-gutter: 0px;
   display: grid;
@@ -432,7 +431,7 @@
   padding: 8px;
   border-radius: 8px;
   text-align: center;
-  background: calc(var(--input) / 0.7);
+  background: var(--lp-elevated);
   scroll-snap-align: start;
   transition:
     background-color 200ms ease,
@@ -441,7 +440,7 @@
 }
 
 .game-chip:hover:not(:disabled) {
-  background: calc(var(--lp-elevated) * 0.5);
+  background: color-mix(in oklab, var(--lp-elevated) 84%, var(--foreground));
 }
 
 .game-chip:disabled {
@@ -494,7 +493,7 @@
   }
 
   .app-header {
-    margin-bottom: 10px;
+    /*margin-bottom: 10px;*/
   }
 
   .app-header__layout {
@@ -569,7 +568,7 @@
   }
 
   .random-bets__options {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .random-bets__options > button {
@@ -1333,11 +1332,6 @@
     gap: 10px 12px;
   }
 
-  .app-header__games {
-    width: calc(100% + 2rem);
-    margin-inline: -1rem;
-  }
-
   .mode-switch__item {
     height: 34px;
     padding: 0 14px;
@@ -1352,14 +1346,13 @@
   }
 
   .game-rail {
-    --rail-gutter: 16px;
-
-    grid-auto-columns: minmax(92px, 30vw);
+    gap: 4px;
+    grid-auto-columns: minmax(0, 1fr);
+    overflow: visible;
   }
 
   .game-chip {
-    min-height: 44px;
-    padding: 10px 12px;
+    padding: 8px 4px;
     border-radius: 15px;
   }
 

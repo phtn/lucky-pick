@@ -42,6 +42,19 @@ describe('toNotificationItems', () => {
     ])
   })
 
+  test('a ticket win names the amount, the game and the draw, and links to the tickets', () => {
+    const one = only(row('ticket-won', { amount: 900, draw: { game: '6/42', drawDate: '2026-11-17', tickets: 1 } }))
+    assert.deepEqual([one.title, one.detail, one.href], [
+      `You won ${(900).toLocaleString()} CR at Lucky Hall`,
+      'Your Lotto 6/42 ticket won in the Nov 17 draw.',
+      '/tickets'
+    ])
+    const many = only(row('ticket-won', { amount: 5_000, draw: { game: '6/55', drawDate: '2026-12-01', tickets: 3 } }))
+    assert.deepEqual([many.title, many.detail], ['You won 5K CR at Lucky Hall', '3 Grand Lotto 6/55 tickets won in the Dec 1 draw.'])
+    // An older row with no draw still reads sensibly.
+    assert.deepEqual([only(row('ticket-won', { amount: null })).title, only(row('ticket-won')).detail], ['You won at Lucky Hall', null])
+  })
+
   test('interpolates the account name', () => {
     assert.equal(only(row('house-closed', { accountName: 'Zed' })).title, 'Zed was closed')
   })

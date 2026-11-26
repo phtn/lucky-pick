@@ -5,7 +5,7 @@ import GameSwitcher from './GameSwitcher.btsx';
 import { DropdownMenuItem, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu.btsx';
 import { Icon } from '@/lib/icons';
 import { THEMES, type ThemeId, type ThemeMode } from '@/lib/theme';
-import type { GameConfig, GameId } from '@/lib/games';
+import type { GameId } from '@/lib/games';
 import type { GameMode } from '@/lib/lotto';
 import { cn } from '@/lib/utils';
 import { Link } from '@octanejs/tanstack-router';
@@ -16,9 +16,8 @@ module
     /** Ball pool of the selected game, shown inside the wordmark. */
     pool: number;
     gameName: string;
-    game: GameConfig;
     gameId: GameId;
-    jackpots: Record<GameId, number>;
+    jackpots: Partial<Record<GameId, number>>;
     isDrawing: boolean;
     /** The games on sale, in rail order; absent shows every game. */
     gameIds?: GameId[];
@@ -48,7 +47,7 @@ component AnalyticsLink
         Icon(name="columns" size={14})
       span(className="truncate") Analytics
 
-props { pool, gameName, game, gameId, jackpots, isDrawing, gameIds, onSwitchGame, mode, onSelectMode, soundOn, onToggleSound, theme, themeMode, onToggleThemeMode, onPickTheme, onNotify }: AppHeaderProps
+props { pool, gameName, gameId, jackpots, isDrawing, gameIds, onSwitchGame, mode, onSelectMode, soundOn, onToggleSound, theme, themeMode, onToggleThemeMode, onPickTheme, onNotify }: AppHeaderProps
 
 setup
   const pathname = usePathname();
@@ -77,7 +76,6 @@ header(className="app-header")
 
     div(className={cn("app-header__games", {hidden: pathname === "/analytics"})})
       GameSwitcher(
-        ~ game={game}
         ~ gameId={gameId}
         ~ jackpots={jackpots}
         ~ isDrawing={isDrawing}

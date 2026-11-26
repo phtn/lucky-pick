@@ -2,12 +2,13 @@ import { paginationOptsValidator } from 'convex/server'
 import { v } from 'convex/values'
 import { GAMES, betPrize, type BetType, type GameConfig } from '../../src/lib/games'
 import { internal } from '../_generated/api'
-import type { Doc } from '../_generated/dataModel'
+import type { Doc, Id } from '../_generated/dataModel'
 import { internalMutation, type MutationCtx } from '../_generated/server'
 import { gameIdSchema } from '../games/d'
 import { getGameByGameId } from '../games/helpers'
 import { post } from '../ledger/post'
 import { findUserWallet, getPartnerWallets } from '../ledger/wallets'
+import { notify } from '../notifications/helpers'
 import { RESULT_GAME_IDS } from './d'
 
 /** Tickets one settlement transaction handles; the rest continue in a fresh one. */
@@ -95,6 +96,8 @@ export const settleDraw = internalMutation({
 
     let settled = 0, won = 0, skipped = 0
     const now = Date.now()
+    // Wins in this batch, per player per house: one notification each, not one per ticket.
+    const winnings = new Map<string, { userId: Id<'users'>; accountId: Id<'accounts'>; tickets: number; amount: number }>()
     for (const ticket of page.page) {
       const wallet = await findUserWallet(ctx, ticket.accountId, ticket.userId)
       const { earnings } = await getPartnerWallets(ctx, ticket.accountId)
@@ -130,7 +133,25 @@ export const settleDraw = internalMutation({
         settledAt: now
       })
       settled++
-      if (prize > 0) won++
+      if (prize > 0) {
+        won++
+        const key = `${ticket.userId}:${ticket.accountId}`
+        const entry = winnings.get(key) ?? { userId: ticket.userId, accountId: ticket.accountId, tickets: 0, amount: 0 }
+        entry.tickets += 1
+        entry.amount += prize
+        winnings.set(key, entry)
+      }
+    }
+
+    for (const { userId, accountId, tickets, amount } of winnings.values()) {
+      await notify(ctx, {
+        userId,
+        kind: 'ticket-won',
+        accountId,
+        accountName: (await ctx.db.get(accountId))?.name ?? 'your banker',
+        amount,
+        draw: { game, drawDate, tickets }
+      })
     }
 
     if (!page.isDone) {

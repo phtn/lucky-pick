@@ -2,17 +2,22 @@ import { RESULT_TIMES } from './results-normalize'
 import type { LotteryResult, ResultDataset } from './results'
 
 /** CSVs remain authoritative for existing draw identities. */
-export function mergeResultHistory(dataset: ResultDataset, shared: readonly LotteryResult[]): ResultDataset {
-  const ids = new Set(dataset.records.map(record => record.id))
+export function mergeResultRecords(baseline: LotteryResult[], shared: readonly LotteryResult[]): LotteryResult[] {
+  const ids = new Set(baseline.map(record => record.id))
   const added: LotteryResult[] = []
   for (const record of shared) {
     if (ids.has(record.id)) continue
     ids.add(record.id)
     added.push(record)
   }
-  if (!added.length) return dataset
-  const records = [...dataset.records, ...added].sort((a, b) => b.date.localeCompare(a.date) || RESULT_TIMES.indexOf(b.time!) - RESULT_TIMES.indexOf(a.time!))
-  return { ...dataset, records, sourceRows: dataset.sourceRows + added.length }
+  if (!added.length) return baseline
+  return [...baseline, ...added].sort((a, b) => b.date.localeCompare(a.date) || RESULT_TIMES.indexOf(b.time!) - RESULT_TIMES.indexOf(a.time!))
+}
+
+export function mergeResultHistory(dataset: ResultDataset, shared: readonly LotteryResult[]): ResultDataset {
+  const records = mergeResultRecords(dataset.records, shared)
+  if (records === dataset.records) return dataset
+  return { ...dataset, records, sourceRows: dataset.sourceRows + records.length - dataset.records.length }
 }
 
 interface HistorySource {

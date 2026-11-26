@@ -68,7 +68,7 @@ if user !== null
       ~ aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
       ~ )
       div(className={cn("flex aspect-square size-6 items-center justify-center", {'opacity-50': loading || unread < 1})})
-        Icon(name='bell' className={cn('size-9 md:size-5')})
+        Icon(name='bell' className={cn('size-5 md:size-5')})
       if unread > 0
         span(className="absolute right-1 top-0.75 flex min-w-3 items-center justify-center rounded-full bg-destructive px-1 font-mono text-[10px] font-bold leading-3.5 text-white") #{unread > 99 ? '99+' : unread}
     DropdownMenuContent(className="min-w-64 max-w-80 bg-background" align="end" side="bottom" sideOffset={4})

@@ -1,8 +1,42 @@
 import { Outlet, useRouterState } from '@octanejs/tanstack-router'
+import { useLinkedState, useMemo } from 'octane'
+import { useGameSettings } from '@/hooks/use-game-settings'
+import { useRecentGameResults } from '@/hooks/use-recent-game-results'
+import { GameSelectionContext } from '@/lib/game-selection'
+import { enabledGameIds } from '@/lib/game-settings'
+import { GAME_IDS, type GameId } from '@/lib/games'
 import { isAdminRoutePath } from '../lib/routing/admin-subdomain'
 import { isGameRoutePath } from '../lib/routing/app-pages'
 import { asgardHandoffPath } from '../lib/routing/asgard-subdomain'
 import Main from "../components/main/Main.btsx";
+
+component GameSurface
+  props { isPlay }: { isPlay: boolean }
+  setup
+    const gameSettings = useGameSettings()
+    const sellableGames = useMemo(() => enabledGameIds(gameSettings), [gameSettings])
+    const recentResults = useRecentGameResults()
+    const jackpots = useMemo(() => {
+      const prizes: Partial<Record<GameId, number>> = {}
+      for (const id of GAME_IDS) {
+        const latest = recentResults[id]?.[0]
+        if (latest) prizes[id] = latest.jackpotCents / 100
+      }
+      return prizes
+    }, [recentResults])
+    const [gameId, setGameId, getGameId] = useLinkedState(sellableGames, (games, previous): GameId => {
+      const selected = previous?.value ?? '6/42'
+      return games.includes(selected) ? selected : games[0]
+    })
+    const selectGame = (next: GameId) => {
+      if (sellableGames.includes(next)) setGameId(next)
+    }
+
+  GameSelectionContext(value={{ gameId, getGameId, selectGame, gameSettings, sellableGames, recentResults, jackpots }})
+    if isPlay
+      Outlet
+    else
+      Main
 
 // The Asgard handoff is a full-page surface on the main origin: it mints the ID
 // token and leaves. Where the host cannot carry a subdomain the console lives
@@ -17,10 +51,8 @@ setup
   const pathname = useRouterState({ select: (state) => state.location.pathname.replace(/\/$/, '') || '/' })
   const isConsoleSurface =
     pathname === asgardHandoffPath || pathname.startsWith(`${asgardHandoffPath}/`) || isAdminRoutePath(pathname)
-  const isOwnSurface = isConsoleSurface || isGameRoutePath(pathname)
 
-if isOwnSurface
-
+if isConsoleSurface
   Outlet
 else
-  Main
+  GameSurface(isPlay={isGameRoutePath(pathname)})

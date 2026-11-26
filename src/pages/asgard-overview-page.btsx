@@ -65,7 +65,7 @@ section(className='relative overview-page px-4 pb-16 md:px-6')
     Masthead(
       ~ eyebrow='Asgard · Control'
       ~ title='Overview'
-      ~ description='What every account is selling, what it has paid out, and what is riding on the next draws.'
+      ~ description='Sales, payouts and open bets, account by account.'
       ~ )
       div(className='flex items-center gap-2 rounded-full border border-border/50 px-3 py-1.5')
         span(aria-hidden={true} className={cn('size-1.5 rounded-full', error ? 'bg-chart-warn' : 'bg-chart-good')})

@@ -5,7 +5,7 @@ import {Icon} from '@/lib/icons';
 module
   interface OfficialResultCardProps {
     game: GameConfig;
-    /** Most recent recorded PCSO draw for this game, if one ships with it. */
+    /** Most recent recorded PCSO draw for this game. */
     latestOfficial?: OfficialResult;
     prevOfficial?: OfficialResult;
   }
@@ -38,9 +38,10 @@ div(className="rounded-[16px] bg-sunken p-4 relative overflow-hidden")
           | #{" Jackpot "}
           b(className="text-primary")
             | #{latestOfficial.jackpotFormatted}
-        span(className="text-muted-foreground")
-          | #{latestOfficial.winners}
-          | #{" winner(s) • Rollover"}
+        if latestOfficial.winners !== null
+          span(className="text-muted-foreground")
+            | #{latestOfficial.winners}
+            | #{latestOfficial.winners === 1 ? ' winner' : ' winners'}
   else
     div(className="well px-3 py-4 text-[12px] text-muted-foreground leading-[1.45]")
       | #{"No recorded draw stored for "}
