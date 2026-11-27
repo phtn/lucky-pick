@@ -23,7 +23,7 @@ setup
   const allRows = betType === 6 ? jackpotLadder(game, jackpot, jackpotLabel) : pickPaytable(game, betCost);
   const rows = showAll ? allRows : allRows.filter(row => row.m === selectedMatch);
 
-div(className="mb-1 rounded-[14px] overflow-hidden")
+div(className="rounded-[10px] overflow-hidden")
   div(className="hidden px-3 py-2 flex items-center justify-between")
     span(className="select-none text-[10px] font-black tracking-widest text-muted-foreground")
       | #{betType === 6 ? '' : 'PAYTABLE • '}
@@ -32,9 +32,9 @@ div(className="mb-1 rounded-[14px] overflow-hidden")
       | #{betType === 6 ? formatCompactPeso(game.baseJackpot) + '+ BASE' : Math.round(PAYOUT_RTP * 1000) / 10 + '% RETURN'}
   div(className="divide-y divide-[var(--lp-divider)]")
     each r in rows key r.m
-      div(className={`flex flex-col justify-center items-center h-12 px-1.5 text-lg ${r.m === selectedMatch ? 'bg-primary/10' : ''}`})
+      div(className={`flex flex-col justify-center items-center h-12 px-1.5 text-base ${r.m === selectedMatch ? 'bg-primary/10' : ''}`})
         span(className={`font-bold ${r.m === selectedMatch ? 'text-primary' : 'text-foreground'}`})
           | #{r.prize}
         span(className="flex flex-col leading-tight")
-          span(className="text-[12px] text-muted-foreground whitesspace-nowrap")
+          span(className="text-[10px] text-muted-foreground whitespace-nowrap")
             | #{r.sub}

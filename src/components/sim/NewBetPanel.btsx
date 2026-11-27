@@ -47,7 +47,7 @@ setup
   const sellable = betTypes ?? BET_TYPES;
   const stakeOptions = stakes ?? [];
 
-div(className="bet-panel bg-sunken p-6! portrait:p-4! border portrait:border-0 rounded-[2rem]")
+div(className="bet-panel bg-sunken sm:p-6! portrait:p-2! border portrait:border-0 rounded-[1rem] md:rounded-[2rem]")
   div(className='flex items-center justify-between mb-4')
     div
       div(className="flex items-center justify-between")

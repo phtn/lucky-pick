@@ -92,8 +92,8 @@ module
 component TicketReading
   props { label, value, className }: { label: string; value: string; className?: string }
   div(className={cn('min-w-0', className)})
-    dt(className={cn(readingLabelClass, 'mb-0.5 xl:sr-only')}) #{label}
-    dd(className='text-xs tabular-nums sm:text-sm') #{value}
+    dt(className={cn(readingLabelClass, 'text-[9px] mb-0.5 lg:sr-only')}) #{label}
+    dd(className='text-xs tabular-nums sm:text-sm text-foreground') #{value}
 
 component WalletMovements
   props { entries, now }: { entries: Movement[]; now: number }
@@ -171,7 +171,7 @@ setup
   // is no answer at all and reads as an em dash. That the balance is missing is
   // a different fact from its being zero, and showing `0` for both would hide
   // one of them (the rule `lib/asgard/account-detail.ts` already states).
-  const balanceValue = wallet === undefined ? '—' : `${formatCredits(wallet?.available ?? 0)} CR`
+  const balanceValue = wallet === undefined ? '—' : `₱${formatCredits(wallet?.available ?? 0)}`
   // `null` is an answer — there is no wallet, so nothing was ever allocated.
   // `undefined` is no answer yet, which must not be reported as an allocation
   // that never happened.
@@ -348,20 +348,20 @@ setup
 
 section(className='overview-page relative min-w-0 pt-4 [overflow-wrap:anywhere] xl:min-h-0 xl:overflow-y-auto xl:pt-10')
   div(className='pb-8 sm:px-4 xl:px-8')
-    header(className='flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between')
+    header(className='flex min-w-0 _flex-col gap-4 lg:flex-row lg:items-end justify-between')
       div(className='flex min-w-0 items-start gap-3 sm:gap-4')
         UserAvatar(avatarUrl={avatarUrl} onError={() => setBrokenPhotoUrl(photoUrl)})
         div(className='min-w-0')
-          h1(className='overview-title font-sans font-medium leading-tight text-foreground') #{name || 'Your profile'}
+          h1(className='overview-title font-sans font-medium leading-tight text-foreground portrait:text-lg! whitespace-nowrap') #{name || 'Your profile'}
           p(className='mt-1 font-mono text-xs text-muted-foreground') #{email || 'No email on this account'}
-          p(className='mt-2 text-sm text-muted-foreground') Monitor your wallet &amp; ticket activity.
-      div(className='flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:gap-x-5')
+          // p(className='mt-2 text-sm text-muted-foreground') Monitor your wallet &amp; ticket activity.
+      div(className='flex items-center gap-x-3 gap-y-1.5 sm:gap-x-5')
         if isVerified
           span(className={cn(chipClass, 'bg-chart-good/15 text-emerald-700 dark:text-emerald-400')}) verified
         else
           span(className={cn(chipClass, 'bg-amber-500/15 text-amber-700 dark:text-amber-400')}) unverified
-        span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') joined #{formatMemberSince(memberSince)}
-        span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') #{accountRecordLabel}
+        span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground portrait:hidden') joined #{formatMemberSince(memberSince)}
+        // span(className='font-mono text-2xs uppercase tracking-[0.14em] text-muted-foreground') #{accountRecordLabel}
 
     // Signed out is either still being checked or already on its way home.
     if !isSignedIn
@@ -462,12 +462,12 @@ section(className='overview-page relative min-w-0 pt-4 [overflow-wrap:anywhere] 
                     StatTile(
                       ~ hero={true}
                       ~ label='House balance'
-                      ~ value={house.float ? `${formatCredits(house.float.available)} CR` : '—'}
+                      ~ value={house.float ? `₱${formatCredits(house.float.available)}` : '—'}
                       ~ caption={house.float ? 'Float available to hand out.' : 'This house has no float wallet yet.'}
                       ~ )
                     div(className='grid grid-cols-2 gap-3 sm:gap-6')
-                      StatTile(label='Held' value={`${formatCredits(house.float?.held ?? 0)} CR`} caption='Float committed, not settled.')
-                      StatTile(label='Earnings' value={`${formatCredits(house.earnings?.available ?? 0)} CR`} caption='Won from players.')
+                      StatTile(label='Held' value={`₱${formatCredits(house.float?.held ?? 0)}`} caption='Float committed, not settled.')
+                      StatTile(label='Earnings' value={`₱${formatCredits(house.earnings?.available ?? 0)}`} caption='Won from players.')
                   div(className='min-w-0 lg:col-span-3')
                     if house.entries.length === 0
                       Blank(message='This house’s float has not moved yet.')
@@ -483,7 +483,7 @@ section(className='overview-page relative min-w-0 pt-4 [overflow-wrap:anywhere] 
                   ~ caption={balanceCaption}
                   ~ )
                 if wallet
-                  StatTile(label='Held' value={`${formatCredits(wallet.held)} CR`} caption='Committed to open plays.' className='sm:max-w-xs')
+                  StatTile(label='Held' value={`₱${formatCredits(wallet.held)}`} caption='Committed to open plays.' className='sm:max-w-xs')
               div(className='min-w-0 lg:col-span-3')
                 if entries.length === 0
                   Blank(message={hasReadMovements ? 'No credit has moved on your account yet.' : UNREAD_MOVEMENTS})
@@ -557,10 +557,10 @@ section(className='overview-page relative min-w-0 pt-4 [overflow-wrap:anywhere] 
                           span(className='grid size-8 shrink-0 place-items-center rounded-full bg-foreground text-sm font-medium text-background xl:size-9 xl:text-base') #{n}
                       span(className={cn(chipClass, TICKET_STATUS_TONE[ticket.status], 'col-start-2 row-start-1 justify-self-end xl:col-auto xl:row-auto xl:justify-self-start')}) #{ticket.status}
                       dl(className='col-span-2 row-start-3 grid grid-cols-2 gap-x-3 gap-y-2 xl:contents')
-                        TicketReading(label='Draw' value={formatDraw(ticket.drawDate, ticket.drawTime)} className='font-mono text-muted-foreground')
+                        TicketReading(label='Draw' value={formatDraw(ticket.drawDate, ticket.drawTime)} className='font-mono text-muted-foreground whitespace-nowrap')
                         TicketReading(label='Stake' value={`₱${formatCredits(ticket.cost)}`} className='text-right text-foreground')
                         TicketReading(label='Payout' value={`₱${formatCredits(ticket.cost * 360)}`} className='text-muted-foreground xl:text-right')
-                        TicketReading(label='Bought' value={formatRelativeTime(ticket.createdAt, now)} className='text-right font-mono text-muted-foreground')
+                        TicketReading(label='Bought' value={formatRelativeTime(ticket.createdAt, now)} className='text-right font-mono text-muted-foreground whitespace-nowrap')
         elseif activeTab === 'plays'
           Panel(title='Recent plays' collapsible={false} description='One row per resolved draw, newest first.' meta={!hasReadPlays ? 'Not read yet' : rows.length === 0 ? 'No draws' : `${formatCount(playFeed.length)} of ${formatCount(rows.length)}`})
             if playFeed.length === 0

@@ -12,8 +12,8 @@ module
 props { pool, selected, onToggleNumber, onQuickPick, onEvenOddMix, onClear }: NumberGridProps
 
 fragment
-  div(className="number-grid bg-sunken lg:p-6")
-    div(className={`number-grid__new grid select-none portrait:gap-4 gap-2 ${pool > 49 ? 'grid-cols-8 gap-1.75!' : 'grid-cols-7'}`})
+  div(className="number-grid bg-sunken lg:p-5")
+    div(className={`number-grid__new grid select-none portrait:gap-4 gap-2 ${pool > 49 ? 'grid-cols-8 gap-3!' : 'grid-cols-7'}`})
       each n in Array.from({ length: pool }, (_, i) => i + 1) key n
         button(
           ~ onClick={() => onToggleNumber(n)}

@@ -370,7 +370,7 @@
   transform: rotate(-28deg);
 }
 
-.app-header {
+.app-headeapp-header__layoutr {
   /*margin-bottom: 1rem;*/
 }
 
@@ -479,7 +479,7 @@
   }
 
   .app-shell {
-    height: 100dvh;
+    height: 100%;
     min-height: 0;
     overflow: hidden;
   }
@@ -489,7 +489,7 @@
     grid-template-rows: auto minmax(0, 1fr) auto;
     height: 100%;
     /*padding-top: clamp(12px, 2vh, 18px);*/
-    padding-bottom: 8px;
+    /*padding-bottom: 8px;*/
   }
 
   .app-header {
@@ -534,8 +534,7 @@
   }
 
   .app-footer {
-    margin-top: 6px;
-    line-height: 14px;
+    margin-top: 10px;
   }
 
   .bet-panel {

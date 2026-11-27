@@ -20,8 +20,9 @@ props { gameId, jackpots, isDrawing, gameIds, onSwitchGame }: GameSwitcherProps
 
 setup
   const rail = gameIds ?? GAME_IDS;
+  const route = window.location.pathname
 
-div(className="game-switcher")
+div(className={cn('game-switcher', {'hidden': route !== '/tickets'})})
   div(className="game-rail" role="group" aria-label="Choose a lottery game")
     each g in rail key g
       scope
@@ -39,6 +40,6 @@ div(className="game-switcher")
           ~ )
           span(className="flex flex-col items-center justify-center gap-0.5 font-bold leading-none md:landscape:flex-row md:landscape:items-baseline md:landscape:gap-2")
             span(className="text-sm tracking-[-0.02em] font-bold") #{g}
-            span(className="text-sm font-normal opacity-80 sm:text-sm") #{jackpot === undefined ? '—' : formatCompactPeso(jackpot)}
+            span(className="text-[10px] font-normal opacity-80 sm:text-xs") #{jackpot === undefined ? '—' : formatCompactPeso(jackpot)}
           span(className="hidden md:block text-[9px] font-semibold tracking-[0.14em] mt-0.75 truncate opacity-80")
             | #{GAMES[g].name.replace(` ${g}`, '').toUpperCase()}
