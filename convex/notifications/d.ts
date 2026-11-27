@@ -9,17 +9,20 @@ export const notificationKindSchema = v.union(
   v.literal('topup-approved'),
   v.literal('topup-rejected'),
   v.literal('transaction-reversed'),
-  v.literal('ticket-won')
+  v.literal('ticket-won'),
+  v.literal('draw-result')
 )
 
-/** The draw a `ticket-won` notification is about. */
-export const notificationDrawSchema = v.object({
+const drawFields = {
   game: v.string(),
   /** The draw's Manila date, `YYYY-MM-DD`. */
-  drawDate: v.string(),
-  /** Winning tickets this notification covers; `amount` is their prizes together. */
-  tickets: v.number()
-})
+  drawDate: v.string()
+}
+
+export const notificationDrawSchema = v.union(
+  v.object({ ...drawFields, tickets: v.number() }),
+  v.object({ ...drawFields, numbers: v.array(v.number()) })
+)
 
 export type NotificationKind = typeof notificationKindSchema.type
 

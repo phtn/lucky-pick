@@ -16,7 +16,7 @@ const row = (kind: NotificationKind, extra: Partial<NotificationRow> = {}): Noti
 const only = (r: NotificationRow) => toNotificationItems([r])[0]
 
 describe('toNotificationItems', () => {
-  test('renders a title and detail for each of the seven kinds', () => {
+  test('renders a title and detail for house and credit events', () => {
     const awaiting = only(row('house-awaiting-confirmation'))
     assert.deepEqual([awaiting.title, awaiting.detail], [
       'Lucky Hall is waiting for you to confirm',
@@ -53,6 +53,20 @@ describe('toNotificationItems', () => {
     assert.deepEqual([many.title, many.detail], ['You won 5K CR at Lucky Hall', '3 Grand Lotto 6/55 tickets won in the Dec 1 draw.'])
     // An older row with no draw still reads sensibly.
     assert.deepEqual([only(row('ticket-won', { amount: null })).title, only(row('ticket-won')).detail], ['You won at Lucky Hall', null])
+  })
+
+  test('a draw result shows the official numbers in draw order and links to the tickets', () => {
+    const item = only(row('draw-result', {
+      accountId: null,
+      accountName: '',
+      draw: { game: '6/42', drawDate: '2026-11-17', numbers: [6, 5, 4, 3, 2, 1] }
+    }))
+    assert.deepEqual([item.title, item.detail, item.href, item.isUnread], [
+      'Lotto 6/42 results · Nov 17',
+      '06 · 05 · 04 · 03 · 02 · 01',
+      '/tickets',
+      true
+    ])
   })
 
   test('interpolates the account name', () => {

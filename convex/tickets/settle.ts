@@ -94,6 +94,24 @@ export const settleDraw = internalMutation({
       )
       .paginate(paginationOpts ?? { numItems: SETTLE_BATCH, cursor: null })
 
+    // Pending tickets qualify even when their wallets delay settlement.
+    for (const userId of new Set(page.page.map((ticket) => ticket.userId))) {
+      const receipt = await ctx.db
+        .query('drawResultNotifications')
+        .withIndex('by_resultId_and_userId', (q) => q.eq('resultId', result._id).eq('userId', userId))
+        .unique()
+      if (receipt) continue
+
+      await notify(ctx, {
+        userId,
+        kind: 'draw-result',
+        accountId: null,
+        accountName: '',
+        draw: { game, drawDate, numbers: result.numbers }
+      })
+      await ctx.db.insert('drawResultNotifications', { resultId: result._id, userId })
+    }
+
     let settled = 0, won = 0, skipped = 0
     const now = Date.now()
     // Wins in this batch, per player per house: one notification each, not one per ticket.

@@ -74,4 +74,9 @@ export default defineSchema({
     .index('by_game_and_drawDate_and_status', ['game', 'drawDate', 'status']),
   practicePlays: defineTable(practicePlayFields).index('by_userId_and_drawnAt', ['userId', 'drawnAt']),
   notifications: defineTable(notificationFields).index('by_userId_and_createdAt', ['userId', 'createdAt']),
+  // Keep delivery receipts even after the player's inbox trims the notification.
+  drawResultNotifications: defineTable({
+    resultId: v.id('historicalResults'),
+    userId: v.id('users'),
+  }).index('by_resultId_and_userId', ['resultId', 'userId']),
 })

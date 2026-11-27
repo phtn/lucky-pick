@@ -92,6 +92,7 @@ test('a new result settles every ticket in its draw, moving stakes and prizes th
   await importResult(t, '2000-01-01', '01-02-03-04-05-06')
   await runScheduled(t)
   expect((await t.withIdentity(ana).query(api.tickets.q.mine, {})).every((ticket) => ticket.status === 'pending')).toBe(true)
+  expect(await t.withIdentity(ana).query(api.notifications.q.mine, {})).toEqual([])
 
   await importResult(t, drawDate, '06-05-04-03-02-01', '10,000.00')
   await runScheduled(t)
@@ -108,21 +109,29 @@ test('a new result settles every ticket in its draw, moving stakes and prizes th
   expect(await balances(t, accountId, anaId)).toEqual({ available: 900 + prizes, held: 0, earnings: 100 - prizes })
   expect(await t.run((ctx) => auditWallets(ctx))).toEqual({ total: 0, mismatched: [] })
 
-  // Ana hears once about all three wins, with their prizes together.
-  expect(await t.withIdentity(ana).query(api.notifications.q.mine, {})).toEqual([
+  const inbox = await t.withIdentity(ana).query(api.notifications.q.mine, {})
+  expect(inbox).toHaveLength(2)
+  expect(inbox).toEqual(expect.arrayContaining([
     expect.objectContaining({
       kind: 'ticket-won', accountId, accountName: 'Casa Uno', amount: prizes, readAt: null,
       draw: { game: '6/42', drawDate, tickets: 3 }
+    }),
+    expect.objectContaining({
+      kind: 'draw-result', accountId: null, amount: null, readAt: null,
+      draw: { game: '6/42', drawDate, numbers: [6, 5, 4, 3, 2, 1] }
     })
-  ])
+  ]))
+  expect(await t.withIdentity(owner).query(api.notifications.q.mine, {})).not.toContainEqual(
+    expect.objectContaining({ kind: 'draw-result' })
+  )
 
   // Settling the same draw again changes nothing.
   expect(await t.mutation(internal.tickets.settle.settleDraw, { game: '6/42', drawDate })).toMatchObject({ settled: 0 })
   expect(await balances(t, accountId, anaId)).toEqual({ available: 900 + prizes, held: 0, earnings: 100 - prizes })
-  expect(await t.withIdentity(ana).query(api.notifications.q.mine, {})).toHaveLength(1)
+  expect(await t.withIdentity(ana).query(api.notifications.q.mine, {})).toEqual(inbox)
 })
 
-test('a large draw settles in batches, and a frozen wallet is passed over until its draw is scheduled again', async () => {
+test('a large draw notifies once across batches and retries, even before a frozen wallet settles', async () => {
   vi.useFakeTimers()
   const { t, accountId, anaId } = await setup(5_000)
   const count = SETTLE_BATCH + 10
@@ -134,6 +143,10 @@ test('a large draw settles in batches, and a frozen wallet is passed over until 
   await importResult(t, drawDate, '01-02-03-04-05-06')
   await runScheduled(t)
   expect((await t.withIdentity(ana).query(api.tickets.q.mine, {})).every((ticket) => ticket.status === 'pending')).toBe(true)
+  const inbox = await t.withIdentity(ana).query(api.notifications.q.mine, {})
+  expect(inbox).toEqual([
+    expect.objectContaining({ kind: 'draw-result', draw: { game: '6/42', drawDate, numbers: [1, 2, 3, 4, 5, 6] } })
+  ])
 
   await t.run((ctx) => ctx.db.patch(walletId, { status: 'active' }))
   await t.mutation(internal.tickets.settle.settleDraw, { game: '6/42', drawDate })
@@ -141,7 +154,6 @@ test('a large draw settles in batches, and a frozen wallet is passed over until 
   const mine = await t.withIdentity(ana).query(api.tickets.q.mine, {})
   expect(mine).toHaveLength(count)
   expect(mine.every((ticket) => ticket.status === 'lost')).toBe(true)
-  // Nobody won, so nobody is notified.
-  expect(await t.withIdentity(ana).query(api.notifications.q.mine, {})).toEqual([])
+  expect(await t.withIdentity(ana).query(api.notifications.q.mine, {})).toEqual(inbox)
   expect(await balances(t, accountId, anaId)).toEqual({ available: 5_000 - count * 25, held: 0, earnings: count * 25 })
 })

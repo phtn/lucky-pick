@@ -14,14 +14,15 @@ export type NotificationKind =
   | 'topup-rejected'
   | 'transaction-reversed'
   | 'ticket-won'
+  | 'draw-result'
 
-/** The draw a `ticket-won` notification is about. */
-export interface NotificationDraw {
+interface Draw {
   game: string
   /** Manila calendar date, `YYYY-MM-DD`. */
   drawDate: string
-  tickets: number
 }
+
+export type NotificationDraw = Draw & ({ tickets: number } | { numbers: number[] })
 
 export interface NotificationRow {
   notificationId: string
@@ -59,7 +60,7 @@ const formatDrawDay = (date: string) => {
 
 /** `Your Lotto 6/42 ticket won in the Nov 17 draw.` / `2 Lotto 6/42 tickets won …` */
 function winDetail(draw: NotificationDraw | null | undefined): string | null {
-  if (!draw) return null
+  if (!draw || !('tickets' in draw)) return null
   const game = GAMES[draw.game as GameId]?.name ?? draw.game
   const which = draw.tickets === 1 ? `Your ${game} ticket` : `${draw.tickets.toLocaleString()} ${game} tickets`
   return `${which} won in the ${formatDrawDay(draw.drawDate)} draw.`
@@ -107,6 +108,16 @@ function copyFor(row: NotificationRow): Copy {
         detail: winDetail(row.draw),
         href: '/tickets'
       }
+    case 'draw-result': {
+      const draw = row.draw
+      if (!draw || !('numbers' in draw)) return { title: 'Draw results are in', detail: null, href: '/tickets' }
+      const game = GAMES[draw.game as GameId]?.name ?? draw.game
+      return {
+        title: `${game} results · ${formatDrawDay(draw.drawDate)}`,
+        detail: draw.numbers.map((number) => String(number).padStart(2, '0')).join(' · '),
+        href: '/tickets'
+      }
+    }
     default: {
       // Compile time: adding a kind to the union without a case above fails here.
       const unhandled: never = row.kind
