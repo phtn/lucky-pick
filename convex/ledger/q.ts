@@ -19,7 +19,7 @@ const requireAccountReader = async (ctx: QueryCtx, accountId: Id<'accounts'>) =>
 /** How much of a float's life one read returns. */
 const FLOAT_HISTORY_LIMIT = 50
 
-/** Published to both `partnerFloatHistory` and `myLedgerHistory`: one joined-entry shape, so the two panels cannot drift. */
+/** A single ledger leg with the transaction's display fields. */
 const historyEntryValidator = v.object({
   _id: v.id('ledgerEntries'),
   amount: v.number(),
@@ -29,6 +29,9 @@ const historyEntryValidator = v.object({
   kind: ledgerKindSchema,
   memo: v.union(v.string(), v.null())
 })
+
+const walletMovementValidator = historyEntryValidator.omit('_id', 'bucket').extend({ _id: v.id('ledgerTransactions') })
+type WalletMovement = typeof walletMovementValidator.type
 
 /**
  * Joins each entry to the kind and memo of its transaction, keeping the order.
@@ -62,6 +65,35 @@ const withTransactionHeaders = async (ctx: QueryCtx, entries: Doc<'ledgerEntries
       }
     ]
   })
+}
+
+/** Activities that changed spendable credits, with the balance after each one. */
+const readWalletMovements = async (ctx: QueryCtx, walletId: Id<'wallets'>, limit: number) => {
+  const movements: Omit<WalletMovement, 'kind' | 'memo'>[] = []
+  let movement: Omit<WalletMovement, 'kind' | 'memo' | 'amount'> | undefined
+  let amount = 0n
+  for await (const entry of ctx.db
+    .query('ledgerEntries')
+    .withIndex('by_walletId_and_bucket_and_createdAt', (q) => q.eq('walletId', walletId).eq('bucket', 'available'))
+    .order('desc')) {
+    if (movement?._id !== entry.txnId) {
+      if (movement && amount !== 0n) movements.push({ ...movement, amount: Number(amount) })
+      if (movements.length === limit) break
+      // Newest first, so this leg carries the balance at the end of the activity.
+      movement = { _id: entry.txnId, createdAt: entry.createdAt, balanceAfter: entry.balanceAfter }
+      amount = 0n
+    }
+    amount += BigInt(entry.amount)
+  }
+  if (movement && amount !== 0n && movements.length < limit) {
+    movements.push({ ...movement, amount: Number(amount) })
+  }
+
+  const joined = await Promise.all(movements.map(async (row) => {
+    const txn = await ctx.db.get('ledgerTransactions', row._id)
+    return txn ? { ...row, kind: txn.kind, memo: txn.memo } : null
+  }))
+  return joined.filter((row) => row !== null)
 }
 
 /** The signed-in user's own wallet, or `null` when signed out, unseen, or never allocated credits. */
@@ -168,7 +200,7 @@ export const myHouseWallets = query({
       name: v.string(),
       float: balanceValidator,
       earnings: balanceValidator,
-      entries: v.array(historyEntryValidator)
+      entries: v.array(walletMovementValidator)
     })
   ),
   handler: async (ctx) => {
@@ -185,20 +217,12 @@ export const myHouseWallets = query({
     const houses = []
     for (const account of accounts) {
       const { float, earnings } = await findPartnerWallets(ctx, account._id)
-      const entries = float
-        ? await ctx.db
-            .query('ledgerEntries')
-            .withIndex('by_walletId_and_createdAt', (q) => q.eq('walletId', float._id))
-            .order('desc')
-            .take(MY_HISTORY_LIMIT)
-        : []
-
       houses.push({
         accountId: account._id,
         name: account.name,
         float: readBalance(float),
         earnings: readBalance(earnings),
-        entries: await withTransactionHeaders(ctx, entries)
+        entries: float ? await readWalletMovements(ctx, float._id, MY_HISTORY_LIMIT) : []
       })
     }
 
@@ -268,12 +292,11 @@ export const myWallet = query({
 })
 
 /**
- * The caller's own recent movements, newest first, shaped like
- * `partnerFloatHistory`. Capped rather than paginated: it feeds a fixed panel.
+ * The caller's own recent wallet activities, newest first.
  */
 export const myLedgerHistory = query({
   args: { limit: v.optional(v.number()) },
-  returns: v.array(historyEntryValidator),
+  returns: v.array(walletMovementValidator),
   handler: async (ctx, { limit }) => {
     const wallet = await findMyWallet(ctx)
     if (!wallet) return []
@@ -281,14 +304,9 @@ export const myLedgerHistory = query({
     // Clamps up to 1, like `partnerFloatHistory` beside it; `plays.q.mine`
     // reads a non-positive limit as malformed and falls back to its own page
     // size. Each follows its own neighbourhood's convention.
-    const take = Math.min(Math.max(Math.floor(limit ?? MY_HISTORY_LIMIT), 1), MY_HISTORY_LIMIT)
-    const entries = await ctx.db
-      .query('ledgerEntries')
-      .withIndex('by_walletId_and_createdAt', (q) => q.eq('walletId', wallet._id))
-      .order('desc')
-      .take(take)
-
-    return await withTransactionHeaders(ctx, entries)
+    const requested = limit === undefined || Number.isNaN(limit) ? MY_HISTORY_LIMIT : Math.floor(limit)
+    const take = Math.min(Math.max(requested, 1), MY_HISTORY_LIMIT)
+    return await readWalletMovements(ctx, wallet._id, take)
   }
 })
 

@@ -21,13 +21,14 @@ import {
   nextDrawDate,
   ticketStatusSchema
 } from './d'
+import { findDrawResult } from './results'
 
 /**
- * The caller's own tickets, newest first. Derived from the identity, so there
- * is no id to probe. Capped rather than paged: it feeds one fixed list.
+ * The caller's own tickets, newest purchase first, or their settled tickets
+ * in draw order when requested. Both lists are capped.
  */
 export const mine = query({
-  args: { limit: v.optional(v.number()) },
+  args: { limit: v.optional(v.number()), drawn: v.optional(v.boolean()) },
   returns: v.array(
     v.object({
       ticketId: v.id('tickets'),
@@ -42,10 +43,11 @@ export const mine = query({
       /** `null` for a ticket bought before draws were recorded on tickets. */
       drawDate: v.union(v.string(), v.null()),
       drawTime: v.union(v.string(), v.null()),
+      drawnNumbers: v.optional(v.union(v.array(v.number()), v.null())),
       createdAt: v.number()
     })
   ),
-  handler: async (ctx, { limit }) => {
+  handler: async (ctx, { limit, drawn }) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new ConvexError('Unauthorized.')
 
@@ -54,13 +56,37 @@ export const mine = query({
     if (!user) return []
 
     const take = Math.min(Math.max(Math.floor(limit ?? MY_TICKETS_LIMIT), 1), MY_TICKETS_LIMIT)
-    const rows = await ctx.db
-      .query('tickets')
-      .withIndex('by_userId_and_createdAt', (q) => q.eq('userId', user._id))
-      .order('desc')
-      .take(take)
+    let rows: Doc<'tickets'>[]
+    if (drawn) {
+      const [won, lost] = await Promise.all((['won', 'lost'] as const).map((status) =>
+        ctx.db
+          .query('tickets')
+          .withIndex('by_userId_and_status_and_drawDate', (q) => q.eq('userId', user._id).eq('status', status))
+          .order('desc')
+          .take(take)
+      ))
+      rows = [...won, ...lost]
+        .sort((a, b) => (b.drawDate ?? '').localeCompare(a.drawDate ?? '') || b._creationTime - a._creationTime)
+        .slice(0, take)
+    } else {
+      rows = await ctx.db
+        .query('tickets')
+        .withIndex('by_userId_and_createdAt', (q) => q.eq('userId', user._id))
+        .order('desc')
+        .take(take)
+    }
 
-    return rows.map((row) => ({
+    const numbersByDraw = new Map<string, Promise<number[] | null>>()
+    const readDrawnNumbers = (row: Doc<'tickets'>) => {
+      if (!row.drawDate) return null
+      const key = `${row.game}:${row.drawDate}`
+      const numbers = numbersByDraw.get(key) ??
+        findDrawResult(ctx, row.game, row.drawDate).then((result) => result?.numbers ?? null)
+      numbersByDraw.set(key, numbers)
+      return numbers
+    }
+
+    return await Promise.all(rows.map(async (row) => ({
       ticketId: row._id,
       accountId: row.accountId,
       game: row.game,
@@ -72,8 +98,9 @@ export const mine = query({
       prizeWon: row.prizeWon ?? null,
       drawDate: row.drawDate ?? null,
       drawTime: row.drawTime ?? null,
+      ...(drawn ? { drawnNumbers: await readDrawnNumbers(row) } : {}),
       createdAt: row.createdAt
-    }))
+    })))
   }
 })
 

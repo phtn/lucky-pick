@@ -71,6 +71,32 @@ test('buying tickets holds the stake and stores each ticket as pending', async (
   expect(await t.withIdentity(ben).query(api.tickets.q.mine, {})).toEqual([])
 })
 
+test('drawn tickets include wins and losses, ordered by draw date before the limit is applied', async () => {
+  const { t, accountId, anaId } = await setup()
+  const { newerDraw, olderDraw } = await t.run(async (ctx) => {
+    const ticket = { userId: anaId, accountId, game: '6/42' as const, betType: 1 as const, numbers: [6], cost: 25 }
+    const newerDraw = await ctx.db.insert('tickets', {
+      ...ticket, status: 'lost', hits: 0, drawDate: '2026-11-24', createdAt: 1
+    })
+    const olderDraw = await ctx.db.insert('tickets', {
+      ...ticket, status: 'won', hits: 1, prizeWon: 150, drawDate: '2026-11-22', createdAt: 2
+    })
+    await ctx.db.insert('tickets', {
+      ...ticket, status: 'pending', hits: 0, drawDate: '2026-11-26', createdAt: 3
+    })
+    return { newerDraw, olderDraw }
+  })
+
+  const client = t.withIdentity(ana)
+  expect(await client.query(api.tickets.q.mine, { drawn: true })).toMatchObject([
+    { ticketId: newerDraw, status: 'lost', hits: 0, prizeWon: null, drawnNumbers: null },
+    { ticketId: olderDraw, status: 'won', hits: 1, prizeWon: 150, drawnNumbers: null }
+  ])
+  expect(await client.query(api.tickets.q.mine, { drawn: true, limit: 1 })).toMatchObject([{ ticketId: newerDraw }])
+  expect(await client.query(api.tickets.q.mine, { limit: 1 })).toMatchObject([{ status: 'pending' }])
+  expect(await t.withIdentity(ben).query(api.tickets.q.mine, { drawn: true })).toEqual([])
+})
+
 test('a retried purchase replays instead of buying twice', async () => {
   const { t, accountId, anaId } = await setup()
   await buy(t, ana, [[1, 2, 3, 4, 5, 6]])

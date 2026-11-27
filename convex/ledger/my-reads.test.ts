@@ -121,7 +121,7 @@ test('myLedgerHistory is empty when signed out or without a wallet', async () =>
   expect(await t.withIdentity(cat).query(api.ledger.q.myLedgerHistory, {})).toEqual([])
 })
 
-test("myLedgerHistory returns the caller's entries newest first with kind and memo", async () => {
+test("myLedgerHistory returns the caller's activities newest first with kind and memo", async () => {
   const { t, anaId, benId } = await setup()
   const anaWallet = await insertUserWallet(t, anaId)
   const benWallet = await insertUserWallet(t, benId)
@@ -129,13 +129,13 @@ test("myLedgerHistory returns the caller's entries newest first with kind and me
   await credit(t, benWallet, [999], () => 'not ana')
 
   const history = await t.withIdentity(ana).query(api.ledger.q.myLedgerHistory, {})
-  expect(history.map((e) => [e.amount, e.balanceAfter, e.bucket, e.kind, e.memo])).toEqual([
-    [30, 60, 'available', 'mint', 'grant 30'],
-    [20, 30, 'available', 'mint', null],
-    [10, 10, 'available', 'mint', 'grant 10']
+  expect(history.map((e) => [e.amount, e.balanceAfter, e.kind, e.memo])).toEqual([
+    [30, 60, 'mint', 'grant 30'],
+    [20, 30, 'mint', null],
+    [10, 10, 'mint', 'grant 10']
   ])
   for (const entry of history) {
-    expect(Object.keys(entry).sort()).toEqual(['_id', 'amount', 'balanceAfter', 'bucket', 'createdAt', 'kind', 'memo'])
+    expect(Object.keys(entry).sort()).toEqual(['_id', 'amount', 'balanceAfter', 'createdAt', 'kind', 'memo'])
   }
   expect(history.map((e) => e.memo)).not.toContain('not ana')
 })
@@ -153,6 +153,7 @@ test('myLedgerHistory clamps limit and caps at the history limit', async () => {
   expect(await read(0)).toHaveLength(1)
   expect(await read(-3)).toHaveLength(1)
   expect(await read(2.9)).toHaveLength(2)
+  expect(await read(NaN)).toHaveLength(20)
   // Newest first: the limit trims the old end, not the new one.
   expect((await read(3)).map((e) => e.amount)).toEqual([25, 24, 23])
 })

@@ -87,6 +87,9 @@ test('a new result settles every ticket in its draw, moving stakes and prizes th
   const tickets = await t.withIdentity(ana).query(api.tickets.q.mine, {})
   const drawDate = tickets[0]!.drawDate!
   expect(await balances(t, accountId, anaId)).toEqual({ available: 900, held: 100, earnings: 0 })
+  expect(await t.withIdentity(ana).query(api.ledger.q.myLedgerHistory, { limit: 1 })).toMatchObject([
+    { kind: 'ticketHold', amount: -25, balanceAfter: 900 }
+  ])
 
   // A result for another day touches nothing.
   await importResult(t, '2000-01-01', '01-02-03-04-05-06')
@@ -105,9 +108,22 @@ test('a new result settles every ticket in its draw, moving stakes and prizes th
   expect(settled.get('10-20-30-40-41-42')).toMatchObject({ status: 'lost', hits: 0, prizeWon: null })
   expect(settled.get('1-2')).toMatchObject({ status: 'won', hits: 2, prizeWon: pick2 })
 
+  const drawn = await t.withIdentity(ana).query(api.tickets.q.mine, { drawn: true })
+  expect(drawn.map((ticket) => ticket.drawnNumbers)).toEqual(Array.from({ length: 4 }, () => [6, 5, 4, 3, 2, 1]))
+
   const prizes = 10_000 + consolation + pick2
   expect(await balances(t, accountId, anaId)).toEqual({ available: 900 + prizes, held: 0, earnings: 100 - prizes })
   expect(await t.run((ctx) => auditWallets(ctx))).toEqual({ total: 0, mismatched: [] })
+
+  const movements = await t.withIdentity(ana).query(api.ledger.q.myLedgerHistory, {})
+  expect(movements.map(({ kind, amount, balanceAfter }) => [kind, amount, balanceAfter])).toEqual([
+    ['ticketCapture', pick2, 900 + prizes],
+    ['ticketCapture', consolation, 10_900 + consolation],
+    ['ticketCapture', 10_000, 10_900],
+    ['ticketHold', -25, 900],
+    ['ticketHold', -75, 925],
+    ['allocate', 1_000, 1_000]
+  ])
 
   const inbox = await t.withIdentity(ana).query(api.notifications.q.mine, {})
   expect(inbox).toHaveLength(2)
@@ -156,4 +172,7 @@ test('a large draw notifies once across batches and retries, even before a froze
   expect(mine.every((ticket) => ticket.status === 'lost')).toBe(true)
   expect(await t.withIdentity(ana).query(api.notifications.q.mine, {})).toEqual(inbox)
   expect(await balances(t, accountId, anaId)).toEqual({ available: 5_000 - count * 25, held: 0, earnings: count * 25 })
+  expect(await t.withIdentity(ana).query(api.ledger.q.myLedgerHistory, { limit: 1 })).toMatchObject([
+    { kind: 'ticketHold', amount: -count * 25, balanceAfter: 5_000 - count * 25 }
+  ])
 })

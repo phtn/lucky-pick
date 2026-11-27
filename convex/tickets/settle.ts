@@ -10,6 +10,7 @@ import { post } from '../ledger/post'
 import { findUserWallet, getPartnerWallets } from '../ledger/wallets'
 import { notify } from '../notifications/helpers'
 import { RESULT_GAME_IDS } from './d'
+import { findDrawResult } from './results'
 
 /** Tickets one settlement transaction handles; the rest continue in a fresh one. */
 export const SETTLE_BATCH = 50
@@ -48,18 +49,6 @@ export function ticketPrize(
 export const ticketGameForResult = (game: Doc<'historicalResults'>['game']) =>
   (RESULT_GAME_IDS as Record<string, Doc<'tickets'>['game']>)[game] ?? null
 
-/** The PCSO result a draw settles against: one per game and date for the six-ball games. */
-async function findResult(ctx: MutationCtx, game: Doc<'tickets'>['game'], drawDate: string) {
-  const resultGame = (Object.entries(RESULT_GAME_IDS) as [Doc<'historicalResults'>['game'], string][]).find(
-    ([, ticketGame]) => ticketGame === game
-  )?.[0]
-  if (!resultGame) return null
-  return await ctx.db
-    .query('historicalResults')
-    .withIndex('by_game_and_date', (q) => q.eq('game', resultGame).eq('date', drawDate))
-    .first()
-}
-
 /**
  * Settle one batch of a draw's pending tickets, then hand the rest to a fresh
  * transaction. Each ticket is one `ticketCapture`: its stake leaves the
@@ -78,7 +67,7 @@ export const settleDraw = internalMutation({
   },
   returns: v.object({ settled: v.number(), won: v.number(), skipped: v.number(), done: v.boolean() }),
   handler: async (ctx, { game, drawDate, paginationOpts }) => {
-    const result = await findResult(ctx, game, drawDate)
+    const result = await findDrawResult(ctx, game, drawDate)
     // No result yet (or one imported without numbers): nothing can settle.
     if (!result?.numbers) return { settled: 0, won: 0, skipped: 0, done: true }
 

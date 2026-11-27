@@ -34,14 +34,9 @@ module
   const EMPTY_PLAYS: PracticePlayRow[] = []
   const EMPTY_TICKETS: MyTicket[] = []
 
-  // Both panels are fixed-height, so both reads are capped rather than paged.
-  // The plays read takes the backend's own default page: a row carries up to
-  // TICKET_DETAIL_LIMIT ticket details, so a live subscription over the full
-  // PLAY_HISTORY_LIMIT would be a large payload for a panel that leads with a
-  // summary. The statistics therefore describe this window, and say so.
   const MOVEMENT_ARGS = { limit: MY_HISTORY_LIMIT }
   const PLAYS_ARGS = { limit: DEFAULT_PLAY_PAGE }
-  const PLAY_FEED_LIMIT = 10
+  const RECENT_TICKETS_ARGS = { drawn: true, limit: 10 }
   // The newest tickets only: `tickets.q.mine` can return up to its own cap of
   // 500 for the board, which is more than a profile tab should subscribe to.
   const TICKETS_ARGS = { limit: 50 }
@@ -50,6 +45,7 @@ module
   const chipClass = 'rounded px-1.5 py-1 font-mono text-2xs uppercase tracking-wider'
   const blankClass = 'rounded-lg border border-dashed border-border/60 px-4 py-10 text-center text-sm text-muted-foreground'
   const ticketColumns = 'xl:grid-cols-[minmax(0,1.1fr)_minmax(14rem,1.75fr)_minmax(0,.65fr)_minmax(0,1.2fr)_minmax(0,.6fr)_minmax(0,.75fr)_minmax(0,.85fr)]'
+  const recentTicketNumberClass = 'inline-flex min-h-6 min-w-6 items-center justify-center gap-0.5 rounded-md px-1 tabular-nums'
 
   // A credit that came in, or a draw that paid: never colour alone, since each
   // one sits beside a figure that carries its own sign.
@@ -70,11 +66,6 @@ module
   const formatNet = (net: number) => (net < 0 ? `−${formatPeso(-net)}` : formatPeso(net))
 
   const formatHits = (hits: number) => (hits === 1 ? '1 hit' : `${hits} hits`)
-
-  // A draw is stored in draw order, because reproducing a simulated draw needs
-  // the order the drum spat the balls out. A reader wants them ascending, the
-  // way `DrawHistory` shows the same draw, so the copy is sorted here.
-  const formatDrawnBalls = (balls: readonly number[]) => [...balls].sort((a, b) => a - b).join(' · ')
 
   // A read that has not answered is not an account where nothing happened, so
   // the two states are never given the same sentence.
@@ -103,10 +94,8 @@ component WalletMovements
         span(className='row-start-2 font-mono text-2xs text-muted-foreground lg:w-20 lg:shrink-0') #{formatRelativeTime(entry.createdAt, now)}
         div(className='col-start-1 row-start-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 lg:flex-1')
           span(className='min-w-0 text-sm text-foreground') #{formatLedgerLabel(entry)}
-          if entry.bucket === 'held'
-            span(className={cn(chipClass, 'bg-foreground/5 text-muted-foreground')}) held
-        span(className={cn('col-start-2 row-start-1 text-right font-mono text-sm tabular-nums lg:min-w-20', entry.amount < 0 ? 'text-destructive' : POSITIVE_TONE)}) #{formatLedgerAmount(entry.amount)}
-        span(className='hidden min-w-20 text-right font-mono text-2xs tabular-nums text-muted-foreground/70 lg:inline') #{formatCredits(entry.balanceAfter)}
+        span(className={cn('col-start-2 row-start-1 text-right font-mono text-xs tabular-nums lg:min-w-20', entry.amount < 0 ? 'text-destructive' : POSITIVE_TONE)}) #{formatLedgerAmount(entry.amount)}
+        span(className='col-start-2 row-start-2 whitespace-nowrap text-right font-mono text-xs tabular-nums text-muted-foreground lg:min-w-28') #{formatCredits(entry.balanceAfter)}
 
 // What a panel says when it has nothing to show, which is never an error here.
 component Blank
@@ -148,7 +137,6 @@ setup
   const profile = useConvexQuery(api.users.q.current, {}, { enabled: isSignedIn })
   const wallet = useConvexQuery(api.ledger.q.myWallet, {}, { enabled: isSignedIn })
   const movements = useConvexQuery(api.ledger.q.myLedgerHistory, MOVEMENT_ARGS, { enabled: isSignedIn })
-  const plays = useConvexQuery(api.plays.q.mine, PLAYS_ARGS, { enabled: isSignedIn })
   const myHouses = useConvexQuery(api.accounts.q.myHouses, {}, { enabled: isSignedIn })
   const tickets = useConvexQuery(api.tickets.q.mine, TICKETS_ARGS, { enabled: isSignedIn })
   const claimableTopups = useConvexQuery(api.money.topups.claimable, {}, { enabled: isSignedIn })
@@ -158,13 +146,6 @@ setup
 
   const now = Date.now()
   const entries = movements ?? EMPTY_MOVEMENTS
-  const rows = plays ?? EMPTY_PLAYS
-  const playFeed = rows.slice(0, PLAY_FEED_LIMIT)
-  const stats = readPracticeStats(rows)
-  // Read out of `stats` so the template can narrow them; `bestDraw` is already
-  // null when nothing was won, so the tile is simply absent then.
-  const bestDraw = stats.bestDraw
-  const favouriteGame = stats.favouriteGame
 
   // A user who has never been allocated credits has no wallet row at all. That
   // is a zero balance, not a failure, so `null` reads as one — while `undefined`
@@ -194,7 +175,6 @@ setup
   // landing, so an account with credits and draws must not be told in it that
   // nothing has ever happened on it.
   const hasReadMovements = movements !== undefined
-  const hasReadPlays = plays !== undefined
   const hasReadTickets = tickets !== undefined
   const ticketRows = tickets ?? EMPTY_TICKETS
   const pendingTicketCount = ticketRows.filter((ticket) => ticket.status === 'pending').length
@@ -205,17 +185,6 @@ setup
       : pendingTicketCount > 0
         ? `Newest ${formatCount(ticketRows.length)} · ${formatCount(pendingTicketCount)} pending`
         : `Newest ${formatCount(ticketRows.length)}`
-
-  // What the Practice panel counts, said truthfully. The window is the newest
-  // DEFAULT_PLAY_PAGE draws — which is every draw when the account holds fewer
-  // — and `plays.m.record` keeps only PLAY_HISTORY_LIMIT rows per user, so the
-  // ones past that are deleted rather than merely left out of these figures.
-  // Party draws aggregate every player at the table into their one row.
-  const practiceWindow =
-    stats.plays < DEFAULT_PLAY_PAGE
-      ? 'Every resolved draw on your record'
-      : `Your last ${formatCount(DEFAULT_PLAY_PAGE)} resolved draws`
-  const practiceDescription = `${practiceWindow}, counted at PCSO ticket prices. Draws past your most recent ${formatCount(PLAY_HISTORY_LIMIT)} are not kept. A party draw counts the tickets of every player at that table.`
 
   // Identity comes from Firebase first: it is there on a deployment with no
   // Convex client, and before `ensureCurrent` has written the `users` row.
@@ -263,6 +232,17 @@ setup
       : topupsToClaim.length > 0
         ? 'bankers'
         : 'wallet'
+
+  const recentTickets = useConvexQuery(api.tickets.q.mine, RECENT_TICKETS_ARGS, { enabled: isSignedIn && activeTab === 'plays' })
+  const plays = useConvexQuery(api.plays.q.mine, PLAYS_ARGS, { enabled: isSignedIn && activeTab === 'practice' })
+  const hasReadPlays = plays !== undefined
+  const stats = readPracticeStats(plays ?? EMPTY_PLAYS)
+  const { bestDraw, favouriteGame } = stats
+  const practiceWindow =
+    stats.plays < DEFAULT_PLAY_PAGE
+      ? 'Every resolved draw on your record'
+      : `Your last ${formatCount(DEFAULT_PLAY_PAGE)} resolved draws`
+  const practiceDescription = `${practiceWindow}, counted at PCSO ticket prices. Draws past your most recent ${formatCount(PLAY_HISTORY_LIMIT)} are not kept. A party draw counts the tickets of every player at that table.`
 
   const [claimingTopupIds, setClaimingTopupIds] = useState<ReadonlySet<string>>(new Set())
   const [claimError, setClaimError] = useState<string | null>(null)
@@ -562,25 +542,42 @@ section(className='overview-page relative min-w-0 pt-4 [overflow-wrap:anywhere] 
                         TicketReading(label='Payout' value={`₱${formatCredits(ticket.cost * 360)}`} className='text-muted-foreground xl:text-right')
                         TicketReading(label='Bought' value={formatRelativeTime(ticket.createdAt, now)} className='text-right font-mono text-muted-foreground whitespace-nowrap')
         elseif activeTab === 'plays'
-          Panel(title='Recent plays' collapsible={false} description='One row per resolved draw, newest first.' meta={!hasReadPlays ? 'Not read yet' : rows.length === 0 ? 'No draws' : `${formatCount(playFeed.length)} of ${formatCount(rows.length)}`})
-            if playFeed.length === 0
-              Blank(message={hasReadPlays ? 'Resolve a draw while signed in and it is listed here.' : UNREAD_PLAYS})
+          Panel(title='Recent plays' collapsible={false} meta={recentTickets?.length ? `${formatCount(recentTickets.length)} settled ${recentTickets.length === 1 ? 'ticket' : 'tickets'}` : undefined})
+            if recentTickets === undefined
+              Blank(message={UNREAD_TICKETS})
+            elseif recentTickets.length === 0
+              Blank(message='Your tickets will appear here once their draws settle.')
             else
               ul(className='overview-feed')
-                each play in playFeed key play._id
+                each ticket in recentTickets key ticket.ticketId
                   li(className='grid min-w-0 grid-cols-2 items-center gap-x-3 gap-y-2 lg:flex lg:gap-4')
                     div(className='col-span-2 min-w-0 lg:flex-1')
                       div(className='flex flex-wrap items-center gap-x-2 gap-y-1')
-                        p(className='text-sm font-medium text-foreground') #{GAMES[play.game].name}
-                        if play.isOfficial
-                          span(className={cn(chipClass, 'bg-foreground/5 text-muted-foreground')}) official
-                        if play.mode === 'party'
-                          span(className={cn(chipClass, 'bg-foreground/5 text-muted-foreground')}) party
-                      p(className='mt-1 font-mono text-xs text-muted-foreground') #{formatDrawnBalls(play.drawnBalls)}
-                    span(className='font-mono text-xs tabular-nums text-muted-foreground lg:min-w-24 lg:text-right') #{`${formatCount(play.ticketCount)} tickets`}
-                    span(className='text-right font-mono text-xs tabular-nums text-muted-foreground lg:min-w-16') #{formatHits(play.bestHits)}
-                    span(className={cn('font-mono text-sm tabular-nums lg:min-w-24 lg:text-right', play.won > 0 ? POSITIVE_TONE : 'text-muted-foreground/70')}) #{formatPeso(play.won)}
-                    span(className='text-right font-mono text-2xs tabular-nums text-muted-foreground/70 lg:min-w-20') #{formatRelativeTime(play.drawnAt, now)}
+                        p(className='text-sm font-medium text-foreground') #{GAMES[ticket.game].name}
+                        span(className={cn(chipClass, TICKET_STATUS_TONE[ticket.status])}) #{ticket.status}
+                      dl(className='mt-2 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 font-mono text-xs')
+                        dt(className='text-muted-foreground') Picks
+                        dd(className='flex flex-wrap gap-1')
+                          each n in ticket.numbers key n
+                            scope
+                              setup const hit = ticket.drawnNumbers?.includes(n) === true
+                              span(className={cn(recentTicketNumberClass, hit ? 'bg-chart-good/15 font-semibold text-emerald-700 dark:text-emerald-400' : 'bg-raised text-foreground')})
+                                | #{n}
+                                // if hit
+                                //   Icon(name='check' label='matched' size={12})
+                        dt(className='text-muted-foreground') Drawn
+                        if ticket.drawnNumbers?.length
+                          dd(className='flex flex-wrap gap-1')
+                            each n in ticket.drawnNumbers key n
+                              span(className={cn(recentTicketNumberClass, 'bg-foreground/5 text-muted-foreground')}) #{n}
+                        else
+                          dd(className='text-muted-foreground') Result unavailable
+                    div(className='portrait:w-full space-y-2')
+                      p(className='font-mono text-xs text-muted-foreground/60 whitespace-nowrap text-left lg:text-right') #{formatDraw(ticket.drawDate, ticket.drawTime)}
+                      div(className='flex items-center gap-2 whitespace-nowrap')
+                        span(className='text-right font-mono text-xs tabular-nums text-muted-foreground lg:min-w-12') #{formatHits(ticket.hits)}
+                        span(className='font-mono text-xs tabular-nums text-muted-foreground lg:text-right') Stake #{formatPeso(ticket.cost)}
+                        span(className={cn('text-right font-mono text-xs tabular-nums', ticket.status === 'won' ? POSITIVE_TONE : 'text-muted-foreground')}) Payout #{formatPeso(ticket.prizeWon ?? 0)}
         else
           Panel(title='Real plays' collapsible={false} description='Tickets bought with credits, once they can be bought.' meta='Not yet playable')
             Blank(message='Credit-backed tickets are still being built. When they ship, every ticket you buy with credits is listed here with the draw it was entered in and what it settled for.')

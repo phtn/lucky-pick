@@ -55,6 +55,7 @@ export default defineSchema({
     .index('by_reversesTxnId', ['reversesTxnId']),
   ledgerEntries: defineTable(ledgerEntryFields)
     .index('by_walletId_and_createdAt', ['walletId', 'createdAt'])
+    .index('by_walletId_and_bucket_and_createdAt', ['walletId', 'bucket', 'createdAt'])
     .index('by_txnId', ['txnId']),
   topupRequests: defineTable(topupRequestFields)
     .index('by_status_and_createdAt', ['status', 'createdAt'])
@@ -67,6 +68,7 @@ export default defineSchema({
   // a house reads everything placed at it.
   tickets: defineTable(ticketFields)
     .index('by_userId_and_createdAt', ['userId', 'createdAt'])
+    .index('by_userId_and_status_and_drawDate', ['userId', 'status', 'drawDate'])
     .index('by_accountId_and_createdAt', ['accountId', 'createdAt'])
     // What a house holds against one draw of one game.
     .index('by_accountId_and_game_and_drawDate', ['accountId', 'game', 'drawDate'])
